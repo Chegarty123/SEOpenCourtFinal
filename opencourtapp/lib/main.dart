@@ -3,6 +3,8 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/widgets.dart';
+// ignore: unused_import
+import 'package:opencourtapp/map_screen.dart';
 import 'package:opencourtapp/profile_screen.dart';
 
 
@@ -18,6 +20,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       home: HomePage(),
+      // home: MapScreen(),
     );
   }
 }
