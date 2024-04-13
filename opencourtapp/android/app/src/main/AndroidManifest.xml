@@ -3,6 +3,10 @@
         android:label="opencourtapp"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
+
+        <meta-data android:name="com.google.android.geo.API_KEY"
+               android:value="AIzaSyC8xMg1kWFWOG3qVEvOnLbUgNUnLcD4iUQ"/>
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
