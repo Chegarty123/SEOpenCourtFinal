@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "504339936590",
+    "project_id": "finalopencourt",
+    "storage_bucket": "finalopencourt.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:504339936590:android:e6e6766e0a956e98045a1f",
+        "android_client_info": {
+          "package_name": "com.example.opencourtapp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA5gCzG2k-u79HHhp5rk8xUm1u3aBIAz8s"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
