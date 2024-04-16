@@ -1,13 +1,32 @@
 {
   "project_info": {
-    "project_number": "504339936590",
-    "project_id": "finalopencourt",
-    "storage_bucket": "finalopencourt.appspot.com"
+    "project_number": "884458743582",
+    "project_id": "opencourtfinal1",
+    "storage_bucket": "opencourtfinal1.appspot.com"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:504339936590:android:e6e6766e0a956e98045a1f",
+        "mobilesdk_app_id": "1:884458743582:android:56deec0fb31170f31dcb0f",
+        "android_client_info": {
+          "package_name": "com.example.flutter_app_1"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAaM6V570jyVN7sj9yH72tyl-Jc1aS9sww"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:884458743582:android:f544d7d3dcf13bc31dcb0f",
         "android_client_info": {
           "package_name": "com.example.opencourtapp"
         }
@@ -15,7 +34,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyA5gCzG2k-u79HHhp5rk8xUm1u3aBIAz8s"
+          "current_key": "AIzaSyAaM6V570jyVN7sj9yH72tyl-Jc1aS9sww"
         }
       ],
       "services": {
