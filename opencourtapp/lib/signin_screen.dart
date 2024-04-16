@@ -3,6 +3,7 @@ import 'package:opencourtapp/reusable_widgets/reusable_widget.dart';
 import 'package:opencourtapp/home_screen.dart';
 import 'package:opencourtapp/signup_screen.dart';
 import 'package:opencourtapp/color_utils.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class SignInScreen extends StatefulWidget {
   const SignInScreen({super.key});
@@ -45,9 +46,34 @@ class _SignInScreenState extends State<SignInScreen> {
                 SizedBox(
                   height: 20,
                 ),
-                signInSignUpButton(context, true, () {
-                  Navigator.push(context,
-                      MaterialPageRoute(builder: (context) => HomeScreen()));
+                signInSignUpButton(context, true, () async {
+                  try {
+                    UserCredential userCredential = await FirebaseAuth.instance
+                        .signInWithEmailAndPassword(
+                            email: _emailTextController.text,
+                            password: _passwordTextController.text);
+                    if (userCredential != null) {
+                      Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (context) => HomeScreen()));
+                    }
+                  } on FirebaseAuthException catch (e) {
+                    print(e.message);
+                    showDialog(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        title: Text('Error with your Log In attempt!'),
+                        content: Text(e.message ?? 'Unknown error occured!'),
+                        actions: [
+                          TextButton(
+                            child: Text('OK'),
+                            onPressed: () => Navigator.of(context).pop(),
+                          ),
+                        ],
+                      ),
+                    );
+                  }
                 }),
                 signUpOption()
               ],
