@@ -21,9 +21,9 @@ class _SignInScreenState extends State<SignInScreen> {
       body: Container(
         decoration: BoxDecoration(
             gradient: LinearGradient(colors: [
-          hexStringToColor("CB2B93"),
-          hexStringToColor("9546C4"),
-          hexStringToColor("5E61F4")
+          hexStringToColor("0f1056"),
+          hexStringToColor("151269"),
+          hexStringToColor("81b1ce")
         ], begin: Alignment.topCenter, end: Alignment.bottomCenter)),
         child: SingleChildScrollView(
           child: Padding(
@@ -33,6 +33,11 @@ class _SignInScreenState extends State<SignInScreen> {
             ),
             child: Column(
               children: <Widget>[
+                SizedBox(
+                  child: Image.asset(
+                    "/images/logo.png",
+                  )
+                ),
                 SizedBox(
                   height: 30,
                 ),
@@ -63,7 +68,7 @@ class _SignInScreenState extends State<SignInScreen> {
                     showDialog(
                       context: context,
                       builder: (context) => AlertDialog(
-                        title: Text('Error with your Log In attempt!'),
+                        title: Text('Error with your OpenCourt log-in attempt!'),
                         content: Text(e.message ?? 'Unknown error occured!'),
                         actions: [
                           TextButton(

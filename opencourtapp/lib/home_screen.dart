@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:opencourtapp/color_utils.dart';
 import 'package:opencourtapp/signin_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -11,13 +12,41 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: ElevatedButton(
-        child: Text("Logout"),
-        onPressed: () {
-          Navigator.push(
-              context, MaterialPageRoute(builder: (context) => SignInScreen()));
-        },
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            hexStringToColor("0f1056"),
+            hexStringToColor("151269"),
+            hexStringToColor("81b1ce"),
+          ],
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+        ),
+      ),
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        body: Column(
+          children: [
+            Padding(
+              padding: EdgeInsets.only(top: 16),
+              child: ElevatedButton(
+                child: Text("Logout"),
+                onPressed: () {
+                  Navigator.push(context,
+                      MaterialPageRoute(builder: (context) => SignInScreen()));
+                },
+              ),
+            ),
+            Expanded(
+              child: Center(
+                child: Image.asset(
+                  "assets/images/logo.png",
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
