@@ -1,7 +1,9 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:opencourtapp/firebase_options.dart';
+import 'package:opencourtapp/map_screen.dart';
 import 'package:opencourtapp/signin_screen.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -40,6 +42,7 @@ class MyApp extends StatelessWidget {
         useMaterial3: true,
       ),
       home: const SignInScreen(),
+      // home: MapScreen(),
     );
   }
 }
