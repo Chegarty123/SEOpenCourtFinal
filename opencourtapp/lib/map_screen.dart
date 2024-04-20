@@ -20,8 +20,8 @@ class _MapScreenState extends State<MapScreen> {
   );
 
   final List<Marker> myMarker = [];
-  final List<Marker> markerList = [
-    const Marker(markerId: MarkerId('Alumni Hall'),
+  final List<Marker> markerList = const[
+    Marker(markerId: MarkerId('Alumni Hall'),
       position: LatLng(40.03631213200846, -75.34249255476594),
       infoWindow: InfoWindow(
         title: 'Alumni Hall',
