@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:opencourtapp/color_utils.dart';
 import 'package:opencourtapp/signin_screen.dart';
+import 'package:opencourtapp/map_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -133,7 +134,25 @@ class _HomeScreenState extends State<HomeScreen> {
                       child: Text(description, style: TextStyle(color: Colors.white.withOpacity(.7), height: 1.9, fontSize: 15),),
                     ),
                     SizedBox(height: 20,),
-                    Text('READ MORE', style: TextStyle(color: Colors.white),),
+                    ElevatedButton(
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => MapScreen()),
+                        );
+                      },
+                      child: Text(
+                        'READ MORE',
+                        style: TextStyle(color: Colors.white),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blue,
+                        padding: EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                      ),
+                    ),
                     SizedBox(height: 30,),
                   ],
                 ),
