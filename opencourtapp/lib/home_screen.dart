@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:opencourtapp/color_utils.dart';
-import 'package:opencourtapp/get_user_location.dart';
 import 'package:opencourtapp/signin_screen.dart';
 import 'package:opencourtapp/map_screen.dart';
 
@@ -31,6 +30,23 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      appBar: AppBar(
+        title: Text('Home'),
+        actions: <Widget>[
+          IconButton(
+            icon: Icon(Icons.logout),
+            onPressed: () {
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (context) => SignInScreen()),
+              );
+            },
+          ),
+        ],
+      ),
+
+
+
       body: PageView(
         controller: _pageController,
         children: <Widget>[
@@ -139,7 +155,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       onPressed: () {
                         Navigator.push(
                           context,
-                          MaterialPageRoute(builder: (context) => GetUserLocation()),
+                          MaterialPageRoute(builder: (context) => MapScreen()),
                         );
                       },
                       child: Text(
