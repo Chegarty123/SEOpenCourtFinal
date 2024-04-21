@@ -54,13 +54,13 @@ class _HomeScreenState extends State<HomeScreen> {
             page: 1,
             image: 'assets/images/west.jpeg',
             title: "West Campus",
-            description: 'Contains a selection of oudoor courts, as well as an indoor facility that has a total of 6 different hoops.'  
+            description: 'Contains a selection of outdoor courts, as well as an indoor facility that has a total of 6 different hoops.'  
           ),
           makePage(
             page: 2,
             image: 'assets/images/main.jpeg',
             title: 'Main Campus',
-            description: "The area of campus with the most amount of choices. Contains a total of 7 different full courts that make up the Driscoll outdoor courts, as well as the indoor courts of Alumni Hall and Nevin Fieldhouse."  
+            description: "This area of campus offers the largest selection of choices. Contains a total of 7 different full courts that make up the Driscoll outdoor courts, as well as the indoor courts of Alumni Hall and Nevin Fieldhouse."  
           ),
           makePage(
             page: 3,
@@ -114,35 +114,6 @@ class _HomeScreenState extends State<HomeScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
                     Text(title, style: TextStyle(color: Colors.white, fontSize: 50, fontWeight: FontWeight.bold),),
-                    SizedBox(
-                      height: 20,
-                    ),
-                    Row(
-                      children: <Widget>[
-                        Container(
-                          margin: EdgeInsets.only(right: 3), 
-                          child: Icon(Icons.star, color: Colors.yellow, size: 15),
-                        ),
-                        Container(
-                          margin: EdgeInsets.only(right: 3), 
-                          child: Icon(Icons.star, color: Colors.yellow, size: 15),
-                        ),
-                        Container(
-                          margin: EdgeInsets.only(right: 3), 
-                          child: Icon(Icons.star, color: Colors.yellow, size: 15),
-                        ),
-                        Container(
-                          margin: EdgeInsets.only(right: 3), 
-                          child: Icon(Icons.star, color: Colors.yellow, size: 15),
-                        ),
-                        Container(
-                          margin: EdgeInsets.only(right: 5), 
-                          child: Icon(Icons.star, color: Colors.grey, size: 15),
-                        ),
-                        Text('4.0', style: TextStyle(color: Colors.white70),),
-                        Text('(2300)', style: TextStyle(color: Colors.white38, fontSize: 12),),
-                      ],
-                    ),
                     SizedBox(
                       height: 20,
                     ),

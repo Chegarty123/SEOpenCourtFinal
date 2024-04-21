@@ -107,7 +107,7 @@ class _MapScreenState extends State<MapScreen> {
         body: SafeArea(
             child: Column(children: [
       Padding(
-        padding: EdgeInsets.only(top: 16),
+        padding: EdgeInsets.only(top: 16, bottom: 16),
         child: ElevatedButton(
           child: Text("Back to Homepage"),
           onPressed: () {
