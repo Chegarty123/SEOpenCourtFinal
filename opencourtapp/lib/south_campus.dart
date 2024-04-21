@@ -75,7 +75,17 @@ class _MapScreenState extends State<SouthCampus> {
                     },
                   ),
                 ],
-              ),  
+              ),
+              Row(
+                 mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Padding(
+                  padding: EdgeInsets.symmetric(vertical: 25),
+                  child: Image.asset(
+                    "/images/south.jpeg",
+                  )
+                ),
+              ],),  
             ],
           ),
         ),

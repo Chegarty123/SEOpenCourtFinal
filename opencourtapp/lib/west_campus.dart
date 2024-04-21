@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:opencourtapp/home_screen.dart';
 
@@ -96,8 +97,19 @@ int _checkInCount4 = 0;
                       });
                     },
                   ),
+                  
                 ],
               ),
+              Row(
+                 mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Padding(
+                  padding: EdgeInsets.symmetric(vertical: 25),
+                  child: Image.asset(
+                    "/images/west.jpeg",
+                  )
+                ),
+              ],)
             ],
           ),
         ),

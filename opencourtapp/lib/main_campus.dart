@@ -1,6 +1,6 @@
-
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:opencourtapp/home_screen.dart';
 import 'package:opencourtapp/map_screen.dart';
@@ -131,8 +131,18 @@ class _MapScreenState extends State<MainCampus> {
                 ),
               ],
             ),
-
-            
+            Row(
+                 mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Padding(
+                  padding: EdgeInsets.symmetric(vertical: 25),
+                  child: Image.asset(
+                    "/images/main.jpeg",
+                    width: 625,
+                    height: 600,
+                  )
+                ),
+              ],)
           ],
         ),
       ),

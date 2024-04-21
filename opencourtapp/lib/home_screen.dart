@@ -3,7 +3,6 @@ import 'package:opencourtapp/color_utils.dart';
 import 'package:opencourtapp/get_user_location.dart';
 import 'package:opencourtapp/signin_screen.dart';
 import 'package:opencourtapp/map_screen.dart';
-
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -55,19 +54,19 @@ class _HomeScreenState extends State<HomeScreen> {
             page: 1,
             image: 'assets/images/west.jpeg',
             title: "West Campus",
-            description: 'Contains a selection of outdoor courts, as well as an indoor facility that has a total of 6 different hoops.'  
+            description: 'This part of campus contains a selection of outdoor courts, as well as an indoor facility that has a total of six different hoops.'  
           ),
           makePage(
             page: 2,
             image: 'assets/images/main.jpeg',
             title: 'Main Campus',
-            description: "This area of campus offers the largest selection of choices. Contains a total of 7 different full courts that make up the Driscoll outdoor courts, as well as the indoor courts of Alumni Hall and Nevin Fieldhouse."  
+            description: "This area of campus offers the largest selection of choices. Contains a total of seven different full courts that make up the Driscoll outdoor courts, as well as the indoor courts of Alumni Hall and Nevin Fieldhouse."  
           ),
           makePage(
             page: 3,
             image: 'assets/images/south.jpeg',
             title: 'South Campus',
-            description: 'South Campus is made up of one full outdoor court that contains 2 different hoops.'   
+            description: 'South Campus is made up of one full outdoor court that contains two different hoops.'   
           ),
         ],       
       )
