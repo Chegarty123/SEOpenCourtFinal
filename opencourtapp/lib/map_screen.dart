@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:opencourtapp/home_screen.dart';
 import 'package:opencourtapp/main_campus.dart';
@@ -88,13 +89,13 @@ class _MapScreenState extends State<MapScreen> {
       ),
     ),
     Marker(markerId: MarkerId('Nevin 1'),
-      position: LatLng(40.03374138317017, -75.33827376365824),
+      position: LatLng(40.033733665145206, -75.33817067654877),
       infoWindow: InfoWindow(
         title: 'Nevin 1',
       ),
     ),
     Marker(markerId: MarkerId('Nevin 2'),
-      position: LatLng(40.033654562713224, -75.33814417275917),
+      position: LatLng(40.03365027942263, -75.3382937877755),
       infoWindow: InfoWindow(
         title: 'Nevin 2',
       ),
@@ -107,16 +108,60 @@ class _MapScreenState extends State<MapScreen> {
     ),
   ];
 
-  @override
   void initState() {
     super.initState();
     myMarker.addAll(markerList);
+    // packData();
+  }
+
+  Future<Position> getUserLocation() async
+  {
+    await Geolocator.requestPermission().then((value) 
+    {
+
+    }).onError((error, stackTrace) 
+    {
+      print('error$error');
+    });
+
+    return await Geolocator.getCurrentPosition();
+  }
+
+  packData()
+  {
+    getUserLocation().then((value) async
+    {
+      print('My Location');
+      print('${value.latitude} ${value.longitude}');
+
+      myMarker.add(
+        Marker(
+          markerId: const MarkerId('My Location'),
+          position: LatLng(value.latitude, value.longitude),
+          infoWindow: InfoWindow(
+            title: 'My Location',
+          )
+        )
+      );
+      CameraPosition cameraPosition = CameraPosition(
+        target: LatLng(value.latitude, value.longitude),
+        zoom: 17
+      );
+
+      final GoogleMapController controller = await _controller.future;
+
+      controller.animateCamera(CameraUpdate.newCameraPosition(cameraPosition));
+      setState((){
+        
+      });
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Container(
+      body: SafeArea(
+        child: Container(
         decoration: BoxDecoration(
           gradient: LinearGradient(
             colors: [
@@ -180,6 +225,14 @@ class _MapScreenState extends State<MapScreen> {
             ],
           ),
         ),
+        ),
+      ),
+      floatingActionButton : FloatingActionButton(
+        onPressed: () 
+          {
+            packData();
+          },
+          child: Icon(Icons.radio_button_off),
       ),
     );
   }

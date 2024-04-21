@@ -76,13 +76,13 @@ class _GetUserLocationState extends State<GetUserLocation> {
       ),
     ),
     Marker(markerId: MarkerId('Nevin 1'),
-      position: LatLng(40.03374138317017, -75.33827376365824),
+      position: LatLng(40.033733665145206, -75.33817067654877),
       infoWindow: InfoWindow(
         title: 'Nevin 1',
       ),
     ),
     Marker(markerId: MarkerId('Nevin 2'),
-      position: LatLng(40.033654562713224, -75.33814417275917),
+      position: LatLng(40.03365027942263, -75.3382937877755),
       infoWindow: InfoWindow(
         title: 'Nevin 2',
       ),
