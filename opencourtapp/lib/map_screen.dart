@@ -1,8 +1,19 @@
 import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:opencourtapp/home_screen.dart';
+import 'package:opencourtapp/main_campus.dart';
+import 'package:opencourtapp/south_campus.dart';
+import 'package:opencourtapp/west_campus.dart';
+
+// Function to convert hex color string to Color object
+Color hexStringToColor(String hexColor) {
+  hexColor = hexColor.toUpperCase().replaceAll("#", "");
+  if (hexColor.length == 6) {
+    hexColor = "FF" + hexColor;
+  }
+  return Color(int.parse(hexColor, radix: 16));
+}
 
 class MapScreen extends StatefulWidget {
   const MapScreen({Key? key}) : super(key: key);
@@ -13,6 +24,7 @@ class MapScreen extends StatefulWidget {
 
 class _MapScreenState extends State<MapScreen> {
   final Completer<GoogleMapController> _controller = Completer();
+  int _checkInCount = 0;
 
   static const CameraPosition _initialPosition = CameraPosition(
     target: LatLng(40.03603365942587, -75.34103877887395),
@@ -20,8 +32,8 @@ class _MapScreenState extends State<MapScreen> {
   );
 
   final List<Marker> myMarker = [];
-  final List<Marker> markerList = const[
-    Marker(markerId: MarkerId('Alumni Hall'),
+  final List<Marker> markerList = const [
+     Marker(markerId: MarkerId('Alumni Hall'),
       position: LatLng(40.03631213200846, -75.34249255476594),
       infoWindow: InfoWindow(
         title: 'Alumni Hall',
@@ -104,27 +116,71 @@ class _MapScreenState extends State<MapScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-        body: SafeArea(
-            child: Column(children: [
-      Padding(
-        padding: EdgeInsets.only(top: 16, bottom: 16),
-        child: ElevatedButton(
-          child: Text("Back to Homepage"),
-          onPressed: () {
-            Navigator.push(
-                context, MaterialPageRoute(builder: (context) => HomeScreen()));
-          },
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              hexStringToColor("81b1ce"),
+              hexStringToColor("151269"),
+              hexStringToColor("81b1ce")
+            ],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+          ),
+        ),
+        child: SafeArea(
+          child: Column(
+            children: [
+              Padding(
+                padding: EdgeInsets.only(top: 16, bottom: 16),
+                child: ElevatedButton(
+                  child: Text("Back to Homepage"),
+                  onPressed: () {
+                    Navigator.push(context, MaterialPageRoute(builder: (context) => HomeScreen()));
+                  },
+                ),
+              ),
+              Expanded(
+                child: GoogleMap(
+                  initialCameraPosition: _initialPosition,
+                  mapType: MapType.satellite,
+                  markers: Set<Marker>.of(myMarker),
+                  onMapCreated: (GoogleMapController controller) {
+                    _controller.complete(controller);
+                  },
+                ),
+              ),
+              Padding(
+                padding: EdgeInsets.only(top: 16, bottom: 16),
+                child: ElevatedButton(
+                  child: Text("Check into Main Campus"),
+                  onPressed: () {
+                    Navigator.push(context, MaterialPageRoute(builder: (context) => MainCampus()));
+                  },
+                ),
+              ),
+              Padding(
+                padding: EdgeInsets.only(top: 16, bottom: 16),
+                child: ElevatedButton(
+                  child: Text("Check into South Campus"),
+                  onPressed: () {
+                    Navigator.push(context, MaterialPageRoute(builder: (context) => SouthCampus()));
+                  },
+                ),
+              ),
+              Padding(
+                padding: EdgeInsets.only(top: 16, bottom: 16),
+                child: ElevatedButton(
+                  child: Text("Check into West Campus"),
+                  onPressed: () {
+                    Navigator.push(context, MaterialPageRoute(builder: (context) => WestCampus()));
+                  },
+                ),
+              ),
+            ],
+          ),
         ),
       ),
-      Expanded(
-          child: GoogleMap(
-        initialCameraPosition: _initialPosition,
-        mapType: MapType.satellite,
-        markers: Set<Marker>.of(myMarker),
-        onMapCreated: (GoogleMapController controller) {
-          _controller.complete(controller);
-        },
-      ))
-    ])));
+    );
   }
 }

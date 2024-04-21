@@ -130,7 +130,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         );
                       },
                       child: Text(
-                        'READ MORE',
+                        'MAP PAGE',
                         style: TextStyle(color: Colors.white),
                       ),
                       style: ElevatedButton.styleFrom(
