@@ -60,7 +60,7 @@ class _HomeScreenState extends State<HomeScreen> {
             page: 2,
             image: 'assets/images/main.jpeg',
             title: 'Main Campus',
-            description: "This area of campus offers the largest selection of choices. Contains a total of seven different full courts that make up the Driscoll outdoor courts, as well as the indoor courts of Alumni Hall and Nevin Fieldhouse."  
+            description: "This area of campus offers the largest selection of choices. Contains a total of seven different full courts that make up the Driscoll outdoor courts, as well as the indoor courts of Alumni Hall and Nevin Fieldhouse. "  
           ),
           makePage(
             page: 3,
