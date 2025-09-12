@@ -1,4 +1,3 @@
-/// <reference types="react-native/types/modules/Codegen" />
 import type { ViewProps } from 'react-native';
 import type { WithDefault } from 'react-native/Libraries/Types/CodegenTypes';
 export type HeaderSubviewTypes = 'back' | 'right' | 'left' | 'title' | 'center' | 'searchBar';

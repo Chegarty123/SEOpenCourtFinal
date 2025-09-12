@@ -95,26 +95,28 @@ open class KEventEmitterWrapper(
 
   override fun emit(viewId: Int, eventName: String, eventBody: WritableMap?, coalescingKey: Short?) {
     val context = reactContextHolder.get() ?: return
+    val uiEvent = UIEvent(surfaceId = -1, viewId, eventName, eventBody, coalescingKey)
     UIManagerHelper.getEventDispatcherForReactTag(context, viewId)
-      ?.dispatchEvent(UIEvent(surfaceId = -1, viewId, eventName, eventBody, coalescingKey))
+      ?.dispatchEvent(uiEvent)
   }
 
   override fun emit(view: View, eventName: String, eventBody: WritableMap?, coalescingKey: Short?) {
     val context = reactContextHolder.get() ?: return
     val surfaceId = UIManagerHelper.getSurfaceId(view)
     val viewId = view.id
+    val uiEvent = UIEvent(surfaceId, viewId, eventName, eventBody, coalescingKey)
     UIManagerHelper.getEventDispatcherForReactTag(context, view.id)
-      ?.dispatchEvent(UIEvent(surfaceId, viewId, eventName, eventBody, coalescingKey))
+      ?.dispatchEvent(uiEvent)
   }
 
   private class UIEvent(
     surfaceId: Int,
     viewId: Int,
-    private val eventName: String,
+    private val eventNameInternal: String,
     private val eventBody: WritableMap?,
     private val coalescingKey: Short?
   ) : com.facebook.react.uimanager.events.Event<UIEvent>(surfaceId, viewId) {
-    override fun getEventName(): String = normalizeEventName(eventName)
+    override fun getEventName(): String = normalizeEventName(eventNameInternal)
     override fun canCoalesce(): Boolean = coalescingKey != null
     override fun getCoalescingKey(): Short = coalescingKey ?: 0
     override fun getEventData(): WritableMap = eventBody ?: Arguments.createMap()

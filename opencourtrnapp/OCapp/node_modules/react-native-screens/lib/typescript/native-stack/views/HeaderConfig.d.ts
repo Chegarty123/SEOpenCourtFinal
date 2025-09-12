@@ -1,4 +1,3 @@
-/// <reference types="react" />
 import { Route } from '@react-navigation/native';
 import { NativeStackNavigationOptions } from '../types';
 type Props = NativeStackNavigationOptions & {

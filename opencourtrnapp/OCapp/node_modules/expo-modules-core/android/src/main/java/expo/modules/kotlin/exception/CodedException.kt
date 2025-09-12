@@ -71,8 +71,8 @@ inline fun <reified T : CodedException> errorCodeOf(): String =
   CodedException.inferCode(T::class.java)
 
 internal class IncompatibleArgTypeException(
-  argumentType: KType,
-  desiredType: KType,
+  argumentType: KClass<*>,
+  desiredType: KClass<*>,
   cause: Throwable? = null
 ) : CodedException(
   message = "Argument type '$argumentType' is not compatible with expected type '$desiredType'.",
@@ -246,6 +246,13 @@ internal class CollectionElementCastException private constructor(
     cause: CodedException
   ) : this(collectionType, elementType, providedType.toString(), cause)
 }
+
+@DoNotStrip
+class DynamicCastException(
+  type: KClass<*>
+) : CodedException(
+  message = "Could not cast dynamic value to '${type.qualifiedName}'."
+)
 
 @DoNotStrip
 class JavaScriptEvaluateException(

@@ -9,11 +9,11 @@ function DelayedFreeze({
   // flag used for determining whether freeze should be enabled
   const [freezeState, setFreezeState] = React.useState(false);
   React.useEffect(() => {
-    const id = setImmediate(() => {
+    const id = setTimeout(() => {
       setFreezeState(freeze);
-    });
+    }, 0);
     return () => {
-      clearImmediate(id);
+      clearTimeout(id);
     };
   }, [freeze]);
   return /*#__PURE__*/React.createElement(Freeze, {

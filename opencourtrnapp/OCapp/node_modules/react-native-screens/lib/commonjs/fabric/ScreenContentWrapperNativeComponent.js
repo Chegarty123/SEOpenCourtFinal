@@ -6,5 +6,6 @@ Object.defineProperty(exports, "__esModule", {
 exports.default = void 0;
 var _codegenNativeComponent = _interopRequireDefault(require("react-native/Libraries/Utilities/codegenNativeComponent"));
 function _interopRequireDefault(e) { return e && e.__esModule ? e : { default: e }; }
+// eslint-disable-next-line @react-native/no-deep-imports
 var _default = exports.default = (0, _codegenNativeComponent.default)('RNSScreenContentWrapper', {});
 //# sourceMappingURL=ScreenContentWrapperNativeComponent.js.map

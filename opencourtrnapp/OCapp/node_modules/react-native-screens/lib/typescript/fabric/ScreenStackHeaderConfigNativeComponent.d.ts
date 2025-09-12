@@ -1,4 +1,3 @@
-/// <reference types="react-native/types/modules/Codegen" />
 import type { ViewProps, ColorValue } from 'react-native';
 import type { Int32, WithDefault, DirectEventHandler } from 'react-native/Libraries/Types/CodegenTypes';
 type DirectionType = 'rtl' | 'ltr';

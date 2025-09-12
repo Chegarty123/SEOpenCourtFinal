@@ -1,4 +1,7 @@
+import { TurboModuleRegistry } from 'react-native';
+
 import NativeModulesProxy from './NativeModulesProxy';
+import { createTurboModuleToExpoProxy } from './TurboModuleToExpoModuleProxy';
 import { ensureNativeModulesAreInstalled } from './ensureNativeModulesAreInstalled';
 
 /**
@@ -31,5 +34,16 @@ export function requireOptionalNativeModule<ModuleType = any>(
 ): ModuleType | null {
   ensureNativeModulesAreInstalled();
 
-  return globalThis.expo?.modules?.[moduleName] ?? NativeModulesProxy[moduleName] ?? null;
+  try {
+    return (
+      globalThis.expo?.modules?.[moduleName] ??
+      NativeModulesProxy[moduleName] ??
+      createTurboModuleToExpoProxy(TurboModuleRegistry.get(moduleName), moduleName) ??
+      null
+    );
+  } catch (e) {
+    const error = e as Error;
+    console.warn(`An error occurred while requiring the '${moduleName}' module: ${error.message}`);
+    return null;
+  }
 }

@@ -1,6 +1,7 @@
 "use strict";
 'use client';
 
+// eslint-disable-next-line @react-native/no-deep-imports
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
