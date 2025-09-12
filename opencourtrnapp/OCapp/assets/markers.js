@@ -8,7 +8,7 @@ const markers = [
             "longitudeDelta": 0.1,
 
         },
-        "description": "The concrete outdoor basketball courts on Villanova University's South Campus",
+        "description": "The concrete outdoor basketball court on Villanova University's South Campus.",
         "image": "https://www1.villanova.edu/content/university/residence-life/residence-halls/_jcr_content/pagecontent/displaybox_122343007/par_container/image.img.jpg/1606160259715.jpg",
     }
 ];
