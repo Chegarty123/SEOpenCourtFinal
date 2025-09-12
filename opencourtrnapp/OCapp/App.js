@@ -4,18 +4,27 @@ import { Button, View, Text, StyleSheet, TextInput } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
+// 🔹 Firebase imports
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from "firebase/auth";
+import { auth } from "./firebaseConfig"; // <-- make sure you created this file
+
 const Stack = createNativeStackNavigator();
 
 function LoginScreen({ navigation }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
 
-  const handleLogin = () => {
-    if (username && password) {
-      navigation.replace('Home'); 
-      // Replace so you can’t go "back" to login after logging in
-    } else {
-      alert('Please enter username and password');
+  const handleLogin = async () => {
+    if (!username || !password) {
+      alert('Please enter email and password');
+      return;
+    }
+
+    try {
+      await signInWithEmailAndPassword(auth, username, password);
+      navigation.replace('Home');
+    } catch (error) {
+      alert(error.message);
     }
   };
 
@@ -24,9 +33,11 @@ function LoginScreen({ navigation }) {
       <Text style={styles.title}>Log In</Text>
       <TextInput
         style={styles.input}
-        placeholder="Username"
+        placeholder="Email"
         value={username}
         onChangeText={setUsername}
+        autoCapitalize="none"
+        keyboardType="email-address"
       />
       <TextInput
         style={styles.input}
@@ -36,6 +47,54 @@ function LoginScreen({ navigation }) {
         onChangeText={setPassword}
       />
       <Button title="Login" onPress={handleLogin} />
+      <View style={{ marginTop: 15 }}>
+        <Button title="Go to Signup" onPress={() => navigation.navigate('Signup')} />
+      </View>
+    </View>
+  );
+}
+
+function SignupScreen({ navigation }) {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+
+  const handleSignup = async () => {
+    if (!email || !password) {
+      alert('Please enter email and password');
+      return;
+    }
+
+    try {
+      await createUserWithEmailAndPassword(auth, email, password);
+      alert("Account created successfully!");
+      navigation.replace('Home');
+    } catch (error) {
+      alert(error.message);
+    }
+  };
+
+  return (
+    <View style={styles.container}>
+      <Text style={styles.title}>Sign Up</Text>
+      <TextInput
+        style={styles.input}
+        placeholder="Email"
+        value={email}
+        onChangeText={setEmail}
+        autoCapitalize="none"
+        keyboardType="email-address"
+      />
+      <TextInput
+        style={styles.input}
+        placeholder="Password (min 6 chars)"
+        secureTextEntry
+        value={password}
+        onChangeText={setPassword}
+      />
+      <Button title="Create Account" onPress={handleSignup} />
+      <View style={{ marginTop: 15 }}>
+        <Button title="Back to Login" onPress={() => navigation.goBack()} />
+      </View>
     </View>
   );
 }
@@ -76,6 +135,7 @@ export default function App() {
         screenOptions={{ headerTitleAlign: 'center' }}
       >
         <Stack.Screen name="Login" component={LoginScreen} />
+        <Stack.Screen name="Signup" component={SignupScreen} />
         <Stack.Screen name="Home" component={HomeScreen} />
         <Stack.Screen name="Second" component={SecondScreen} />
       </Stack.Navigator>
