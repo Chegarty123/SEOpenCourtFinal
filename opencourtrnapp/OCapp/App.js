@@ -11,6 +11,8 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
+import MapView, {Marker} from 'react-native-maps';
+import markers from './assets/markers';
 
 // Firebase imports
 import {
@@ -150,6 +152,7 @@ function MapScreen() {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Map Page</Text>
+      <MapView style={styles.map} initialRegion={markers[0].coordinates}/>
     </View>
   );
 }
@@ -293,4 +296,6 @@ const styles = StyleSheet.create({
     color: '#4e73df',
     fontWeight: '600',
   },
+  map: {width: '100%', height: '100%'},
+
 });

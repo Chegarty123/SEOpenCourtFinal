@@ -1,0 +1,27 @@
+# Node modules
+node_modules/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+expo-debug.log
+
+# Metro / bundler cache
+.expo/
+.expo-shared/
+.expo/web-build/
+web-build/
+
+# Build outputs
+ios/
+android/
+build/
+dist/
+
+# System files
+.DS_Store
+Thumbs.db
+
+# Environment files (secrets)
+.env
