@@ -11,7 +11,7 @@ export default function MapScreen() {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Basketball Courts Nearby</Text>
-      <MapView style={styles.map} initialRegion={markers[0].coordinates}>
+      <MapView style={styles.map} initialRegion={markers[0].coordinates} mapType="satellite">
       {markers.map((marker, index) => (<Marker
         key = {index}
         title = {marker.name}
