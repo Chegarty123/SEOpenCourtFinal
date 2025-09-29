@@ -150,7 +150,7 @@ function HomeScreen() {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Welcome to OpenCourt</Text>
-      <Image source={require("./images/OpenCourtLogo.png")} style = {{width: 350, height: 350, alignSelf: "center"}} resizeMode="contain"/>
+      <Image source={require("./images/OCLogo.png")} style = {{width: 350, height: 350, alignSelf: "center"}} resizeMode="contain"/>
     </View>
   );
 }
