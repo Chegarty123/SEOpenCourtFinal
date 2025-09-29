@@ -1,5 +1,4 @@
-import * as React from 'react';
-import { useState, useRef } from 'react';
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -16,6 +15,10 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import MapView, {Marker} from 'react-native-maps';
 import markers from './assets/markers';
+
+import * as ImagePicker from "expo-image-picker";
+import { Picker } from "@react-native-picker/picker";
+import { ScrollView } from 'react-native';
 
 // Firebase imports
 import {
@@ -216,10 +219,142 @@ function SettingsScreen({ navigation }) {
 }
 
 function ProfileScreen() {
+  const user = auth.currentUser;
+  const [username, setUsername] = useState(user?.email?.split("@")[0] || "");
+  const [profilePic, setProfilePic] = useState(null);
+  const [position, setPosition] = useState("Point Guard");
+  const [memberSince, setMemberSince] = useState("");
+  const [gradeLevel, setGradeLevel] = useState("Freshman");
+  const [favoriteTeam, setFavoriteTeam] = useState("None");
+
+  useEffect(() => {
+    if (user?.metadata?.creationTime) {
+      setMemberSince(new Date(user.metadata.creationTime).toDateString());
+    }
+  }, [user]);
+
+  const pickImage = async () => {
+    let result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 1,
+    });
+
+    if (!result.canceled) {
+      setProfilePic(result.assets[0].uri);
+    }
+  };
+
   return (
+    <ScrollView contentContainerStyle={styles.scrollContainer}>
+
     <View style={styles.container}>
-      <Text style={styles.title}>Profile Page</Text>
+      {/* Profile Picture */}
+      <TouchableOpacity onPress={pickImage}>
+        <Image
+          source={
+            profilePic
+              ? { uri: profilePic }
+              : require("./images/defaultProfile.png") // fallback image
+          }
+          style={styles.profileImage}
+        />
+      </TouchableOpacity>
+
+      {/* Username + member info */}
+      <Text style={styles.username}>{username}</Text>
+      <Text style={styles.memberSince}>Member since {memberSince}</Text>
+
+      {/* Position Picker */}
+      <View style={styles.positionContainer}>
+  <Text style={styles.label}>Natural Position:</Text>
+  <Text style={styles.positionDisplay}>{position}</Text>
+
+  <View style={styles.tagContainer}>
+    {["Point Guard", "Shooting Guard", "Small Forward", "Power Forward", "Center"].map((pos) => (
+      <TouchableOpacity
+        key={pos}
+        style={[
+          styles.tag,
+          position === pos && styles.tagSelected
+        ]}
+        onPress={() => setPosition(pos)}
+      >
+        <Text style={[
+          styles.tagText,
+          position === pos && styles.tagTextSelected
+        ]}>
+          {pos}
+        </Text>
+      </TouchableOpacity>
+    ))}
+  </View>
+
+  <View style={styles.gradeContainer}>
+  <Text style={styles.label}>Grade Level:</Text>
+  <Text style={styles.gradeDisplay}>{gradeLevel}</Text>
+
+  <View style={styles.tagContainer}>
+    {["Freshman", "Sophomore", "Junior", "Senior"].map((grade) => (
+      <TouchableOpacity
+        key={grade}
+        style={[
+          styles.tag,
+          gradeLevel === grade && styles.tagSelected
+        ]}
+        onPress={() => setGradeLevel(grade)}
+      >
+        <Text style={[
+          styles.tagText,
+          gradeLevel === grade && styles.tagTextSelected
+        ]}>
+          {grade}
+        </Text>
+      </TouchableOpacity>
+    ))}
+  </View>
+  <View style={styles.teamContainer}>
+  <Text style={styles.label}>Favorite NBA Team:</Text>
+  <Text style={styles.teamDisplay}>{favoriteTeam}</Text>
+
+  <View style={styles.tagContainer}>
+    {[
+      "Lakers", "Warriors", "Celtics", "Bulls", "Heat",
+  "Nets", "Knicks", "76ers", "Suns", "Mavericks",
+  "Clippers", "Nuggets", "Timberwolves", "Trail Blazers", "Jazz",
+  "Thunder", "Spurs", "Rockets", "Grizzlies", "Pelicans",
+  "Kings", "Magic", "Pacers", "Pistons", "Cavaliers",
+  "Hawks", "Hornets", "Wizards", "Raptors", "Bucks"
+
+    ].map((team) => (
+      <TouchableOpacity
+        key={team}
+        style={[
+          styles.tag,
+          favoriteTeam === team && styles.tagSelected
+        ]}
+        onPress={() => setFavoriteTeam(team)}
+      >
+        <Text style={[
+          styles.tagText,
+          favoriteTeam === team && styles.tagTextSelected
+        ]}>
+          {team}
+        </Text>
+      </TouchableOpacity>
+    ))}
+  </View>
+</View>
+
+</View>
+
+</View>
+
+
     </View>
+    </ScrollView>
+
   );
 }
 
@@ -392,7 +527,7 @@ const styles = StyleSheet.create({
   markerInfo: {
   flex: 1,
   flexShrink: 1,
-  maxWidth: 140,   // keeps text bounded
+  maxWidth: 140, 
 },
 markerName: {
   fontSize: 16,
@@ -403,7 +538,94 @@ markerName: {
 markerDescription: {
   fontSize: 13,
   color: "#666",
-  flexWrap: "wrap",   // ensures wrapping happens
+  flexWrap: "wrap", 
+},
+profileImage: {
+  width: 100,
+  height: 100,
+  borderRadius: 50,
+  marginBottom: 20,
+  borderWidth: 2,
+  borderColor: '#4e73df',
+},
+
+username: {
+  fontSize: 24,
+  fontWeight: '700',
+  color: '#333',
+  marginBottom: 8,
+},
+
+memberSince: {
+  fontSize: 16,
+  color: '#666',
+  marginBottom: 20,
+},
+positionContainer: {
+  width: '100%',
+  maxWidth: 400,
+  marginTop: 20,
+  padding: 15,
+  backgroundColor: '#fff',
+  borderRadius: 12,
+  shadowColor: '#000',
+  shadowOpacity: 0.1,
+  shadowRadius: 6,
+  elevation: 4,
+},
+
+label: {
+  fontSize: 18,
+  fontWeight: '600',
+  color: '#4e73df',
+  marginBottom: 10,
+},
+positionContainer: {
+  width: '100%',
+  maxWidth: 400,
+  marginTop: 20,
+  padding: 15,
+  backgroundColor: '#fff',
+  borderRadius: 12,
+  shadowColor: '#000',
+  shadowOpacity: 0.1,
+  shadowRadius: 6,
+  elevation: 4,
+},
+
+label: {
+  fontSize: 18,
+  fontWeight: '600',
+  color: '#4e73df',
+  marginBottom: 10,
+},
+tagContainer: {
+  flexDirection: 'row',
+  flexWrap: 'wrap',
+  justifyContent: 'center',
+  marginTop: 10,
+},
+
+tag: {
+  paddingVertical: 8,
+  paddingHorizontal: 12,
+  borderRadius: 20,
+  backgroundColor: '#e0e0e0',
+  margin: 6,
+},
+
+tagSelected: {
+  backgroundColor: '#4e73df',
+},
+
+tagText: {
+  fontSize: 14,
+  color: '#333',
+},
+
+tagTextSelected: {
+  color: '#fff',
+  fontWeight: '600',
 },
 
 
