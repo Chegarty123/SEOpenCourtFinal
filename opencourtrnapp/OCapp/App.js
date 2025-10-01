@@ -9,6 +9,7 @@ import {
   Pressable,
   Image,
 } from 'react-native';
+import * as Location from "expo-location";
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -156,20 +157,81 @@ function HomeScreen() {
 }
 
 function MapScreen() {
-  const mapRef = useRef<MapView>(null);
+  const mapRef = useRef(null);
   const [selectedCard, setSelectedCard] = useState("");
+  const [userLocation, setUserLocation] = useState(null);
+
+  useEffect(() => {
+    (async () => {
+      let { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== "granted") {
+        console.warn("Permission to access location was denied");
+        return;
+      }
+
+      // Watch position updates live
+      const subscription = await Location.watchPositionAsync(
+        {
+          accuracy: Location.Accuracy.High,
+          timeInterval: 2000, // every 2 seconds
+          distanceInterval: 5, // or every 5 meters
+        },
+        (location) => {
+          setUserLocation({
+            latitude: location.coords.latitude,
+            longitude: location.coords.longitude,
+            latitudeDelta: 0.01,
+            longitudeDelta: 0.01,
+          });
+        }
+      );
+
+      return () => subscription.remove();
+    })();
+  }, []);
 
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Basketball Courts Nearby</Text>
-      <MapView style={styles.map} initialRegion={markers[0].coordinates} mapType="satellite">
+      <MapView ref={mapRef} style={styles.map} initialRegion={markers[0].coordinates} mapType="satellite">
       {markers.map((marker, index) => (<Marker
         key = {index}
         title = {marker.name}
         coordinate = {marker.coordinates}
       />
       ))}
+
+       <Marker coordinate={userLocation} title="You are here">
+  <View style={{ alignItems: "center" }}>
+    {/* Avatar image */}
+    <Image
+      source={{ uri: "https://d1si3tbndbzwz9.cloudfront.net/basketball/player/31932/headshot.png" }}
+      style={{
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        borderWidth: 2,
+        borderColor: "white",
+      }}
+    />
+    {/* Optional little pin "pointer" below */}
+    <View
+      style={{
+        width: 0,
+        height: 0,
+        borderLeftWidth: 8,
+        borderRightWidth: 8,
+        borderTopWidth: 12,
+        borderLeftColor: "transparent",
+        borderRightColor: "transparent",
+        borderTopColor: "blue",
+        marginTop: -2,
+      }}
+    />
+  </View>
+</Marker>
       </MapView>
+
       <View style = {styles.markerListContainer}>
         <FlatList
           horizontal
