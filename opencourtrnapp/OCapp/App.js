@@ -26,7 +26,8 @@ import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
 } from 'firebase/auth';
-import { auth } from './firebaseConfig';
+import { auth, db } from './firebaseConfig';
+import { doc, getDoc, setDoc } from "firebase/firestore";
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -289,11 +290,84 @@ function ProfileScreen() {
   const [gradeLevel, setGradeLevel] = useState("Freshman");
   const [favoriteTeam, setFavoriteTeam] = useState("None");
 
+  const teamLogos = {
+    Hawks: require("./images/hawks.png"),      
+    Raptors: require("./images/raptors.png"),   
+    Nets: require("./images/nets.png"),    
+    Heat: require("./images/heat.png"),         
+    Sixers: require("./images/sixers.png"),         
+    Knicks: require("./images/knicks.png"),     
+    Magic: require("./images/magic.webp"),           
+    Celtics: require("./images/celtics.png"),
+    Bulls: require("./images/bulls.png"),      
+    Cavaliers: require("./images/cavs.png"),  
+    Pistons: require("./images/pistons.png"),     
+    Bucks: require("./images/bucks.png"),         
+    Wizards: require("./images/wizards.webp"),          
+    Hornets: require("./images/hornets.png"),       
+    Pacers: require("./images/pacers.png"),    
+    
+    Nuggets: require("./images/nuggets.png"),      
+    Suns: require("./images/suns.png"),   
+    Clippers: require("./images/clippers.png"),    
+    Lakers: require("./images/lakers.png"),         
+    Trailblazers: require("./images/trailblazers.png"),         
+    Thunder: require("./images/thunder.png"),     
+    Timberwolves: require("./images/timberwolves.png"),           
+    Rockets: require("./images/rockets.png"),
+    Pelicans: require("./images/pelicans.png"),      
+    Grizzlies: require("./images/grizzlies.png"),  
+    Mavericks: require("./images/mavericks.png"),     
+    Spurs: require("./images/spurs.png"),         
+    Warriors: require("./images/warriors.png"),          
+    Jazz: require("./images/jazz.png"),       
+    Kings: require("./images/kings.png"),    
+  };
+
   useEffect(() => {
-    if (user?.metadata?.creationTime) {
-      setMemberSince(new Date(user.metadata.creationTime).toDateString());
-    }
+    const loadProfile = async () => {
+      if (!user) return;
+      const userDoc = doc(db, "users", user.uid);
+      const snapshot = await getDoc(userDoc);
+
+      if (snapshot.exists()) {
+        const data = snapshot.data();
+        setProfilePic(data.profilePic || null);
+        setPosition(data.position || "Point Guard");
+        setGradeLevel(data.gradeLevel || "Freshman");
+        setFavoriteTeam(data.favoriteTeam || "None");
+        setUsername(data.username || user.email.split("@")[0]);
+        setMemberSince(data.memberSince || new Date(user.metadata.creationTime).toDateString());
+      } else {
+        // create default doc if none exists
+        await setDoc(userDoc, {
+          username,
+          profilePic,
+          position,
+          gradeLevel,
+          favoriteTeam,
+          memberSince: new Date(user.metadata.creationTime).toDateString(),
+        });
+      }
+    };
+    loadProfile();
   }, [user]);
+
+  useEffect(() => {
+  if (!user) return;
+  const timeout = setTimeout(async () => {
+    const userDoc = doc(db, "users", user.uid);
+    await setDoc(userDoc, {
+      username,
+      profilePic,
+      position,
+      gradeLevel,
+      favoriteTeam,
+      memberSince: memberSince || new Date(user.metadata.creationTime).toDateString(),
+    });
+  }, 800); // wait 0.8s after last change
+  return () => clearTimeout(timeout);
+}, [username, profilePic, position, gradeLevel, favoriteTeam]);
 
   const pickImage = async () => {
     let result = await ImagePicker.launchImageLibraryAsync({
@@ -383,8 +457,8 @@ function ProfileScreen() {
   <View style={styles.tagContainer}>
     {[
       "Lakers", "Warriors", "Celtics", "Bulls", "Heat",
-  "Nets", "Knicks", "76ers", "Suns", "Mavericks",
-  "Clippers", "Nuggets", "Timberwolves", "Trail Blazers", "Jazz",
+  "Nets", "Knicks", "Sixers", "Suns", "Mavericks",
+  "Clippers", "Nuggets", "Timberwolves", "Trailblazers", "Jazz",
   "Thunder", "Spurs", "Rockets", "Grizzlies", "Pelicans",
   "Kings", "Magic", "Pacers", "Pistons", "Cavaliers",
   "Hawks", "Hornets", "Wizards", "Raptors", "Bucks"
@@ -394,10 +468,15 @@ function ProfileScreen() {
         key={team}
         style={[
           styles.tag,
-          favoriteTeam === team && styles.tagSelected
+          favoriteTeam === team && styles.tagSelected,
+          { alignItems: "center" }
         ]}
         onPress={() => setFavoriteTeam(team)}
       >
+        <Image
+        source={teamLogos[team]}               
+        style={{ width: 18, height: 18, marginBottom: 4 }}
+        />
         <Text style={[
           styles.tagText,
           favoriteTeam === team && styles.tagTextSelected
