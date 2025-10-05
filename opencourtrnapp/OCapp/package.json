@@ -23,7 +23,10 @@
     "react-native-maps": "1.20.1",
     "react-native-safe-area-context": "~5.6.0",
     "react-native-screens": "~4.16.0",
-    "expo-location": "~19.0.7"
+    "expo-location": "~19.0.7",
+    "expo-splash-screen": "~31.0.10",
+    "expo-asset": "~12.0.9",
+    "expo-font": "~14.0.8"
   },
   "devDependencies": {
     "@babel/core": "^7.20.0"
