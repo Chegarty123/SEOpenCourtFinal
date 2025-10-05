@@ -66,7 +66,7 @@ function LoginScreen({ navigation }) {
         {/* circular logo badge */}
         <View style={styles.logoBadge}>
           <Image
-            source={require('./images/OCLOGO.png')}
+            source={require('./images/OCLogo.png')}
             style={{ width: 76, height: 76 }}
             resizeMode="contain"
           />
@@ -250,7 +250,7 @@ function HomeScreen({ navigation }) {
           <Text style={styles.homeName}>{firstName}</Text>
         </View>
         <Image
-          source={require('./images/OCLOGO.png')}
+          source={require('./images/OCLogo.png')}
           style={styles.homeLogo}
           resizeMode="contain"
         />
