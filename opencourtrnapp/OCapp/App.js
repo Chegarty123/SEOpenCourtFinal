@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import * as Location from "expo-location";
 import { NavigationContainer } from '@react-navigation/native';
+import { useNavigation } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,6 +22,7 @@ import markers from './assets/markers';
 import * as ImagePicker from "expo-image-picker";
 import { Picker } from "@react-native-picker/picker";
 import { ScrollView } from 'react-native';
+import { Alert } from "react-native";
 
 // Firebase imports
 import {
@@ -320,7 +322,7 @@ function HomeScreen({ navigation }) {
 
 
 
-function MapScreen() {
+function MapScreen({ navigation }) {
   const mapRef = useRef(null);
   const [selectedCard, setSelectedCard] = useState("");
   const [userLocation, setUserLocation] = useState(null);
@@ -344,8 +346,8 @@ function MapScreen() {
           setUserLocation({
             latitude: location.coords.latitude,
             longitude: location.coords.longitude,
-            latitudeDelta: 0.01,
-            longitudeDelta: 0.01,
+            latitudeDelta: 0.0075,
+            longitudeDelta: 0.0075,
           });
         }
       );
@@ -357,18 +359,23 @@ function MapScreen() {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Basketball Courts Nearby</Text>
-      <MapView ref={mapRef} style={styles.map} initialRegion={markers[0].coordinates} mapType="satellite">
+      <MapView ref={mapRef} style={styles.map} initialRegion={userLocation} mapType="satellite">
       {markers.map((marker, index) => (<Marker
+        onPress={() => {mapRef.current?.animateToRegion(marker.coordinates, 1000);}}
         key = {index}
         title = {marker.name}
         coordinate = {marker.coordinates}
       />
       ))}
 
-       <Marker coordinate={userLocation} title="You are here">
-  <View style={{ alignItems: "center" }}>
+       <Marker onPress={() => {mapRef.current?.animateToRegion(userLocation, 1000);}}
+       coordinate={userLocation}
+       title="Your Location"
+       pinColor="blue"
+       />
+    {/* <View style={{ alignItems: "center" }}>
     {/* Avatar image */}
-    <Image
+    {/* <Image
       source={{ uri: "https://d1si3tbndbzwz9.cloudfront.net/basketball/player/31932/headshot.png" }}
       style={{
         width: 40,
@@ -377,9 +384,9 @@ function MapScreen() {
         borderWidth: 2,
         borderColor: "white",
       }}
-    />
+    /> */}
     {/* Optional little pin "pointer" below */}
-    <View
+    {/* <View
       style={{
         width: 0,
         height: 0,
@@ -392,21 +399,40 @@ function MapScreen() {
         marginTop: -2,
       }}
     />
-  </View>
-</Marker>
+  </View> */}
+{/* </Marker> */}
       </MapView>
+      <TouchableOpacity
+  style={styles.locationButton}
+  onPress={() => {
+    if (userLocation) {
+      mapRef.current?.animateToRegion(userLocation, 1000);
+    }
+  }}
+>
+  <Text style={styles.locationButtonText}>Find My Location</Text>
+</TouchableOpacity>
 
       <View style = {styles.markerListContainer}>
         <FlatList
           horizontal
           data={markers}
-          keyExtractors={(item) => item.name}
+          keyExtractor={(item) => item.name}
           renderItem={({ item: marker}) => (
             <Pressable
               onPress={() => {
                 setSelectedCard(marker.name);
                 mapRef.current?.animateToRegion(marker.coordinates, 1000);
-              }}
+                Alert.alert(
+                  "Navigate to Court?",
+                  `Do you want to view the page of ${marker.name}?`,
+                    [
+                      { text: "No", style: "cancel" },
+                      { text: "Yes", onPress: () => navigation.navigate('CourtDetail', {marker})}
+                    ]
+                );
+              }
+              }
               style={
                 marker.name === selectedCard
                   ? styles.activateMarkerButton
@@ -662,6 +688,50 @@ function ProfileScreen() {
   );
 }
 
+function CourtDetailScreen({ route, navigation }) {
+  const { marker } = route.params;
+  const [checkedIn, setCheckedIn] = useState(false);
+
+  return (
+    <View style={styles.container}>
+      <Text style={styles.title}>{marker.name}</Text>
+      <Image source={{ uri: marker.image }} style={styles.profileImage} />
+      <Text style={{ marginVertical: 10 }}>{marker.description}</Text>
+
+      {/* Placeholder for users currently checked in */}
+      <Text style={{ fontSize: 16, marginVertical: 10 }}>
+        Users checked in: {checkedIn ? "1 (You)" : "0"}
+      </Text>
+
+      {/* Check-in/out buttons */}
+      {!checkedIn ? (
+        <TouchableOpacity
+          style={styles.button}
+          onPress={() => setCheckedIn(true)}
+        >
+          <Text style={styles.buttonText}>Check In</Text>
+        </TouchableOpacity>
+      ) : (
+        <TouchableOpacity
+          style={[styles.button, { backgroundColor: "red" }]}
+          onPress={() => setCheckedIn(false)}
+        >
+          <Text style={styles.buttonText}>Check Out</Text>
+        </TouchableOpacity>
+      )}
+
+      <TouchableOpacity
+        style={[styles.button, { backgroundColor: "#4e73df", marginTop: 20 }]}
+        onPress={() => navigation.goBack()}
+      >
+        <Text style={styles.buttonText}>Back to Map</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+
+
 /* ------------------ BOTTOM TABS ------------------ */
 function MainTabs() {
   return (
@@ -714,6 +784,14 @@ export default function App() {
         <Stack.Screen
           name="MainTabs"
           component={MainTabs}
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen name="MapScreen"
+        component={MapScreen}
+        />
+        <Stack.Screen
+          name="CourtDetail"
+          component={CourtDetailScreen}
           options={{ headerShown: false }}
         />
       </Stack.Navigator>
@@ -781,7 +859,8 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   map: {
-    width: '100%', height: '100%'
+    width: '100%', height: '100%',
+    paddingBottom: 230
   },
   markerListContainer: {
     position: "absolute",
@@ -1119,6 +1198,41 @@ tagTextSelected: {
   },
   bannerTitle: { color: '#0b2239', fontWeight: '800' },
   bannerSub:   { color: '#43607a', fontSize: 12, marginTop: 2 },
+
+  header: {
+  position: "absolute",
+  top: 40, // adjust for status bar
+  alignSelf: "center",
+  fontSize: 20,
+  fontWeight: "bold",
+  color: "black",
+  backgroundColor: "rgba(255, 255, 255, 0.8)", // slightly see-through
+  paddingHorizontal: 12,
+  paddingVertical: 6,
+  borderRadius: 10,
+  zIndex: 10,
+},
+
+locationButton: {
+  position: "absolute",
+  top: 65, // below header
+  alignSelf: "center",
+  backgroundColor: "white",
+  paddingVertical: 5,
+  paddingHorizontal: 10,
+  borderRadius: 25,
+  shadowColor: "#000",
+  shadowOpacity: 0.2,
+  shadowOffset: { width: 0, height: 2 },
+  shadowRadius: 4,
+  elevation: 5,
+  zIndex: 10,
+},
+
+locationButtonText: {
+  color: "blue",
+  fontWeight: "bold",
+},
 
 
   
