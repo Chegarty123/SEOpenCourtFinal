@@ -1,7 +1,7 @@
 import { StyleSheet } from 'react-native';
 
 export const styles = StyleSheet.create({
-  /* ===== Generic / shared ===== */
+  /* ======================== Generic / shared ======================== */
   container: {
     flex: 1,
     backgroundColor: '#f5f7fa',
@@ -60,7 +60,7 @@ export const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
-  /* ===== Map screen ===== */
+  /* ======================== Map screen ======================== */
   map: {
     width: '100%',
     height: '100%',
@@ -158,7 +158,7 @@ export const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
 
-  /* ===== Profile screen ===== */
+  /* ======================== Profile screen ======================== */
   profileImage: {
     width: 100,
     height: 100,
@@ -253,7 +253,7 @@ export const styles = StyleSheet.create({
     paddingBottom: 40,
   },
 
-  /* ===== Auth / Sign-in ===== */
+  /* ======================== Auth / Sign-in ======================== */
   authScreen: {
     flex: 1,
     backgroundColor: '#f3f6fb',
@@ -395,7 +395,7 @@ export const styles = StyleSheet.create({
   socialText: { fontWeight: '600', color: '#0b2239' },
   footerText: { marginTop: 14, textAlign: 'center', color: '#5b718a' },
 
-  /* ===== Home screen ===== */
+  /* ======================== Home screen ======================== */
   homeWrap: {
     flex: 1,
     backgroundColor: '#eef3f9',
@@ -468,7 +468,7 @@ export const styles = StyleSheet.create({
   bannerTitle: { color: '#0b2239', fontWeight: '800' },
   bannerSub: { color: '#43607a', fontSize: 12, marginTop: 2 },
 
-  /* ===== Court Detail screen ===== */
+  /* ======================== Court Detail screen ======================== */
   courtScreenWrap: {
     flex: 1,
     backgroundColor: '#f3f6fb',
@@ -733,4 +733,138 @@ export const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  chatMessagesOuter: {
+    borderWidth: 1,
+    borderColor: "#cbd5e1",
+    borderRadius: 12,
+    backgroundColor: "#f8fafc",
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    marginTop: 12,
+    maxHeight: 260, // controls how tall the chat window is
+  },
+  
+  chatScroll: {
+    flexGrow: 0,
+  },
+  
+  chatScrollContent: {
+    paddingBottom: 8,
+    rowGap: 12, // if RN yells about rowGap, swap to gap or manual marginBottom
+  },
+  
+  chatBubble: {
+    maxWidth: "75%",
+    borderRadius: 16,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+  },
+  
+  chatBubbleMine: {
+    backgroundColor: "#1e5fa9",
+    alignSelf: "flex-end",
+    borderBottomRightRadius: 4,
+  },
+  
+  chatBubbleOther: {
+    backgroundColor: "#e2e8f0",
+    alignSelf: "flex-start",
+    borderBottomLeftRadius: 4,
+  },
+  
+  chatUserMine: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#fff",
+    marginBottom: 4,
+  },
+  
+  chatUserOther: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#0b2239",
+    marginBottom: 4,
+  },
+  
+  chatText: {
+    fontSize: 16,
+    lineHeight: 20,
+    color: "#0b2239",
+    fontWeight: "500",
+  },
+  
+  chatTime: {
+    fontSize: 13,
+    lineHeight: 16,
+    color: "#475569",
+    marginTop: 6,
+  }, 
+  
+  chatMessagesOuter: {
+    borderWidth: 1,
+    borderColor: "#cbd5e1",
+    borderRadius: 12,
+    backgroundColor: "#f8fafc",
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    marginTop: 12,
+    maxHeight: 220, // slightly smaller to fit more on screen
+  },
+  
+  chatScroll: {
+    flexGrow: 0,
+  },
+  
+  chatScrollContent: {
+    paddingBottom: 8,
+    rowGap: 8, // tighter gap between messages
+  },
+  
+  chatBubble: {
+    maxWidth: "75%",
+    borderRadius: 14,
+    paddingVertical: 6,   // tighter vertical padding
+    paddingHorizontal: 10, // tighter horizontal padding
+  },
+  
+  chatBubbleMine: {
+    backgroundColor: "#1e5fa9",
+    alignSelf: "flex-end",
+    borderBottomRightRadius: 4,
+  },
+  
+  chatBubbleOther: {
+    backgroundColor: "#e2e8f0",
+    alignSelf: "flex-start",
+    borderBottomLeftRadius: 4,
+  },
+  
+  chatUserMine: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#fff",
+    marginBottom: 2,
+  },
+  
+  chatUserOther: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#0b2239",
+    marginBottom: 2,
+  },
+  
+  chatText: {
+    fontSize: 14,
+    lineHeight: 18,
+    color: "#0b2239",
+    fontWeight: "500",
+  },
+  
+  chatTime: {
+    fontSize: 11,
+    lineHeight: 14,
+    color: "#475569",
+    marginTop: 4,
+  },
+  
 });
