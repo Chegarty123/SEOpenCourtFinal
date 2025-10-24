@@ -1,34 +1,118 @@
-import React from 'react';
-import { useState, useRef } from 'react';
-import MapView, {Marker} from 'react-native-maps';
-import { View, Text, StyleSheet, FlatList, Pressable, Image, } from 'react-native';
-import markers from './assets/markers';
+import React, { useState, useEffect, useRef } from "react";
+import {
+  View,
+  Text,
+  FlatList,
+  Alert,
+  Pressable,
+  Image,
+  TouchableOpacity,
+} from "react-native";
+import * as Location from "expo-location";
+import MapView, { Marker } from "react-native-maps";
+import markers from "../assets/markers";
+import { styles } from "../styles/globalStyles.js";
 
-export default function MapScreen() {
-  const mapRef = useRef<MapView>(null);
+export default function MapScreen({ navigation }) {
+  const mapRef = useRef(null);
   const [selectedCard, setSelectedCard] = useState("");
+  const [userLocation, setUserLocation] = useState(null);
+
+  useEffect(() => {
+    (async () => {
+      let { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== "granted") {
+        console.warn("Permission to access location was denied");
+        return;
+      }
+
+      const subscription = await Location.watchPositionAsync(
+        {
+          accuracy: Location.Accuracy.High,
+          timeInterval: 2000,
+          distanceInterval: 5,
+        },
+        (location) => {
+          setUserLocation({
+            latitude: location.coords.latitude,
+            longitude: location.coords.longitude,
+            latitudeDelta: 0.0075,
+            longitudeDelta: 0.0075,
+          });
+        }
+      );
+
+      return () => subscription.remove();
+    })();
+  }, []);
 
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Basketball Courts Nearby</Text>
-      <MapView style={styles.map} initialRegion={markers[0].coordinates} mapType="satellite">
-      {markers.map((marker, index) => (<Marker
-        key = {index}
-        title = {marker.name}
-        coordinate = {marker.coordinates}
-      />
-      ))}
+
+      <MapView
+        ref={mapRef}
+        style={styles.map}
+        initialRegion={userLocation}
+        mapType="satellite"
+      >
+        {markers.map((marker, index) => (
+          <Marker
+            key={index}
+            onPress={() => {
+              mapRef.current?.animateToRegion(marker.coordinates, 1000);
+            }}
+            title={marker.name}
+            coordinate={marker.coordinates}
+          />
+        ))}
+
+        {userLocation && (
+          <Marker
+            onPress={() => {
+              mapRef.current?.animateToRegion(userLocation, 1000);
+            }}
+            coordinate={userLocation}
+            title="Your Location"
+            pinColor="blue"
+          />
+        )}
       </MapView>
-      <View style = {styles.markerListContainer}>
+
+      <TouchableOpacity
+        style={styles.locationButton}
+        onPress={() => {
+          if (userLocation) {
+            mapRef.current?.animateToRegion(userLocation, 1000);
+          }
+        }}
+      >
+        <Text style={styles.locationButtonText}>Find My Location</Text>
+      </TouchableOpacity>
+
+      {/* horizontal card list */}
+      <View style={styles.markerListContainer}>
         <FlatList
           horizontal
           data={markers}
-          keyExtractors={(item) => item.name}
-          renderItem={({ item: marker}) => (
+          keyExtractor={(item) => item.name}
+          renderItem={({ item: marker }) => (
             <Pressable
               onPress={() => {
                 setSelectedCard(marker.name);
                 mapRef.current?.animateToRegion(marker.coordinates, 1000);
+                Alert.alert(
+                  "Navigate to Court?",
+                  `Do you want to view the page of ${marker.name}?`,
+                  [
+                    { text: "No", style: "cancel" },
+                    {
+                      text: "Yes",
+                      onPress: () =>
+                        navigation.navigate("CourtDetail", { marker }),
+                    },
+                  ]
+                );
               }}
               style={
                 marker.name === selectedCard
@@ -47,82 +131,9 @@ export default function MapScreen() {
                 </Text>
               </View>
             </Pressable>
-          )}/>
-            </View>
+          )}
+        />
+      </View>
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  map: {width: '100%', height: '100%'},
-  title: {
-    fontSize: 26,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 25,
-    textAlign: 'center',
-    marginTop: 25,
-  },
-  markerListContainer: {
-    position: "absolute",
-    bottom: 20,
-    left: 0,
-    right: 0,
-    paddingHorizontal: 10,
-  },
-  markerButton: {
-    backgroundColor: "#fff",
-    borderRadius: 12,
-    padding: 10,
-    marginRight: 12,
-    flexDirection: "row",
-    alignItems: "center",
-    elevation: 3, // Android shadow
-    shadowColor: "#000", // iOS shadow
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 2 },
-    minWidth: 220,
-  },
-  activateMarkerButton: {
-    backgroundColor: "#007AFF", // Highlight color (iOS blue-like)
-    borderRadius: 12,
-    padding: 10,
-    marginRight: 12,
-    flexDirection: "row",
-    alignItems: "center",
-    elevation: 5,
-    shadowColor: "#000",
-    shadowOpacity: 0.25,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 3 },
-    minWidth: 220,
-  },
-
-  // Image
-  markerImage: {
-    width: 60,
-    height: 60,
-    borderRadius: 8,
-    marginRight: 10,
-  },
-
-  // Text info
-  markerInfo: {
-  flex: 1,
-  flexShrink: 1,
-  maxWidth: 140,   // keeps text bounded
-},
-markerName: {
-  fontSize: 16,
-  fontWeight: "bold",
-  color: "#333",
-  marginBottom: 4,
-},
-markerDescription: {
-  fontSize: 13,
-  color: "#666",
-  flexWrap: "wrap",   // ensures wrapping happens
-},
-});
