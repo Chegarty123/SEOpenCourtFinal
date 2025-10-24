@@ -689,46 +689,354 @@ function ProfileScreen() {
 }
 
 function CourtDetailScreen({ route, navigation }) {
-  const { marker } = route.params;
+  const { marker } = route.params || {};
   const [checkedIn, setCheckedIn] = useState(false);
 
+  // pull the logged in firebase user
+  const user = auth.currentUser;
+
+  // this will store YOUR profile info from Firestore
+  const [myProfile, setMyProfile] = useState({
+    id: 'you',
+    name: 'you',
+    avatar: null,
+    note: 'hooping now',
+  });
+
+  // placeholder "who's here" (starts WITHOUT you)
+  const [playersHere, setPlayersHere] = useState([
+    {
+      id: '1',
+      name: 'alex.m',
+      avatar: 'https://i.pravatar.cc/100?img=12',
+      note: 'looking for 3v3',
+    },
+    {
+      id: '2',
+      name: 'jay23',
+      avatar: 'https://i.pravatar.cc/100?img=32',
+      note: 'running full court rn',
+    },
+    {
+      id: '3',
+      name: 'mia.b',
+      avatar: 'https://i.pravatar.cc/100?img=5',
+      note: 'here til 6pm',
+    },
+  ]);
+
+  // local chat state (stub)
+  const [messages, setMessages] = useState([
+    {
+      id: 'm1',
+      user: 'jay23',
+      text: 'We need one more for 4v4.',
+      time: '4:12 PM',
+      mine: false,
+    },
+    {
+      id: 'm2',
+      user: 'alex.m',
+      text: 'I’m walking over now.',
+      time: '4:13 PM',
+      mine: true,
+    },
+    {
+      id: 'm3',
+      user: 'mia.b',
+      text: 'Is it packed?',
+      time: '4:14 PM',
+      mine: false,
+    },
+  ]);
+
+  const [draftMessage, setDraftMessage] = useState('');
+
+  // Load YOUR profile info from Firestore so we can show it in check-in
+  useEffect(() => {
+    const loadMyProfile = async () => {
+      if (!user) return;
+
+      try {
+        const userDocRef = doc(db, "users", user.uid);
+        const snapshot = await getDoc(userDocRef);
+
+        if (snapshot.exists()) {
+          const data = snapshot.data();
+
+          setMyProfile({
+            id: 'you',
+            name: data.username || (user.email ? user.email.split("@")[0] : "you"),
+            avatar: data.profilePic
+              ? data.profilePic
+              : null, // we'll fall back later if null
+            note: 'hooping now', // you can later make this editable
+          });
+        } else {
+          // no doc yet: fallback to auth email and a default image
+          setMyProfile({
+            id: 'you',
+            name: user.email ? user.email.split("@")[0] : "you",
+            avatar: null,
+            note: 'hooping now',
+          });
+        }
+      } catch (err) {
+        console.warn("Failed to load profile", err);
+        // still give a fallback so UI doesn't break
+        setMyProfile({
+          id: 'you',
+          name: user?.email ? user.email.split("@")[0] : "you",
+          avatar: null,
+          note: 'hooping now',
+        });
+      }
+    };
+
+    loadMyProfile();
+  }, [user]);
+
+  const handleCheckInToggle = () => {
+    setCheckedIn((prev) => !prev);
+
+    setPlayersHere((prevPlayers) => {
+      const meIndex = prevPlayers.findIndex((p) => p.id === 'you');
+
+      // If we're checking IN
+      if (!checkedIn) {
+        if (meIndex === -1) {
+          // Build my player card using myProfile
+          const myPlayerCard = {
+            id: 'you',
+            name: myProfile.name || 'you',
+            avatar: myProfile.avatar
+              ? myProfile.avatar
+              : 'https://i.pravatar.cc/100?img=68', // fallback avatar if none picked
+            note: myProfile.note || 'hooping now',
+          };
+
+          // put "you" at the front
+          return [myPlayerCard, ...prevPlayers];
+        }
+        return prevPlayers;
+      }
+
+      // If we're checking OUT
+      if (checkedIn) {
+        if (meIndex !== -1) {
+          const copy = [...prevPlayers];
+          copy.splice(meIndex, 1);
+          return copy;
+        }
+        return prevPlayers;
+      }
+
+      return prevPlayers;
+    });
+  };
+
+  const handleSend = () => {
+    if (!draftMessage.trim()) return;
+
+    const newMsg = {
+      id: `m${Date.now()}`,
+      user: myProfile.name || 'you',
+      text: draftMessage.trim(),
+      time: 'now',
+      mine: true,
+    };
+
+    setMessages((prev) => [...prev, newMsg]);
+    setDraftMessage('');
+  };
+
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>{marker.name}</Text>
-      <Image source={{ uri: marker.image }} style={styles.profileImage} />
-      <Text style={{ marginVertical: 10 }}>{marker.description}</Text>
+    <View style={styles.courtScreenWrap}>
+      {/* === TOP HERO / HEADER === */}
+      <View style={styles.courtHeroContainer}>
+        <Image
+          source={{ uri: marker?.image }}
+          style={styles.courtHeroImage}
+          resizeMode="cover"
+        />
 
-      {/* Placeholder for users currently checked in */}
-      <Text style={{ fontSize: 16, marginVertical: 10 }}>
-        Users checked in: {checkedIn ? "1 (You)" : "0"}
-      </Text>
+        {/* dark overlay */}
+        <View style={styles.courtHeroOverlay} />
 
-      {/* Check-in/out buttons */}
-      {!checkedIn ? (
-        <TouchableOpacity
-          style={styles.button}
-          onPress={() => setCheckedIn(true)}
-        >
-          <Text style={styles.buttonText}>Check In</Text>
-        </TouchableOpacity>
-      ) : (
-        <TouchableOpacity
-          style={[styles.button, { backgroundColor: "red" }]}
-          onPress={() => setCheckedIn(false)}
-        >
-          <Text style={styles.buttonText}>Check Out</Text>
-        </TouchableOpacity>
-      )}
+        {/* top row: back button */}
+        <View style={styles.courtHeroTopRow}>
+          <TouchableOpacity
+            style={styles.courtBackBtn}
+            onPress={() => navigation.goBack()}
+          >
+            <Ionicons name="chevron-back" size={20} color="#0b2239" />
+            <Text style={styles.courtBackBtnText}>Back</Text>
+          </TouchableOpacity>
+        </View>
 
-      <TouchableOpacity
-        style={[styles.button, { backgroundColor: "#4e73df", marginTop: 20 }]}
-        onPress={() => navigation.goBack()}
+        {/* bottom info */}
+        <View style={styles.courtHeroBottom}>
+          <Text style={styles.courtName}>{marker?.name || 'Court Name'}</Text>
+          <Text style={styles.courtSubText}>
+            {marker?.description || 'Outdoor court • Lights • Full court'}
+          </Text>
+
+          <View style={styles.courtStatsRow}>
+            <View style={styles.courtStatChip}>
+              <Ionicons name="people-outline" size={16} color="#0b2239" />
+              <Text style={styles.courtStatText}>
+                {playersHere.length} here now
+              </Text>
+            </View>
+
+            <View style={styles.courtStatChip}>
+              <Ionicons name="star" size={16} color="#0b2239" />
+              <Text style={styles.courtStatText}>4.6 rating</Text>
+            </View>
+          </View>
+        </View>
+      </View>
+
+      {/* === CONTENT SCROLL === */}
+      <ScrollView
+        style={styles.courtContentScroll}
+        contentContainerStyle={{ paddingBottom: 140 }}
+        showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.buttonText}>Back to Map</Text>
-      </TouchableOpacity>
+        {/* Check-in / who’s here card */}
+        <View style={styles.courtCard}>
+          <View style={styles.cardHeaderRow}>
+            <Text style={styles.cardHeaderText}>Who's on this court</Text>
+            <View style={styles.cardHeaderRight}>
+              <Ionicons
+                name="radio-button-on-outline"
+                size={14}
+                color={checkedIn ? '#10b981' : '#64748b'}
+              />
+              <Text
+                style={[
+                  styles.cardHeaderPresence,
+                  { color: checkedIn ? '#10b981' : '#64748b' },
+                ]}
+              >
+                {checkedIn ? 'You are checked in' : 'You are not checked in'}
+              </Text>
+            </View>
+          </View>
+
+          {/* avatar row */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.playersRow}
+          >
+            {playersHere.map((p) => (
+              <View key={p.id} style={styles.playerBubble}>
+                <Image
+                  source={{ uri: p.avatar }}
+                  style={styles.playerAvatar}
+                />
+                <Text style={styles.playerName} numberOfLines={1}>
+                  {p.name}
+                </Text>
+                <Text style={styles.playerNote} numberOfLines={1}>
+                  {p.note}
+                </Text>
+              </View>
+            ))}
+          </ScrollView>
+
+          {/* Check-in button */}
+          <TouchableOpacity
+            style={[
+              styles.checkInBtn,
+              checkedIn ? styles.checkOutBtn : null,
+            ]}
+            onPress={handleCheckInToggle}
+            activeOpacity={0.9}
+          >
+            <Ionicons
+              name={checkedIn ? 'log-out-outline' : 'log-in-outline'}
+              size={18}
+              color="#fff"
+            />
+            <Text style={styles.checkInBtnText}>
+              {checkedIn ? 'Check Out' : 'Check In'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Chat card */}
+        <View style={styles.courtCard}>
+          <View style={styles.cardHeaderRow}>
+            <Text style={styles.cardHeaderText}>Court Chat</Text>
+            <Text style={styles.chatHintText}>
+              Use this to set up games or ask if it’s active.
+            </Text>
+          </View>
+
+          {/* messages */}
+          <View style={styles.chatMessagesWrap}>
+            {messages.map((m) => (
+              <View
+                key={m.id}
+                style={[
+                  styles.chatBubble,
+                  m.mine ? styles.chatBubbleMine : styles.chatBubbleOther,
+                ]}
+              >
+                {!m.mine && (
+                  <Text style={styles.chatUserOther}>{m.user}</Text>
+                )}
+                {m.mine && (
+                  <Text style={styles.chatUserMine}>You</Text>
+                )}
+
+                <Text
+                  style={[
+                    styles.chatText,
+                    m.mine && { color: '#fff' },
+                  ]}
+                >
+                  {m.text}
+                </Text>
+                <Text
+                  style={[
+                    styles.chatTime,
+                    m.mine && { color: '#cbd5e1' },
+                  ]}
+                >
+                  {m.time}
+                </Text>
+              </View>
+            ))}
+          </View>
+        </View>
+      </ScrollView>
+
+      {/* fixed bottom input bar */}
+      <View style={styles.chatInputBar}>
+        <TextInput
+          style={styles.chatInput}
+          placeholder="Message this court..."
+          placeholderTextColor="#8aa0b6"
+          value={draftMessage}
+          onChangeText={setDraftMessage}
+          returnKeyType="send"
+          onSubmitEditing={handleSend}
+        />
+        <TouchableOpacity
+          style={styles.sendBtn}
+          onPress={handleSend}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="send" size={18} color="#fff" />
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
+
 
 
 
@@ -748,10 +1056,11 @@ function MainTabs() {
             iconName = 'home-outline';
           } else if (route.name === 'Map') {
             iconName = 'map-outline';
-          } else if (route.name === 'Settings') {
-            iconName = 'settings-outline';
-          } else if (route.name === 'Profile') {
+          }  else if (route.name === 'Profile') {
             iconName = 'person-outline';
+          }
+          else if (route.name === 'Settings') {
+            iconName = 'settings-outline';
           }
 
           return <Ionicons name={iconName} size={size} color={color} />;
@@ -760,8 +1069,8 @@ function MainTabs() {
     >
       <Tab.Screen name="Home" component={HomeScreen} />
       <Tab.Screen name="Map" component={MapScreen} />
-      <Tab.Screen name="Settings" component={SettingsScreen} />
       <Tab.Screen name="Profile" component={ProfileScreen} />
+      <Tab.Screen name="Settings" component={SettingsScreen} />
     </Tab.Navigator>
   );
 }
@@ -1234,8 +1543,283 @@ locationButtonText: {
   fontWeight: "bold",
 },
 
+  /* ===== COURT DETAIL SCREEN ===== */
+  courtScreenWrap: {
+    flex: 1,
+    backgroundColor: '#f3f6fb',
+  },
 
-  
+  /* HERO / HEADER */
+  courtHeroContainer: {
+    width: '100%',
+    height: 220,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+    overflow: 'hidden',
+    backgroundColor: '#000', // fallback
+  },
+  courtHeroImage: {
+    position: 'absolute',
+    width: '100%',
+    height: '100%',
+  },
+  courtHeroOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+  },
+  courtHeroTopRow: {
+    position: 'absolute',
+    top: 40,
+    left: 16,
+    right: 16,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    zIndex: 10,
+  },
+  courtBackBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.9)',
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 12,
+  },
+  courtBackBtnText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#0b2239',
+    marginLeft: 4,
+  },
+
+  courtHeroBottom: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    bottom: 16,
+  },
+  courtName: {
+    color: '#fff',
+    fontSize: 24,
+    fontWeight: '800',
+    textShadowColor: 'rgba(0,0,0,0.6)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 6,
+  },
+  courtSubText: {
+    color: '#dbeafe',
+    fontSize: 13,
+    marginTop: 4,
+  },
+  courtStatsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginTop: 12,
+    gap: 8,
+  },
+  courtStatChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.9)',
+    borderRadius: 12,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+  },
+  courtStatText: {
+    color: '#0b2239',
+    fontWeight: '600',
+    fontSize: 13,
+    marginLeft: 6,
+  },
+
+  /* MAIN CONTENT */
+  courtContentScroll: {
+    flex: 1,
+    paddingHorizontal: 16,
+    paddingTop: 16,
+  },
+
+  courtCard: {
+    backgroundColor: '#fff',
+    borderRadius: 18,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 4,
+  },
+
+  cardHeaderRow: {
+    flexDirection: 'column',
+    marginBottom: 12,
+  },
+  cardHeaderText: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0b2239',
+  },
+  cardHeaderRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 6,
+    gap: 6,
+  },
+  cardHeaderPresence: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+
+  /* PLAYERS / CHECK-IN */
+  playersRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    paddingVertical: 6,
+  },
+  playerBubble: {
+    width: 90,
+    marginRight: 12,
+    alignItems: 'center',
+    backgroundColor: '#f8fafc',
+    borderRadius: 16,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+  },
+  playerAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 2,
+    borderColor: '#4e73df',
+    marginBottom: 6,
+  },
+  playerName: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0b2239',
+    maxWidth: '100%',
+  },
+  playerNote: {
+    fontSize: 11,
+    color: '#64748b',
+    maxWidth: '100%',
+    textAlign: 'center',
+  },
+
+  checkInBtn: {
+    marginTop: 14,
+    backgroundColor: '#1f6fb2', // same vibe as primaryBtn
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  checkOutBtn: {
+    backgroundColor: '#ef4444', // red if checked in
+  },
+  checkInBtnText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
+    marginLeft: 6,
+  },
+
+  /* CHAT */
+  chatHintText: {
+    marginTop: 4,
+    color: '#5b718a',
+    fontSize: 12,
+    fontWeight: '400',
+  },
+
+  chatMessagesWrap: {
+    backgroundColor: '#f7fbff',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#d6e2ee',
+    padding: 12,
+    maxHeight: 260, // keeps it from taking entire screen
+  },
+
+  chatBubble: {
+    maxWidth: '80%',
+    borderRadius: 14,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    marginBottom: 10,
+  },
+  chatBubbleMine: {
+    alignSelf: 'flex-end',
+    backgroundColor: '#1f6fb2',
+  },
+  chatBubbleOther: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#e2e8f0',
+  },
+  chatUserMine: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  chatUserOther: {
+    color: '#0b2239',
+    fontSize: 11,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  chatText: {
+    color: '#0b2239',
+    fontSize: 14,
+    lineHeight: 18,
+  },
+  chatTime: {
+    fontSize: 10,
+    marginTop: 4,
+    color: '#475569',
+  },
+
+  /* override text color for your own bubble */
+  // We'll tweak chatText + chatTime color when it's "mine"
+  // using inline styles instead of extra styles, so no need
+  // for separate style keys here.
+
+  /* CHAT INPUT BAR (fixed at bottom) */
+  chatInputBar: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#d6e2ee',
+  },
+  chatInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#d6e2ee',
+    backgroundColor: '#f7fbff',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    fontSize: 14,
+    color: '#0b2239',
+    marginRight: 10,
+  },
+  sendBtn: {
+    backgroundColor: '#1f6fb2',
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 
 
 });
