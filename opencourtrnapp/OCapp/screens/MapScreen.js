@@ -6,6 +6,7 @@ import {
   Image,
   ScrollView,
   Platform,
+  Dimensions,
 } from "react-native";
 import * as Location from "expo-location";
 import MapView, { Marker } from "react-native-maps";
@@ -16,6 +17,8 @@ import { styles } from "../styles/globalStyles";
 export default function MapScreen({ navigation }) {
   const mapRef = useRef(null);
   const [userLocation, setUserLocation] = useState(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [hasCentered, setHasCentered] = useState(false);
 
   // get live user location and follow updates
   useEffect(() => {
@@ -55,6 +58,15 @@ export default function MapScreen({ navigation }) {
     if (!region) return;
     mapRef.current?.animateToRegion(region, 1000);
   };
+
+  useEffect(() => {
+    if (userLocation && !hasCentered) {
+      flyTo(userLocation);
+      setHasCentered(true);
+    }
+  }, [userLocation]);
+
+  const { height } = Dimensions.get("window");
 
   return (
     <View
