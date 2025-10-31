@@ -7,6 +7,7 @@ import {
   ScrollView,
   Platform,
   Dimensions,
+  Modal,
 } from "react-native";
 import * as Location from "expo-location";
 import MapView, { Marker } from "react-native-maps";
@@ -16,15 +17,16 @@ import { styles } from "../styles/globalStyles";
 
 export default function MapScreen({ navigation }) {
   const mapRef = useRef(null);
+  const fullscreenMapRef = useRef(null);
   const [userLocation, setUserLocation] = useState(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [hasCentered, setHasCentered] = useState(false);
+  const [currentRegion, setCurrentRegion] = useState(null);
 
-  // get live user location and follow updates
+  // ✅ Get user location and update continuously
   useEffect(() => {
     (async () => {
-      let { status } =
-        await Location.requestForegroundPermissionsAsync();
+      let { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== "granted") {
         console.warn("Permission to access location was denied");
         return;
@@ -53,10 +55,11 @@ export default function MapScreen({ navigation }) {
     })();
   }, []);
 
-  // helper to jump to a region
-  const flyTo = (region) => {
-    if (!region) return;
-    mapRef.current?.animateToRegion(region, 1000);
+  // ✅ Updated helper — works for both main & fullscreen maps
+  const flyTo = (region, mapToUse = mapRef) => {
+    if (!region || !mapToUse?.current) return;
+    mapToUse.current.animateToRegion(region, 1000);
+    setCurrentRegion(region);
   };
 
   useEffect(() => {
@@ -72,7 +75,7 @@ export default function MapScreen({ navigation }) {
     <View
       style={{
         flex: 1,
-        backgroundColor: "#eef2f7", // same bg vibe as CourtDetail screen
+        backgroundColor: "#eef2f7",
         paddingTop: Platform.OS === "ios" ? 50 : 20,
       }}
     >
@@ -87,22 +90,10 @@ export default function MapScreen({ navigation }) {
         }}
       >
         <View style={{ flexShrink: 1 }}>
-          <Text
-            style={{
-              color: "#0b2239",
-              fontSize: 14,
-              fontWeight: "500",
-            }}
-          >
+          <Text style={{ color: "#0b2239", fontSize: 14, fontWeight: "500" }}>
             Courts Near You
           </Text>
-          <Text
-            style={{
-              color: "#0b2239",
-              fontSize: 24,
-              fontWeight: "700",
-            }}
-          >
+          <Text style={{ color: "#0b2239", fontSize: 24, fontWeight: "700" }}>
             Find a run 🏀
           </Text>
         </View>
@@ -146,30 +137,27 @@ export default function MapScreen({ navigation }) {
         }}
       >
         <MapView
-          ref={mapRef}
-          style={{ flex: 1 }}
-          mapType="satellite"
-          initialRegion={
-            userLocation || {
-              // fallback center-ish on campus so it doesn't crash first render
-              latitude: markers[0]?.coordinates.latitude || 0,
-              longitude: markers[0]?.coordinates.longitude || 0,
-              latitudeDelta:
-                markers[0]?.coordinates.latitudeDelta || 0.0075,
-              longitudeDelta:
-                markers[0]?.coordinates.longitudeDelta || 0.0075,
-            }
-          }
-        >
+  ref={mapRef}
+  style={{ flex: 1 }}
+  mapType="satellite"
+  region={
+    currentRegion ||
+    userLocation || {
+      latitude: markers[0]?.coordinates.latitude || 0,
+      longitude: markers[0]?.coordinates.longitude || 0,
+      latitudeDelta: 0.0075,
+      longitudeDelta: 0.0075,
+    }
+  }
+  onRegionChangeComplete={(region) => setCurrentRegion(region)} // 👈 keep in sync
+>
           {/* Court markers */}
           {markers.map((marker) => (
             <Marker
               key={marker.id}
               title={marker.name}
               coordinate={marker.coordinates}
-              onPress={() => {
-                flyTo(marker.coordinates);
-              }}
+              onPress={() => flyTo(marker.coordinates, mapRef)} // ✅ explicitly use mapRef
             />
           ))}
 
@@ -179,17 +167,41 @@ export default function MapScreen({ navigation }) {
               coordinate={userLocation}
               title="You"
               pinColor="dodgerblue"
-              onPress={() => {
-                flyTo(userLocation);
-              }}
+              onPress={() => flyTo(userLocation, mapRef)} // ✅ explicitly use mapRef
             />
           )}
         </MapView>
 
-        {/* Find My Location floating button */}
+        {/* Fullscreen toggle */}
+        <TouchableOpacity
+          onPress={() => {
+  if (currentRegion && fullscreenMapRef.current) {
+    fullscreenMapRef.current.animateToRegion(currentRegion, 0);
+  }
+  setIsFullscreen(true);
+}}
+          activeOpacity={0.9}
+          style={{
+            position: "absolute",
+            top: 16,
+            right: 16,
+            backgroundColor: "#ffffff",
+            borderRadius: 10,
+            padding: 8,
+            shadowColor: "#000",
+            shadowOpacity: 0.15,
+            shadowRadius: 8,
+            shadowOffset: { width: 0, height: 3 },
+            elevation: 4,
+          }}
+        >
+          <Ionicons name="expand-outline" size={20} color="#0b2239" />
+        </TouchableOpacity>
+
+        {/* My Location */}
         <TouchableOpacity
           activeOpacity={0.9}
-          onPress={() => flyTo(userLocation)}
+          onPress={() => flyTo(userLocation, mapRef)} // ✅ explicitly use mapRef
           style={{
             position: "absolute",
             right: 16,
@@ -225,7 +237,91 @@ export default function MapScreen({ navigation }) {
         </TouchableOpacity>
       </View>
 
-      {/* BOTTOM SHEET STYLE COURT LIST */}
+      {/* ✅ FULLSCREEN MAP MODAL */}
+      <Modal visible={isFullscreen} animationType="fade" transparent={true}>
+        <View style={{ flex: 1, backgroundColor: "#000" }}>
+          <MapView
+  ref={fullscreenMapRef}
+  style={{ flex: 1 }}
+  mapType="satellite"
+  region={currentRegion || userLocation}
+  onRegionChangeComplete={(region) => setCurrentRegion(region)} // 👈 sync region
+>
+            {markers.map((marker) => (
+              <Marker
+                key={marker.id}
+                title={marker.name}
+                coordinate={marker.coordinates}
+                onPress={() => flyTo(marker.coordinates, fullscreenMapRef)} // ✅ correct reference
+              />
+            ))}
+
+            {userLocation && (
+              <Marker
+                coordinate={userLocation}
+                title="You"
+                pinColor="dodgerblue"
+                onPress={() => flyTo(userLocation, fullscreenMapRef)} // ✅ correct reference
+              />
+            )}
+          </MapView>
+
+          {/* Close Button */}
+          <TouchableOpacity
+            onPress={() => setIsFullscreen(false)}
+            activeOpacity={0.9}
+            style={{
+              position: "absolute",
+              top: 40,
+              right: 20,
+              backgroundColor: "#ffffff",
+              borderRadius: 10,
+              padding: 8,
+              shadowColor: "#000",
+              shadowOpacity: 0.2,
+              shadowRadius: 6,
+              shadowOffset: { width: 0, height: 3 },
+              elevation: 4,
+            }}
+          >
+            <Ionicons name="close-outline" size={22} color="#0b2239" />
+          </TouchableOpacity>
+
+          {/* ✅ My Location Button in Fullscreen */}
+          <TouchableOpacity
+            activeOpacity={0.9}
+            onPress={() => flyTo(userLocation, fullscreenMapRef)} // ✅ correct reference
+            style={{
+              position: "absolute",
+              right: 20,
+              bottom: 30,
+              backgroundColor: "#ffffff",
+              paddingHorizontal: 14,
+              paddingVertical: 10,
+              borderRadius: 12,
+              flexDirection: "row",
+              alignItems: "center",
+              shadowColor: "#000",
+              shadowOpacity: 0.15,
+              shadowRadius: 8,
+              shadowOffset: { width: 0, height: 3 },
+              elevation: 4,
+            }}
+          >
+            <Ionicons
+              name="locate-outline"
+              size={18}
+              color="#0b2239"
+              style={{ marginRight: 6 }}
+            />
+            <Text style={{ color: "#0b2239", fontSize: 14, fontWeight: "600" }}>
+              My Location
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </Modal>
+
+      {/* COURT LIST */}
       <View
         style={{
           backgroundColor: "#fff",
@@ -319,24 +415,16 @@ export default function MapScreen({ navigation }) {
                 overflow: "hidden",
               }}
               onPress={() => {
-                // fly map to court
-                flyTo(marker.coordinates);
-
-                // navigate to detail
+                flyTo(marker.coordinates, mapRef);
                 navigation.navigate("CourtDetail", { marker });
               }}
             >
-              {/* Court image */}
               <Image
                 source={{ uri: marker.image }}
-                style={{
-                  width: "100%",
-                  height: 110,
-                }}
+                style={{ width: "100%", height: 110 }}
                 resizeMode="cover"
               />
 
-              {/* Info row */}
               <View style={{ padding: 12 }}>
                 <Text
                   style={{
@@ -363,7 +451,6 @@ export default function MapScreen({ navigation }) {
                   {marker.description}
                 </Text>
 
-                {/* bottom row: fake activity + button chevron */}
                 <View
                   style={{
                     flexDirection: "row",
@@ -400,12 +487,7 @@ export default function MapScreen({ navigation }) {
                     </Text>
                   </View>
 
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                    }}
-                  >
+                  <View style={{ flexDirection: "row", alignItems: "center" }}>
                     <Text
                       style={{
                         color: "#1e5fa9",
@@ -431,3 +513,4 @@ export default function MapScreen({ navigation }) {
     </View>
   );
 }
+
