@@ -1,3 +1,4 @@
+// screens/CourtDetailScreen.js
 import React, { useState, useEffect, useRef } from "react";
 import {
   View,
@@ -57,7 +58,7 @@ export default function CourtDetailScreen({ route, navigation }) {
     return `${hh}:${mm} ${ampm}`;
   };
 
-  // load my profile
+  // load my profile (so we know my avatar/name for check-ins & chat)
   useEffect(() => {
     const loadMyProfile = async () => {
       if (!user) return;
@@ -109,7 +110,7 @@ export default function CourtDetailScreen({ route, navigation }) {
       snap.forEach((d) => {
         const data = d.data();
         list.push({
-          id: d.id,
+          id: d.id, // this is the userId
           name: data.username || "player",
           avatar:
             data.avatar ||
@@ -217,7 +218,7 @@ export default function CourtDetailScreen({ route, navigation }) {
     <KeyboardAvoidingView
       style={{ flex: 1, backgroundColor: "#eef2f7" }}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
-      keyboardVerticalOffset={Platform.OS === "ios" ? 20 : 0} // adjust if header overlaps
+      keyboardVerticalOffset={Platform.OS === "ios" ? 20 : 0}
     >
       <View style={[styles.courtScreenWrap, { flex: 1 }]}>
         {/* HERO HEADER */}
@@ -306,7 +307,6 @@ export default function CourtDetailScreen({ route, navigation }) {
                 <TouchableOpacity
                   key={p.id}
                   style={styles.playerBubble}
-                  activeOpacity={0.8}
                   onPress={() =>
                     navigation.navigate("UserProfile", {
                       userId: p.id,
@@ -314,11 +314,7 @@ export default function CourtDetailScreen({ route, navigation }) {
                   }
                 >
                   <Image
-                    source={
-                      p.avatar
-                        ? { uri: p.avatar }
-                        : require("../images/defaultProfile.png") // fallback so it's never blank
-                    }
+                    source={{ uri: p.avatar }}
                     style={styles.playerAvatar}
                   />
                   <Text style={styles.playerName} numberOfLines={1}>
@@ -330,7 +326,6 @@ export default function CourtDetailScreen({ route, navigation }) {
                 </TouchableOpacity>
               ))}
             </ScrollView>
-
 
             {/* check in/out button */}
             <TouchableOpacity
@@ -380,9 +375,7 @@ export default function CourtDetailScreen({ route, navigation }) {
                     ]}
                   >
                     {!m.mine && (
-                      <Text style={styles.chatUserOther}>
-                        {m.user}
-                      </Text>
+                      <Text style={styles.chatUserOther}>{m.user}</Text>
                     )}
                     {m.mine && (
                       <Text style={styles.chatUserMine}>You</Text>

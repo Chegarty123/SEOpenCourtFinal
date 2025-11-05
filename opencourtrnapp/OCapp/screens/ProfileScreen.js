@@ -1,3 +1,4 @@
+// screens/ProfileScreen.js
 import React, { useState, useEffect } from "react";
 import {
   View,
@@ -5,23 +6,31 @@ import {
   TouchableOpacity,
   Image,
   ScrollView,
+  ActivityIndicator,
   Alert,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
-import { auth, db } from "../firebaseConfig";
+import { auth, db, storage } from "../firebaseConfig";
 import { doc, getDoc, setDoc } from "firebase/firestore";
-import { signOut } from "firebase/auth";
+import { onAuthStateChanged } from "firebase/auth";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { styles } from "../styles/globalStyles.js";
 
-export default function ProfileScreen({ navigation }) {
-  const user = auth.currentUser;
-  const [username, setUsername] = useState(user?.email?.split("@")[0] || "");
+export default function ProfileScreen() {
+  // Track Firebase user in state instead of reading once
+  const [user, setUser] = useState(auth.currentUser || null);
+
+  const [username, setUsername] = useState(
+    auth.currentUser?.email?.split("@")[0] || ""
+  );
   const [profilePic, setProfilePic] = useState(null);
   const [position, setPosition] = useState("Point Guard");
   const [memberSince, setMemberSince] = useState("");
   const [gradeLevel, setGradeLevel] = useState("Freshman");
   const [favoriteTeam, setFavoriteTeam] = useState("None");
+  const [loadingProfile, setLoadingProfile] = useState(true);
 
+  // team logos (local require)
   const teamLogos = {
     Hawks: require("../images/hawks.png"),
     Raptors: require("../images/raptors.png"),
@@ -55,76 +64,158 @@ export default function ProfileScreen({ navigation }) {
     Kings: require("../images/kings.png"),
   };
 
+  // Keep user in sync with Firebase auth state
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, (firebaseUser) => {
+      setUser(firebaseUser || null);
+    });
+    return unsub;
+  }, []);
+
+  // Load profile from Firestore whenever we have a user
   useEffect(() => {
     const loadProfile = async () => {
-      if (!user) return;
-      const userDoc = doc(db, "users", user.uid);
-      const snapshot = await getDoc(userDoc);
+      if (!user) {
+        setLoadingProfile(false);
+        return;
+      }
 
-      if (snapshot.exists()) {
-        const data = snapshot.data();
-        setProfilePic(data.profilePic || null);
-        setPosition(data.position || "Point Guard");
-        setGradeLevel(data.gradeLevel || "Freshman");
-        setFavoriteTeam(data.favoriteTeam || "None");
-        setUsername(data.username || user.email.split("@")[0]);
-        setMemberSince(
-          data.memberSince ||
-            new Date(user.metadata.creationTime).toDateString()
-        );
-      } else {
-        await setDoc(userDoc, {
+      setLoadingProfile(true);
+
+      try {
+        const userDocRef = doc(db, "users", user.uid);
+        const snapshot = await getDoc(userDocRef);
+
+        const defaultMemberSince = new Date(
+          user.metadata.creationTime
+        ).toDateString();
+
+        if (snapshot.exists()) {
+          const data = snapshot.data();
+
+          setProfilePic(data.profilePic || null);
+          setPosition(data.position || "Point Guard");
+          setGradeLevel(data.gradeLevel || "Freshman");
+          setFavoriteTeam(data.favoriteTeam || "None");
+          setUsername(data.username || user.email.split("@")[0]);
+          setMemberSince(data.memberSince || defaultMemberSince);
+        } else {
+          // First time: create a doc with defaults
+          const payload = {
+            username: user.email.split("@")[0],
+            profilePic: null,
+            position: "Point Guard",
+            gradeLevel: "Freshman",
+            favoriteTeam: "None",
+            memberSince: defaultMemberSince,
+          };
+
+          await setDoc(userDocRef, payload);
+
+          setUsername(payload.username);
+          setProfilePic(payload.profilePic);
+          setPosition(payload.position);
+          setGradeLevel(payload.gradeLevel);
+          setFavoriteTeam(payload.favoriteTeam);
+          setMemberSince(payload.memberSince);
+        }
+      } catch (err) {
+        console.log("Error loading profile:", err);
+      } finally {
+        setLoadingProfile(false);
+      }
+    };
+
+    loadProfile();
+  }, [user]);
+
+  // Auto-save profile when fields change (after loading is done)
+  useEffect(() => {
+    if (!user) return;
+    if (loadingProfile) return; // don't overwrite while loading
+
+    const timeout = setTimeout(async () => {
+      try {
+        const userDocRef = doc(db, "users", user.uid);
+        const payload = {
           username,
           profilePic,
           position,
           gradeLevel,
           favoriteTeam,
-          memberSince: new Date(user.metadata.creationTime).toDateString(),
-        });
-      }
-    };
-    loadProfile();
-  }, [user]);
+          memberSince:
+            memberSince ||
+            new Date(user.metadata.creationTime).toDateString(),
+        };
 
-  useEffect(() => {
-    if (!user) return;
-    const timeout = setTimeout(async () => {
-      const userDoc = doc(db, "users", user.uid);
-      await setDoc(userDoc, {
-        username,
-        profilePic,
-        position,
-        gradeLevel,
-        favoriteTeam,
-        memberSince:
-          memberSince ||
-          new Date(user.metadata.creationTime).toDateString(),
-      });
+        await setDoc(userDocRef, payload, { merge: true });
+      } catch (err) {
+        console.log("Error saving profile:", err);
+      }
     }, 800);
+
     return () => clearTimeout(timeout);
-  }, [username, profilePic, position, gradeLevel, favoriteTeam]);
+  }, [
+    user,
+    username,
+    profilePic,
+    position,
+    gradeLevel,
+    favoriteTeam,
+    memberSince,
+    loadingProfile,
+  ]);
 
   const pickImage = async () => {
-    let result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 1,
-    });
-
-    if (!result.canceled) {
-      setProfilePic(result.assets[0].uri);
-    }
-  };
-
-  const handleLogout = async () => {
     try {
-      await signOut(auth);
-      navigation.replace("Login");
-    } catch (error) {
-      Alert.alert("Logout Failed", error.message);
+      if (!user) {
+        Alert.alert("Not signed in", "Please sign in first.");
+        return;
+      }
+
+      let result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (result.canceled) return;
+
+      const localUri = result.assets[0].uri;
+
+      // Upload to Firebase Storage
+      const response = await fetch(localUri);
+      const blob = await response.blob();
+
+      const storageRef = ref(storage, `profilePics/${user.uid}.jpg`);
+      await uploadBytes(storageRef, blob);
+      const downloadURL = await getDownloadURL(storageRef);
+
+      // Store URL in state; autosave effect will push it to Firestore
+      setProfilePic(downloadURL);
+    } catch (err) {
+      console.log("Error picking/uploading image:", err);
+      Alert.alert("Upload failed", "Sorry, we couldn't update your picture.");
     }
   };
+
+  if (!user) {
+    return (
+      <View style={[styles.container, { justifyContent: "center" }]}>
+        <Text style={styles.username}>Please sign in to view profile.</Text>
+      </View>
+    );
+  }
+
+  if (loadingProfile) {
+    return (
+      <View style={[styles.container, { justifyContent: "center" }]}>
+        <ActivityIndicator />
+        <Text style={styles.memberSince}>Loading profile...</Text>
+      </View>
+    );
+  }
 
   return (
     <ScrollView contentContainerStyle={styles.scrollContainer}>
@@ -145,7 +236,7 @@ export default function ProfileScreen({ navigation }) {
         <Text style={styles.username}>{username}</Text>
         <Text style={styles.memberSince}>Member since {memberSince}</Text>
 
-        {/* Position / Grade / Favorite team */}
+        {/* Position / Grade / Favorite team container */}
         <View style={styles.positionContainer}>
           <Text style={styles.label}>Natural Position:</Text>
           <Text style={styles.positionDisplay}>{position}</Text>
@@ -160,7 +251,10 @@ export default function ProfileScreen({ navigation }) {
             ].map((pos) => (
               <TouchableOpacity
                 key={pos}
-                style={[styles.tag, position === pos && styles.tagSelected]}
+                style={[
+                  styles.tag,
+                  position === pos && styles.tagSelected,
+                ]}
                 onPress={() => setPosition(pos)}
               >
                 <Text
@@ -180,22 +274,28 @@ export default function ProfileScreen({ navigation }) {
             <Text style={styles.gradeDisplay}>{gradeLevel}</Text>
 
             <View style={styles.tagContainer}>
-              {["Freshman", "Sophomore", "Junior", "Senior"].map((grade) => (
-                <TouchableOpacity
-                  key={grade}
-                  style={[styles.tag, gradeLevel === grade && styles.tagSelected]}
-                  onPress={() => setGradeLevel(grade)}
-                >
-                  <Text
+              {["Freshman", "Sophomore", "Junior", "Senior"].map(
+                (grade) => (
+                  <TouchableOpacity
+                    key={grade}
                     style={[
-                      styles.tagText,
-                      gradeLevel === grade && styles.tagTextSelected,
+                      styles.tag,
+                      gradeLevel === grade && styles.tagSelected,
                     ]}
+                    onPress={() => setGradeLevel(grade)}
                   >
-                    {grade}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+                    <Text
+                      style={[
+                        styles.tagText,
+                        gradeLevel === grade &&
+                          styles.tagTextSelected,
+                      ]}
+                    >
+                      {grade}
+                    </Text>
+                  </TouchableOpacity>
+                )
+              )}
             </View>
 
             <View style={styles.teamContainer}>
@@ -203,7 +303,38 @@ export default function ProfileScreen({ navigation }) {
               <Text style={styles.teamDisplay}>{favoriteTeam}</Text>
 
               <View style={styles.tagContainer}>
-                {Object.keys(teamLogos).map((team) => (
+                {[
+                  "Lakers",
+                  "Warriors",
+                  "Celtics",
+                  "Bulls",
+                  "Heat",
+                  "Nets",
+                  "Knicks",
+                  "Sixers",
+                  "Suns",
+                  "Mavericks",
+                  "Clippers",
+                  "Nuggets",
+                  "Timberwolves",
+                  "Trailblazers",
+                  "Jazz",
+                  "Thunder",
+                  "Spurs",
+                  "Rockets",
+                  "Grizzlies",
+                  "Pelicans",
+                  "Kings",
+                  "Magic",
+                  "Pacers",
+                  "Pistons",
+                  "Cavaliers",
+                  "Hawks",
+                  "Hornets",
+                  "Wizards",
+                  "Raptors",
+                  "Bucks",
+                ].map((team) => (
                   <TouchableOpacity
                     key={team}
                     style={[
@@ -224,7 +355,8 @@ export default function ProfileScreen({ navigation }) {
                     <Text
                       style={[
                         styles.tagText,
-                        favoriteTeam === team && styles.tagTextSelected,
+                        favoriteTeam === team &&
+                          styles.tagTextSelected,
                       ]}
                     >
                       {team}
@@ -235,32 +367,7 @@ export default function ProfileScreen({ navigation }) {
             </View>
           </View>
         </View>
-
-        {/* Clean Logout Button */}
-        <TouchableOpacity
-          onPress={handleLogout}
-          style={{
-            backgroundColor: "#e74c3c",
-            paddingVertical: 12,
-            paddingHorizontal: 25,
-            borderRadius: 25,
-            marginTop: 25,
-            alignSelf: "center",
-          }}
-        >
-          <Text
-            style={{
-              color: "#fff",
-              fontSize: 16,
-              fontWeight: "600",
-              textAlign: "center",
-            }}
-          >
-            Log Out
-          </Text>
-        </TouchableOpacity>
       </View>
     </ScrollView>
   );
 }
-
