@@ -5,13 +5,15 @@ import {
   TouchableOpacity,
   Image,
   ScrollView,
+  Alert,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import { auth, db } from "../firebaseConfig";
 import { doc, getDoc, setDoc } from "firebase/firestore";
+import { signOut } from "firebase/auth";
 import { styles } from "../styles/globalStyles.js";
 
-export default function ProfileScreen() {
+export default function ProfileScreen({ navigation }) {
   const user = auth.currentUser;
   const [username, setUsername] = useState(user?.email?.split("@")[0] || "");
   const [profilePic, setProfilePic] = useState(null);
@@ -20,7 +22,6 @@ export default function ProfileScreen() {
   const [gradeLevel, setGradeLevel] = useState("Freshman");
   const [favoriteTeam, setFavoriteTeam] = useState("None");
 
-  // team logos (local require)
   const teamLogos = {
     Hawks: require("../images/hawks.png"),
     Raptors: require("../images/raptors.png"),
@@ -54,7 +55,6 @@ export default function ProfileScreen() {
     Kings: require("../images/kings.png"),
   };
 
-  // load profile on mount
   useEffect(() => {
     const loadProfile = async () => {
       if (!user) return;
@@ -79,16 +79,13 @@ export default function ProfileScreen() {
           position,
           gradeLevel,
           favoriteTeam,
-          memberSince: new Date(
-            user.metadata.creationTime
-          ).toDateString(),
+          memberSince: new Date(user.metadata.creationTime).toDateString(),
         });
       }
     };
     loadProfile();
   }, [user]);
 
-  // auto-save profile when changes settle
   useEffect(() => {
     if (!user) return;
     const timeout = setTimeout(async () => {
@@ -120,6 +117,15 @@ export default function ProfileScreen() {
     }
   };
 
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      navigation.replace("Login");
+    } catch (error) {
+      Alert.alert("Logout Failed", error.message);
+    }
+  };
+
   return (
     <ScrollView contentContainerStyle={styles.scrollContainer}>
       <View style={styles.container}>
@@ -139,7 +145,7 @@ export default function ProfileScreen() {
         <Text style={styles.username}>{username}</Text>
         <Text style={styles.memberSince}>Member since {memberSince}</Text>
 
-        {/* Position / Grade / Favorite team container */}
+        {/* Position / Grade / Favorite team */}
         <View style={styles.positionContainer}>
           <Text style={styles.label}>Natural Position:</Text>
           <Text style={styles.positionDisplay}>{position}</Text>
@@ -154,10 +160,7 @@ export default function ProfileScreen() {
             ].map((pos) => (
               <TouchableOpacity
                 key={pos}
-                style={[
-                  styles.tag,
-                  position === pos && styles.tagSelected,
-                ]}
+                style={[styles.tag, position === pos && styles.tagSelected]}
                 onPress={() => setPosition(pos)}
               >
                 <Text
@@ -177,28 +180,22 @@ export default function ProfileScreen() {
             <Text style={styles.gradeDisplay}>{gradeLevel}</Text>
 
             <View style={styles.tagContainer}>
-              {["Freshman", "Sophomore", "Junior", "Senior"].map(
-                (grade) => (
-                  <TouchableOpacity
-                    key={grade}
+              {["Freshman", "Sophomore", "Junior", "Senior"].map((grade) => (
+                <TouchableOpacity
+                  key={grade}
+                  style={[styles.tag, gradeLevel === grade && styles.tagSelected]}
+                  onPress={() => setGradeLevel(grade)}
+                >
+                  <Text
                     style={[
-                      styles.tag,
-                      gradeLevel === grade && styles.tagSelected,
+                      styles.tagText,
+                      gradeLevel === grade && styles.tagTextSelected,
                     ]}
-                    onPress={() => setGradeLevel(grade)}
                   >
-                    <Text
-                      style={[
-                        styles.tagText,
-                        gradeLevel === grade &&
-                          styles.tagTextSelected,
-                      ]}
-                    >
-                      {grade}
-                    </Text>
-                  </TouchableOpacity>
-                )
-              )}
+                    {grade}
+                  </Text>
+                </TouchableOpacity>
+              ))}
             </View>
 
             <View style={styles.teamContainer}>
@@ -206,38 +203,7 @@ export default function ProfileScreen() {
               <Text style={styles.teamDisplay}>{favoriteTeam}</Text>
 
               <View style={styles.tagContainer}>
-                {[
-                  "Lakers",
-                  "Warriors",
-                  "Celtics",
-                  "Bulls",
-                  "Heat",
-                  "Nets",
-                  "Knicks",
-                  "Sixers",
-                  "Suns",
-                  "Mavericks",
-                  "Clippers",
-                  "Nuggets",
-                  "Timberwolves",
-                  "Trailblazers",
-                  "Jazz",
-                  "Thunder",
-                  "Spurs",
-                  "Rockets",
-                  "Grizzlies",
-                  "Pelicans",
-                  "Kings",
-                  "Magic",
-                  "Pacers",
-                  "Pistons",
-                  "Cavaliers",
-                  "Hawks",
-                  "Hornets",
-                  "Wizards",
-                  "Raptors",
-                  "Bucks",
-                ].map((team) => (
+                {Object.keys(teamLogos).map((team) => (
                   <TouchableOpacity
                     key={team}
                     style={[
@@ -258,8 +224,7 @@ export default function ProfileScreen() {
                     <Text
                       style={[
                         styles.tagText,
-                        favoriteTeam === team &&
-                          styles.tagTextSelected,
+                        favoriteTeam === team && styles.tagTextSelected,
                       ]}
                     >
                       {team}
@@ -270,7 +235,32 @@ export default function ProfileScreen() {
             </View>
           </View>
         </View>
+
+        {/* Clean Logout Button */}
+        <TouchableOpacity
+          onPress={handleLogout}
+          style={{
+            backgroundColor: "#e74c3c",
+            paddingVertical: 12,
+            paddingHorizontal: 25,
+            borderRadius: 25,
+            marginTop: 25,
+            alignSelf: "center",
+          }}
+        >
+          <Text
+            style={{
+              color: "#fff",
+              fontSize: 16,
+              fontWeight: "600",
+              textAlign: "center",
+            }}
+          >
+            Log Out
+          </Text>
+        </TouchableOpacity>
       </View>
     </ScrollView>
   );
 }
+
