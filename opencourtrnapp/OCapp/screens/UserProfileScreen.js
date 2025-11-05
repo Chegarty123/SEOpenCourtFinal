@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from "react";
+// screens/UserProfileScreen.js
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -6,48 +7,15 @@ import {
   ScrollView,
   ActivityIndicator,
 } from "react-native";
-import { db } from "../firebaseConfig";
 import { doc, getDoc } from "firebase/firestore";
-import { styles } from "../styles/globalStyles.js";
+import { db } from "../firebaseConfig";
+import { styles } from "../styles/globalStyles";
 
 export default function UserProfileScreen({ route }) {
   const { userId } = route.params || {};
-  const [profile, setProfile] = useState(null);
-  const [loading, setLoading] = useState(true);
 
-  // team logos (same mapping as ProfileScreen)
-  const teamLogos = {
-    Hawks: require("../images/hawks.png"),
-    Raptors: require("../images/raptors.png"),
-    Nets: require("../images/nets.png"),
-    Heat: require("../images/heat.png"),
-    Sixers: require("../images/sixers.png"),
-    Knicks: require("../images/knicks.png"),
-    Magic: require("../images/magic.webp"),
-    Celtics: require("../images/celtics.png"),
-    Bulls: require("../images/bulls.png"),
-    Cavaliers: require("../images/cavs.png"),
-    Pistons: require("../images/pistons.png"),
-    Bucks: require("../images/bucks.png"),
-    Wizards: require("../images/wizards.webp"),
-    Hornets: require("../images/hornets.png"),
-    Pacers: require("../images/pacers.png"),
-    Nuggets: require("../images/nuggets.png"),
-    Suns: require("../images/suns.png"),
-    Clippers: require("../images/clippers.png"),
-    Lakers: require("../images/lakers.png"),
-    Trailblazers: require("../images/trailblazers.png"),
-    Thunder: require("../images/thunder.png"),
-    Timberwolves: require("../images/timberwolves.png"),
-    Rockets: require("../images/rockets.png"),
-    Pelicans: require("../images/pelicans.png"),
-    Grizzlies: require("../images/grizzlies.png"),
-    Mavericks: require("../images/mavericks.png"),
-    Spurs: require("../images/spurs.png"),
-    Warriors: require("../images/warriors.png"),
-    Jazz: require("../images/jazz.png"),
-    Kings: require("../images/kings.png"),
-  };
+  const [loading, setLoading] = useState(true);
+  const [profile, setProfile] = useState(null);
 
   useEffect(() => {
     const loadProfile = async () => {
@@ -57,21 +25,30 @@ export default function UserProfileScreen({ route }) {
       }
 
       try {
-        const ref = doc(db, "users", userId);
-        const snap = await getDoc(ref);
+        const refDoc = doc(db, "users", userId);
+        const snap = await getDoc(refDoc);
 
         if (snap.exists()) {
           const data = snap.data();
           setProfile({
-            username: data.username || "Player",
+            username:
+              data.username || "Player",
             profilePic: data.profilePic || null,
-            position: data.position || "Point Guard",
-            gradeLevel: data.gradeLevel || "Freshman",
+            position: data.position || "Unknown position",
+            gradeLevel: data.gradeLevel || "Unknown grade",
             favoriteTeam: data.favoriteTeam || "None",
-            memberSince: data.memberSince || "",
+            memberSince:
+              data.memberSince || "Unknown",
           });
         } else {
-          setProfile(null);
+          setProfile({
+            username: "Player",
+            profilePic: null,
+            position: "Unknown position",
+            gradeLevel: "Unknown grade",
+            favoriteTeam: "None",
+            memberSince: "Unknown",
+          });
         }
       } catch (err) {
         console.log("Error loading user profile:", err);
@@ -88,7 +65,7 @@ export default function UserProfileScreen({ route }) {
     return (
       <View style={[styles.container, { justifyContent: "center" }]}>
         <ActivityIndicator />
-        <Text style={styles.memberSince}>Loading player…</Text>
+        <Text style={styles.memberSince}>Loading player...</Text>
       </View>
     );
   }
@@ -96,75 +73,41 @@ export default function UserProfileScreen({ route }) {
   if (!profile) {
     return (
       <View style={[styles.container, { justifyContent: "center" }]}>
-        <Text style={styles.username}>Profile not found.</Text>
+        <Text style={styles.username}>Player not found.</Text>
       </View>
     );
   }
 
-  const {
-    username,
-    profilePic,
-    position,
-    gradeLevel,
-    favoriteTeam,
-    memberSince,
-  } = profile;
-
   return (
     <ScrollView contentContainerStyle={styles.scrollContainer}>
       <View style={styles.container}>
-        {/* Profile picture (read-only) */}
         <Image
           source={
-            profilePic
-              ? { uri: profilePic }
+            profile.profilePic
+              ? { uri: profile.profilePic }
               : require("../images/defaultProfile.png")
           }
           style={styles.profileImage}
         />
 
-        {/* Username + member info */}
-        <Text style={styles.username}>{username}</Text>
-        {!!memberSince && (
-          <Text style={styles.memberSince}>Member since {memberSince}</Text>
-        )}
+        <Text style={styles.username}>{profile.username}</Text>
+        <Text style={styles.memberSince}>
+          Member since {profile.memberSince}
+        </Text>
 
         <View style={styles.positionContainer}>
-          {/* Position */}
           <Text style={styles.label}>Natural Position</Text>
-          <Text style={styles.positionDisplay}>{position}</Text>
+          <Text style={styles.positionDisplay}>{profile.position}</Text>
 
-          {/* Grade */}
           <View style={styles.gradeContainer}>
             <Text style={styles.label}>Grade Level</Text>
-            <Text style={styles.gradeDisplay}>{gradeLevel}</Text>
+            <Text style={styles.gradeDisplay}>{profile.gradeLevel}</Text>
           </View>
 
-          {/* Favorite team */}
           <View style={styles.teamContainer}>
             <Text style={styles.label}>Favorite NBA Team</Text>
-            <View style={{ flexDirection: "row", alignItems: "center" }}>
-              {favoriteTeam !== "None" && teamLogos[favoriteTeam] && (
-                <Image
-                  source={teamLogos[favoriteTeam]}
-                  style={{ width: 22, height: 22, marginRight: 8 }}
-                />
-              )}
-              <Text style={styles.teamDisplay}>{favoriteTeam}</Text>
-            </View>
+            <Text style={styles.teamDisplay}>{profile.favoriteTeam}</Text>
           </View>
-
-          {/* Little note that this is read-only */}
-          <Text
-            style={{
-              marginTop: 24,
-              fontSize: 12,
-              color: "#64748b",
-              textAlign: "center",
-            }}
-          >
-            This is a public player profile from their OpenCourt account.
-          </Text>
         </View>
       </View>
     </ScrollView>
