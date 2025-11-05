@@ -14,6 +14,12 @@ export default function SignupScreen({ navigation }) {
       return;
     }
 
+    // Villanova email restriction
+    if (!email.toLowerCase().endsWith("@villanova.edu")) {
+      alert("Only valid Villanova email addresses are allowed.");
+      return;
+    }
+
     try {
       await createUserWithEmailAndPassword(auth, email, password);
       alert("Account created successfully!");

@@ -25,8 +25,8 @@ export default function MainTabs() {
             iconName = "map-outline";
           } else if (route.name === "Profile") {
             iconName = "person-outline";
-          } else if (route.name === "Settings") {
-            iconName = "settings-outline";
+          } else if (route.name === "Friends") {
+            iconName = "person-add-outline";
           }
           return <Ionicons name={iconName} size={size} color={color} />;
         },
@@ -35,7 +35,7 @@ export default function MainTabs() {
       <Tab.Screen name="Home" component={HomeScreen} />
       <Tab.Screen name="Map" component={MapScreen} />
       <Tab.Screen name="Profile" component={ProfileScreen} />
-      <Tab.Screen name="Settings" component={SettingsScreen} />
+      <Tab.Screen name="Friends" component={SettingsScreen} />
     </Tab.Navigator>
   );
 }
