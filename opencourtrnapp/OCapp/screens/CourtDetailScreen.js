@@ -303,9 +303,22 @@ export default function CourtDetailScreen({ route, navigation }) {
               contentContainerStyle={styles.playersRow}
             >
               {playersHere.map((p) => (
-                <View key={p.id} style={styles.playerBubble}>
+                <TouchableOpacity
+                  key={p.id}
+                  style={styles.playerBubble}
+                  activeOpacity={0.8}
+                  onPress={() =>
+                    navigation.navigate("UserProfile", {
+                      userId: p.id,
+                    })
+                  }
+                >
                   <Image
-                    source={{ uri: p.avatar }}
+                    source={
+                      p.avatar
+                        ? { uri: p.avatar }
+                        : require("../images/defaultProfile.png") // fallback so it's never blank
+                    }
                     style={styles.playerAvatar}
                   />
                   <Text style={styles.playerName} numberOfLines={1}>
@@ -314,9 +327,10 @@ export default function CourtDetailScreen({ route, navigation }) {
                   <Text style={styles.playerNote} numberOfLines={1}>
                     {p.note}
                   </Text>
-                </View>
+                </TouchableOpacity>
               ))}
             </ScrollView>
+
 
             {/* check in/out button */}
             <TouchableOpacity

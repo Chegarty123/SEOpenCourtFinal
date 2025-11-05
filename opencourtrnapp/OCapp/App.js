@@ -9,6 +9,8 @@ import SignupScreen from './screens/SignupScreen';
 import MainTabs from './screens/MainTabs';
 import MapScreen from './screens/MapScreen';
 import CourtDetailScreen from './screens/CourtDetailScreen';
+import UserProfileScreen from "./screens/UserProfileScreen";
+
 
 const Stack = createNativeStackNavigator();
 
@@ -40,6 +42,11 @@ export default function App() {
           name="CourtDetail"
           component={CourtDetailScreen}
           options={{ headerShown: false }}
+        />
+        <Stack.Screen
+          name="UserProfile"
+          component={UserProfileScreen}
+          options={{ title: "Player Profile" }}
         />
       </Stack.Navigator>
     </NavigationContainer>
