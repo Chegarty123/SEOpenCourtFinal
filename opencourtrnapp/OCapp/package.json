@@ -26,7 +26,8 @@
     "expo-location": "~19.0.7",
     "expo-splash-screen": "~31.0.10",
     "expo-asset": "~12.0.9",
-    "expo-font": "~14.0.8"
+    "expo-font": "~14.0.8",
+    "expo-file-system": "~19.0.17"
   },
   "devDependencies": {
     "@babel/core": "^7.20.0"

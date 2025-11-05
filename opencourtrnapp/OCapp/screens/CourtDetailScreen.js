@@ -58,15 +58,15 @@ export default function CourtDetailScreen({ route, navigation }) {
     return `${hh}:${mm} ${ampm}`;
   };
 
-  // load my profile (so we know my avatar/name for check-ins & chat)
+  // live-load my profile (so we know my avatar/name for check-ins & chat)
   useEffect(() => {
-    const loadMyProfile = async () => {
-      if (!user) return;
+    if (!user) return;
 
-      try {
-        const userDocRef = doc(db, "users", user.uid);
-        const snapshot = await getDoc(userDocRef);
+    const userDocRef = doc(db, "users", user.uid);
 
+    const unsub = onSnapshot(
+      userDocRef,
+      (snapshot) => {
         if (snapshot.exists()) {
           const data = snapshot.data();
           setMyProfile({
@@ -74,7 +74,7 @@ export default function CourtDetailScreen({ route, navigation }) {
             name:
               data.username ||
               (user.email ? user.email.split("@")[0] : "you"),
-            avatar: data.profilePic || null,
+            avatar: data.profilePic || null, // base64 data URL from ProfileScreen
             note: "hooping now",
           });
         } else {
@@ -85,7 +85,8 @@ export default function CourtDetailScreen({ route, navigation }) {
             note: "hooping now",
           });
         }
-      } catch (err) {
+      },
+      (err) => {
         console.warn("Failed to load profile", err);
         setMyProfile({
           uid: user?.uid || "me",
@@ -94,10 +95,38 @@ export default function CourtDetailScreen({ route, navigation }) {
           note: "hooping now",
         });
       }
-    };
+    );
 
-    loadMyProfile();
+    return () => unsub();
   }, [user]);
+
+  // keep my check-in avatar in sync with my profile while I'm checked in
+  useEffect(() => {
+    if (!user || !courtId) return;
+    if (!checkedIn) return;
+
+    const myCheckinRef = doc(db, "courts", courtId, "checkins", user.uid);
+
+    setDoc(
+      myCheckinRef,
+      {
+        username: myProfile.name || "player",
+        avatar:
+          myProfile.avatar || "https://i.pravatar.cc/100?img=68",
+        note: myProfile.note || "hooping now",
+      },
+      { merge: true }
+    ).catch((err) => {
+      console.warn("sync check-in avatar failed", err);
+    });
+  }, [
+    myProfile.avatar,
+    myProfile.name,
+    myProfile.note,
+    checkedIn,
+    courtId,
+    user,
+  ]);
 
   // live check-ins
   useEffect(() => {
@@ -314,7 +343,11 @@ export default function CourtDetailScreen({ route, navigation }) {
                   }
                 >
                   <Image
-                    source={{ uri: p.avatar }}
+                    source={
+                      p.avatar
+                        ? { uri: p.avatar }
+                        : require("../images/defaultProfile.png")
+                    }
                     style={styles.playerAvatar}
                   />
                   <Text style={styles.playerName} numberOfLines={1}>

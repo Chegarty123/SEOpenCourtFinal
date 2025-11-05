@@ -10,10 +10,9 @@ import {
   Alert,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
-import { auth, db, storage } from "../firebaseConfig";
+import { auth, db } from "../firebaseConfig";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { styles } from "../styles/globalStyles.js";
 
 export default function ProfileScreen() {
@@ -166,37 +165,54 @@ export default function ProfileScreen() {
     loadingProfile,
   ]);
 
+  // Pick image and store as base64 data URL in Firestore (no Storage / no FileSystem)
   const pickImage = async () => {
+    if (!user) {
+      Alert.alert("Not signed in", "Please sign in first.");
+      return;
+    }
+
     try {
-      if (!user) {
-        Alert.alert("Not signed in", "Please sign in first.");
+      // ask for permission explicitly (helps avoid weird iOS errors)
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (perm.status !== "granted") {
+        Alert.alert(
+          "Permission needed",
+          "OpenCourt needs access to your photos to set a profile picture."
+        );
         return;
       }
 
-      let result = await ImagePicker.launchImageLibraryAsync({
+      const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
         aspect: [1, 1],
-        quality: 0.8,
+        quality: 0.5, // keep Firestore doc smaller
+        base64: true, // 👈 get base64 directly
       });
 
       if (result.canceled) return;
 
-      const localUri = result.assets[0].uri;
+      const asset = result.assets && result.assets[0];
+      if (!asset || !asset.base64) {
+        console.log("No base64 returned from picker", result);
+        Alert.alert(
+          "Upload failed",
+          "Sorry, we couldn't read that picture."
+        );
+        return;
+      }
 
-      // Upload to Firebase Storage
-      const response = await fetch(localUri);
-      const blob = await response.blob();
+      const dataUrl = `data:image/jpeg;base64,${asset.base64}`;
 
-      const storageRef = ref(storage, `profilePics/${user.uid}.jpg`);
-      await uploadBytes(storageRef, blob);
-      const downloadURL = await getDownloadURL(storageRef);
-
-      // Store URL in state; autosave effect will push it to Firestore
-      setProfilePic(downloadURL);
+      // Store data URL in state; auto-save effect will push it to Firestore
+      setProfilePic(dataUrl);
     } catch (err) {
-      console.log("Error picking/uploading image:", err);
-      Alert.alert("Upload failed", "Sorry, we couldn't update your picture.");
+      console.log("Error picking image:", err);
+      Alert.alert(
+        "Upload failed",
+        "Sorry, we couldn't update your picture."
+      );
     }
   };
 
