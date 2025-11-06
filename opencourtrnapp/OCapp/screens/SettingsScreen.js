@@ -26,7 +26,7 @@ import { styles } from "../styles/globalStyles";
 
 const defaultAvatar = require("../images/defaultProfile.png");
 
-export default function FriendScreen() {
+export default function FriendScreen({ navigation }) {
   const [currentUser, setCurrentUser] = useState(null);
   const [allUsers, setAllUsers] = useState([]);
   const [friends, setFriends] = useState([]);
@@ -169,13 +169,19 @@ export default function FriendScreen() {
 
   if (loading || !currentUser) {
     return (
-      <View style={[styles.container, { justifyContent: "center", alignItems: "center" }]}>
+      <View
+        style={[
+          styles.container,
+          { justifyContent: "center", alignItems: "center" },
+        ]}
+      >
         <ActivityIndicator size="large" />
         <Text style={{ marginTop: 10 }}>Loading friends...</Text>
       </View>
     );
   }
 
+  // ⬇️ Row renderer with profile navigation wired in
   const renderUserRow = (user, actionType = "add") => (
     <View
       key={user.uid}
@@ -187,13 +193,32 @@ export default function FriendScreen() {
         borderBottomWidth: 1,
       }}
     >
-      <Image
-        source={user.avatar}
-        style={{ width: 36, height: 36, borderRadius: 18, marginRight: 12 }}
-      />
-      <Text style={{ fontSize: 14, fontWeight: "600", color: "#0b2239", flex: 1 }}>
-        {user.username}
-      </Text>
+      {/* Tap avatar + name to open their profile */}
+      <TouchableOpacity
+        style={{ flexDirection: "row", alignItems: "center", flex: 1 }}
+        activeOpacity={0.8}
+        onPress={() =>
+          navigation.navigate("UserProfile", {
+            userId: user.uid,
+          })
+        }
+      >
+        <Image
+          source={user.avatar}
+          style={{ width: 36, height: 36, borderRadius: 18, marginRight: 12 }}
+        />
+        <Text
+          style={{
+            fontSize: 14,
+            fontWeight: "600",
+            color: "#0b2239",
+          }}
+        >
+          {user.username}
+        </Text>
+      </TouchableOpacity>
+
+      {/* Actions on the right (add / accept / remove) */}
       {actionType === "add" && (
         <TouchableOpacity onPress={() => sendFriendRequest(user)}>
           <Ionicons name="person-add-outline" size={22} color="#1f6fb2" />
@@ -201,7 +226,10 @@ export default function FriendScreen() {
       )}
       {actionType === "accept" && (
         <View style={{ flexDirection: "row" }}>
-          <TouchableOpacity onPress={() => acceptRequest(user.uid)} style={{ marginRight: 10 }}>
+          <TouchableOpacity
+            onPress={() => acceptRequest(user.uid)}
+            style={{ marginRight: 10 }}
+          >
             <Ionicons name="checkmark-circle-outline" size={22} color="#16a34a" />
           </TouchableOpacity>
           <TouchableOpacity onPress={() => declineRequest(user.uid)}>
@@ -218,7 +246,12 @@ export default function FriendScreen() {
   );
 
   return (
-    <ScrollView style={styles.homeWrap} contentContainerStyle={{ paddingBottom: 24 }}>
+    <ScrollView
+      style={styles.homeWrap}
+      contentContainerStyle={{ paddingBottom: 24 }}
+      showsVerticalScrollIndicator={false}
+    >
+      {/* Search bar */}
       <TextInput
         placeholder="Search users..."
         value={searchText}
@@ -236,21 +269,27 @@ export default function FriendScreen() {
         }}
       />
 
+      {/* Search results */}
       {searchText.length > 0 && (
         <View style={styles.courtCard}>
           <Text style={styles.cardHeaderText}>Search Results</Text>
           {filteredUsers.length === 0 ? (
-            <Text style={{ color: "#64748b", marginTop: 8 }}>No users found.</Text>
+            <Text style={{ color: "#64748b", marginTop: 8 }}>
+              No users found.
+            </Text>
           ) : (
             filteredUsers.map((u) => renderUserRow(u, "add"))
           )}
         </View>
       )}
 
+      {/* Incoming requests */}
       <View style={styles.courtCard}>
         <Text style={styles.cardHeaderText}>Incoming Friend Requests</Text>
         {incomingRequests.length === 0 ? (
-          <Text style={{ color: "#64748b", marginTop: 8 }}>No incoming requests.</Text>
+          <Text style={{ color: "#64748b", marginTop: 8 }}>
+            No incoming requests.
+          </Text>
         ) : (
           allUsers
             .filter((u) => incomingRequests.includes(u.uid))
@@ -258,12 +297,17 @@ export default function FriendScreen() {
         )}
       </View>
 
+      {/* Friends list */}
       <View style={styles.courtCard}>
         <Text style={styles.cardHeaderText}>Friends</Text>
         {friends.length === 0 ? (
-          <Text style={{ color: "#64748b", marginTop: 8 }}>No friends yet.</Text>
+          <Text style={{ color: "#64748b", marginTop: 8 }}>
+            No friends yet.
+          </Text>
         ) : (
-          allUsers.filter((u) => friends.includes(u.uid)).map((u) => renderUserRow(u, "remove"))
+          allUsers
+            .filter((u) => friends.includes(u.uid))
+            .map((u) => renderUserRow(u, "remove"))
         )}
       </View>
     </ScrollView>
