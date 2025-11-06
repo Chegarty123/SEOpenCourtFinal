@@ -11,12 +11,17 @@ import MapScreen from "./screens/MapScreen";
 import CourtDetailScreen from "./screens/CourtDetailScreen";
 import UserProfileScreen from "./screens/UserProfileScreen";
 import CourtChatScreen from "./screens/CourtChatScreen"; // 👈 NEW
+import { StatusBar } from "expo-status-bar";
+
 
 const Stack = createNativeStackNavigator();
 
 export default function App() {
   return (
     <NavigationContainer>
+
+      <StatusBar style="dark" />
+      
       <Stack.Navigator initialRouteName="Login">
         <Stack.Screen
           name="Login"
