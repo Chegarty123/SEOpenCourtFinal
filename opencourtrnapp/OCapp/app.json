@@ -1,7 +1,9 @@
-
 {
-  "plugins": [
-    "expo-asset",
-    "expo-font"
-  ]
+  "expo": {
+    "orientation": "portrait",
+    "plugins": [
+      "expo-asset",
+      "expo-font"
+    ]
+  }
 }
