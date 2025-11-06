@@ -1,16 +1,16 @@
 // App.js
-import React from 'react';
-import { NavigationContainer } from '@react-navigation/native';
-import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import React from "react";
+import { NavigationContainer } from "@react-navigation/native";
+import { createNativeStackNavigator } from "@react-navigation/native-stack";
 
 // screens
-import LoginScreen from './screens/LoginScreen';
-import SignupScreen from './screens/SignupScreen';
-import MainTabs from './screens/MainTabs';
-import MapScreen from './screens/MapScreen';
-import CourtDetailScreen from './screens/CourtDetailScreen';
+import LoginScreen from "./screens/LoginScreen";
+import SignupScreen from "./screens/SignupScreen";
+import MainTabs from "./screens/MainTabs";
+import MapScreen from "./screens/MapScreen";
+import CourtDetailScreen from "./screens/CourtDetailScreen";
 import UserProfileScreen from "./screens/UserProfileScreen";
-
+import CourtChatScreen from "./screens/CourtChatScreen"; // 👈 NEW
 
 const Stack = createNativeStackNavigator();
 
@@ -47,6 +47,11 @@ export default function App() {
           name="UserProfile"
           component={UserProfileScreen}
           options={{ title: "Player Profile" }}
+        />
+        <Stack.Screen
+          name="CourtChat"
+          component={CourtChatScreen}
+          options={{ headerShown: false }} // full custom header
         />
       </Stack.Navigator>
     </NavigationContainer>

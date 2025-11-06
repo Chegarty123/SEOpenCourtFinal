@@ -1,27 +1,22 @@
 // screens/CourtDetailScreen.js
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
   TouchableOpacity,
   Image,
   ScrollView,
-  TextInput,
-  Platform,
-  KeyboardAvoidingView,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { auth, db } from "../firebaseConfig";
 import {
   doc,
-  getDoc,
   setDoc,
   deleteDoc,
   collection,
   onSnapshot,
   query,
   orderBy,
-  addDoc,
   serverTimestamp,
 } from "firebase/firestore";
 import { styles } from "../styles/globalStyles";
@@ -30,8 +25,6 @@ export default function CourtDetailScreen({ route, navigation }) {
   const { marker } = route.params || {};
   const courtId = marker?.id;
   const user = auth.currentUser;
-
-  const chatScrollRef = useRef(null);
 
   const [myProfile, setMyProfile] = useState({
     uid: user?.uid || "me",
@@ -44,7 +37,6 @@ export default function CourtDetailScreen({ route, navigation }) {
   const [checkedIn, setCheckedIn] = useState(false);
 
   const [messages, setMessages] = useState([]);
-  const [draftMessage, setDraftMessage] = useState("");
 
   // format Firestore timestamp -> "4:33 PM"
   const renderTime = (ts) => {
@@ -58,7 +50,7 @@ export default function CourtDetailScreen({ route, navigation }) {
     return `${hh}:${mm} ${ampm}`;
   };
 
-  // live-load my profile (so we know my avatar/name for check-ins & chat)
+  // live-load my profile (so we know my avatar/name for check-ins)
   useEffect(() => {
     if (!user) return;
 
@@ -74,7 +66,7 @@ export default function CourtDetailScreen({ route, navigation }) {
             name:
               data.username ||
               (user.email ? user.email.split("@")[0] : "you"),
-            avatar: data.profilePic || null, // base64 data URL from ProfileScreen
+            avatar: data.profilePic || null,
             note: "hooping now",
           });
         } else {
@@ -158,7 +150,7 @@ export default function CourtDetailScreen({ route, navigation }) {
     return () => unsub();
   }, [courtId, user]);
 
-  // live chat
+  // live chat (just for preview)
   useEffect(() => {
     if (!courtId || !user) return;
 
@@ -179,11 +171,6 @@ export default function CourtDetailScreen({ route, navigation }) {
         });
       });
       setMessages(chatArr);
-
-      // scroll to bottom after messages update
-      setTimeout(() => {
-        chatScrollRef.current?.scrollToEnd({ animated: true });
-      }, 50);
     });
 
     return () => unsub();
@@ -219,36 +206,13 @@ export default function CourtDetailScreen({ route, navigation }) {
     }
   };
 
-  // send message
-  const handleSend = async () => {
-    if (!draftMessage.trim() || !user || !courtId) return;
-
-    const msgsRef = collection(db, "courts", courtId, "messages");
-
-    try {
-      await addDoc(msgsRef, {
-        userId: user.uid,
-        username: myProfile.name || "you",
-        text: draftMessage.trim(),
-        ts: serverTimestamp(),
-      });
-      setDraftMessage("");
-
-      setTimeout(() => {
-        chatScrollRef.current?.scrollToEnd({ animated: true });
-      }, 50);
-    } catch (err) {
-      console.warn("send message failed", err);
-    }
-  };
+  const lastMessage =
+    messages && messages.length > 0
+      ? messages[messages.length - 1]
+      : null;
 
   return (
-    // wraps entire screen to lift input bar above keyboard on iOS
-    <KeyboardAvoidingView
-      style={{ flex: 1, backgroundColor: "#eef2f7" }}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-      keyboardVerticalOffset={Platform.OS === "ios" ? 20 : 0}
-    >
+    <View style={{ flex: 1, backgroundColor: "#eef2f7" }}>
       <View style={[styles.courtScreenWrap, { flex: 1 }]}>
         {/* HERO HEADER */}
         <View style={styles.courtHeroContainer}>
@@ -301,7 +265,7 @@ export default function CourtDetailScreen({ route, navigation }) {
         </View>
 
         {/* MAIN CONTENT BELOW HERO */}
-        <View style={{ flex: 1, paddingHorizontal: 16 }}>
+        <View style={{ flex: 1, paddingHorizontal: 16, paddingTop: 16 }}>
           {/* WHO'S HERE CARD */}
           <View style={styles.courtCard}>
             <View style={styles.cardHeaderRow}>
@@ -380,83 +344,92 @@ export default function CourtDetailScreen({ route, navigation }) {
             </TouchableOpacity>
           </View>
 
-          {/* CHAT CARD */}
+          {/* CHAT PREVIEW CARD */}
           <View style={styles.courtCard}>
             <View style={styles.cardHeaderRow}>
-              <Text style={styles.cardHeaderText}>Court Chat</Text>
+              <Text style={styles.cardHeaderText}>Court chat</Text>
               <Text style={styles.chatHintText}>
-                Use this to set up games or ask if it’s active.
+                See the latest message or open the full conversation.
               </Text>
             </View>
 
-            {/* scrollable chat window */}
-            <View style={styles.chatMessagesOuter}>
-              <ScrollView
-                ref={chatScrollRef}
-                style={styles.chatScroll}
-                contentContainerStyle={styles.chatScrollContent}
-                showsVerticalScrollIndicator={true}
+            {lastMessage ? (
+              <View
+                style={{
+                  paddingVertical: 10,
+                  paddingHorizontal: 12,
+                  borderRadius: 12,
+                  backgroundColor: "#f8fafc",
+                  borderWidth: 1,
+                  borderColor: "#e2e8f0",
+                  marginBottom: 10,
+                }}
               >
-                {messages.map((m) => (
-                  <View
-                    key={m.id}
-                    style={[
-                      styles.chatBubble,
-                      m.mine
-                        ? styles.chatBubbleMine
-                        : styles.chatBubbleOther,
-                    ]}
-                  >
-                    {!m.mine && (
-                      <Text style={styles.chatUserOther}>{m.user}</Text>
-                    )}
-                    {m.mine && (
-                      <Text style={styles.chatUserMine}>You</Text>
-                    )}
+                <Text
+                  style={{
+                    fontSize: 12,
+                    color: "#64748b",
+                    marginBottom: 4,
+                  }}
+                >
+                  Last message · {renderTime(lastMessage.ts)}
+                </Text>
+                <Text
+                  style={{
+                    fontSize: 14,
+                    fontWeight: "600",
+                    color: "#0b2239",
+                  }}
+                  numberOfLines={1}
+                >
+                  {lastMessage.user}
+                </Text>
+                <Text
+                  style={{
+                    fontSize: 14,
+                    color: "#475569",
+                    marginTop: 2,
+                  }}
+                  numberOfLines={2}
+                >
+                  {lastMessage.text}
+                </Text>
+              </View>
+            ) : (
+              <Text
+                style={{
+                  fontSize: 13,
+                  color: "#64748b",
+                  marginBottom: 10,
+                }}
+              >
+                No messages yet. Be the first to say something.
+              </Text>
+            )}
 
-                    <Text
-                      style={[
-                        styles.chatText,
-                        m.mine && { color: "#fff" },
-                      ]}
-                    >
-                      {m.text}
-                    </Text>
-                    <Text
-                      style={[
-                        styles.chatTime,
-                        m.mine && { color: "#cbd5e1" },
-                      ]}
-                    >
-                      {renderTime(m.ts)}
-                    </Text>
-                  </View>
-                ))}
-              </ScrollView>
-            </View>
+            <TouchableOpacity
+              style={[
+                styles.checkInBtn,
+                { backgroundColor: "#1f6fb2", marginTop: 4 },
+              ]}
+              activeOpacity={0.9}
+              onPress={() =>
+                navigation.navigate("CourtChat", {
+                  courtId,
+                  marker,
+                })
+              }
+            >
+              <Ionicons
+                name="chatbubble-ellipses-outline"
+                size={18}
+                color="#fff"
+              />
+              <Text style={styles.checkInBtnText}>Open court chat</Text>
+            </TouchableOpacity>
           </View>
         </View>
-
-        {/* INPUT BAR (fixed at bottom, lifts with keyboard) */}
-        <View style={styles.chatInputBar}>
-          <TextInput
-            style={styles.chatInput}
-            placeholder="Message this court..."
-            placeholderTextColor="#8aa0b6"
-            value={draftMessage}
-            onChangeText={setDraftMessage}
-            returnKeyType="send"
-            onSubmitEditing={handleSend}
-          />
-          <TouchableOpacity
-            style={styles.sendBtn}
-            onPress={handleSend}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="send" size={18} color="#fff" />
-          </TouchableOpacity>
-        </View>
       </View>
-    </KeyboardAvoidingView>
+    </View>
   );
 }
