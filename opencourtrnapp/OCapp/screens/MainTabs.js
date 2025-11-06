@@ -34,8 +34,8 @@ export default function MainTabs() {
     >
       <Tab.Screen name="Home" component={HomeScreen} />
       <Tab.Screen name="Map" component={MapScreen} />
-      <Tab.Screen name="Profile" component={ProfileScreen} />
       <Tab.Screen name="Friends" component={SettingsScreen} />
+      <Tab.Screen name="Profile" component={ProfileScreen} />
     </Tab.Navigator>
   );
 }
