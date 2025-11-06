@@ -10,7 +10,7 @@ import {
   ActivityIndicator,
   Alert,
 } from "react-native";
-import { db } from "../firebaseConfig";
+import { db, auth } from "../firebaseConfig";
 import {
   collection,
   getDocs,
@@ -20,9 +20,9 @@ import {
   arrayUnion,
   arrayRemove,
 } from "firebase/firestore";
-import { auth } from "../firebaseConfig"; 
 import { onAuthStateChanged } from "firebase/auth";
-import { styles } from "../styles/globalStyles.js";
+import { Ionicons } from "@expo/vector-icons";
+import { styles } from "../styles/globalStyles";
 
 const defaultAvatar = require("../images/defaultProfile.png");
 
@@ -72,7 +72,7 @@ export default function FriendScreen() {
     fetchUsers();
   }, [currentUser]);
 
-  // Listen to current user's friend data in real-time
+  // Listen to current user's friend data
   useEffect(() => {
     if (!currentUser) return;
 
@@ -87,7 +87,7 @@ export default function FriendScreen() {
     return unsubSnap;
   }, [currentUser]);
 
-  // Send Friend Request
+  // Send friend request
   const sendFriendRequest = async (user) => {
     if (!currentUser) return;
     try {
@@ -107,14 +107,11 @@ export default function FriendScreen() {
         updateDoc(senderRef, { outgoingRequests: arrayUnion(user.uid) }),
         updateDoc(receiverRef, { incomingRequests: arrayUnion(currentUser.uid) }),
       ]);
-
-      console.log(`Friend request sent from ${currentUser.uid} to ${user.uid}`);
     } catch (err) {
       console.error("Error sending friend request:", err);
     }
   };
 
-  // Accept Friend Request
   const acceptRequest = async (uid) => {
     try {
       const requesterRef = doc(db, "users", uid);
@@ -135,7 +132,6 @@ export default function FriendScreen() {
     }
   };
 
-  // Decline Friend Request
   const declineRequest = async (uid) => {
     try {
       const requesterRef = doc(db, "users", uid);
@@ -150,7 +146,6 @@ export default function FriendScreen() {
     }
   };
 
-  // Remove friend (mutual removal)
   const removeFriend = async (uid) => {
     try {
       const currentRef = doc(db, "users", currentUser.uid);
@@ -166,97 +161,6 @@ export default function FriendScreen() {
     }
   };
 
-  const renderSearchUser = (user) => {
-    const isFriend = friends.includes(user.uid);
-    const isOutgoing = outgoingRequests.includes(user.uid);
-    const isIncoming = incomingRequests.includes(user.uid);
-
-    return (
-      <View
-        key={user.uid}
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          justifyContent: "space-between",
-          backgroundColor: "#fff",
-          padding: 10,
-          borderRadius: 10,
-          marginBottom: 5,
-          shadowColor: "#000",
-          shadowOpacity: 0.1,
-          shadowRadius: 5,
-          elevation: 2,
-        }}
-      >
-        <View style={{ flexDirection: "row", alignItems: "center" }}>
-          <Image
-            source={user.avatar}
-            style={{ width: 40, height: 40, borderRadius: 20, marginRight: 10 }}
-          />
-          <Text style={{ fontSize: 16 }}>{user.username}</Text>
-        </View>
-
-        {isFriend ? (
-          <Text style={{ color: "green", fontWeight: "600" }}>Friends</Text>
-        ) : isOutgoing ? (
-          <Text style={{ color: "#999" }}>Requested</Text>
-        ) : isIncoming ? (
-          <Text style={{ color: "#f39c12" }}>Incoming</Text>
-        ) : (
-          <TouchableOpacity
-            style={{
-              backgroundColor: "#3498db",
-              paddingHorizontal: 12,
-              paddingVertical: 5,
-              borderRadius: 5,
-            }}
-            onPress={() => sendFriendRequest(user)}
-          >
-            <Text style={{ color: "white" }}>Add</Text>
-          </TouchableOpacity>
-        )}
-      </View>
-    );
-  };
-
-  const renderFriendCard = (user) => (
-    <View
-      key={user.uid}
-      style={{
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "space-between",
-        backgroundColor: "#fff",
-        padding: 10,
-        borderRadius: 10,
-        marginBottom: 5,
-        shadowColor: "#000",
-        shadowOpacity: 0.1,
-        shadowRadius: 5,
-        elevation: 2,
-      }}
-    >
-      <View style={{ flexDirection: "row", alignItems: "center" }}>
-        <Image
-          source={user.avatar}
-          style={{ width: 40, height: 40, borderRadius: 20, marginRight: 10 }}
-        />
-        <Text style={{ fontSize: 16 }}>{user.username}</Text>
-      </View>
-      <TouchableOpacity
-        onPress={() => removeFriend(user.uid)}
-        style={{
-          backgroundColor: "#e74c3c",
-          paddingHorizontal: 12,
-          paddingVertical: 5,
-          borderRadius: 5,
-        }}
-      >
-        <Text style={{ color: "#fff" }}>Remove</Text>
-      </TouchableOpacity>
-    </View>
-  );
-
   const filteredUsers = allUsers.filter(
     (u) =>
       u.username.toLowerCase().includes(searchText.toLowerCase()) &&
@@ -265,17 +169,56 @@ export default function FriendScreen() {
 
   if (loading || !currentUser) {
     return (
-      <View
-        style={[styles.container, { justifyContent: "center", alignItems: "center" }]}
-      >
+      <View style={[styles.container, { justifyContent: "center", alignItems: "center" }]}>
         <ActivityIndicator size="large" />
         <Text style={{ marginTop: 10 }}>Loading friends...</Text>
       </View>
     );
   }
 
+  const renderUserRow = (user, actionType = "add") => (
+    <View
+      key={user.uid}
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        paddingVertical: 8,
+        borderBottomColor: "#e5e7eb",
+        borderBottomWidth: 1,
+      }}
+    >
+      <Image
+        source={user.avatar}
+        style={{ width: 36, height: 36, borderRadius: 18, marginRight: 12 }}
+      />
+      <Text style={{ fontSize: 14, fontWeight: "600", color: "#0b2239", flex: 1 }}>
+        {user.username}
+      </Text>
+      {actionType === "add" && (
+        <TouchableOpacity onPress={() => sendFriendRequest(user)}>
+          <Ionicons name="person-add-outline" size={22} color="#1f6fb2" />
+        </TouchableOpacity>
+      )}
+      {actionType === "accept" && (
+        <View style={{ flexDirection: "row" }}>
+          <TouchableOpacity onPress={() => acceptRequest(user.uid)} style={{ marginRight: 10 }}>
+            <Ionicons name="checkmark-circle-outline" size={22} color="#16a34a" />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => declineRequest(user.uid)}>
+            <Ionicons name="close-circle-outline" size={22} color="#ef4444" />
+          </TouchableOpacity>
+        </View>
+      )}
+      {actionType === "remove" && (
+        <TouchableOpacity onPress={() => removeFriend(user.uid)}>
+          <Ionicons name="trash-outline" size={22} color="#ef4444" />
+        </TouchableOpacity>
+      )}
+    </View>
+  );
+
   return (
-    <ScrollView contentContainerStyle={{ padding: 15, backgroundColor: "#f5f5f5" }}>
+    <ScrollView style={styles.homeWrap} contentContainerStyle={{ paddingBottom: 24 }}>
       <TextInput
         placeholder="Search users..."
         value={searchText}
@@ -294,85 +237,35 @@ export default function FriendScreen() {
       />
 
       {searchText.length > 0 && (
-        <View style={{ marginBottom: 20 }}>
+        <View style={styles.courtCard}>
+          <Text style={styles.cardHeaderText}>Search Results</Text>
           {filteredUsers.length === 0 ? (
-            <Text style={{ color: "#888" }}>No users found.</Text>
+            <Text style={{ color: "#64748b", marginTop: 8 }}>No users found.</Text>
           ) : (
-            filteredUsers.map(renderSearchUser)
+            filteredUsers.map((u) => renderUserRow(u, "add"))
           )}
         </View>
       )}
 
-      <Text style={{ fontSize: 18, fontWeight: "bold", marginBottom: 10 }}>
-        Incoming Friend Requests
-      </Text>
-      {incomingRequests.length === 0 ? (
-        <Text style={{ color: "#888", marginBottom: 15 }}>No incoming requests.</Text>
-      ) : (
-        allUsers
-          .filter((u) => incomingRequests.includes(u.uid))
-          .map((user) => (
-            <View
-              key={user.uid}
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                justifyContent: "space-between",
-                backgroundColor: "#fff",
-                padding: 10,
-                borderRadius: 10,
-                marginBottom: 5,
-                shadowColor: "#000",
-                shadowOpacity: 0.1,
-                shadowRadius: 5,
-                elevation: 2,
-              }}
-            >
-              <View style={{ flexDirection: "row", alignItems: "center" }}>
-                <Image
-                  source={user.avatar}
-                  style={{ width: 40, height: 40, borderRadius: 20, marginRight: 10 }}
-                />
-                <Text style={{ fontSize: 16 }}>{user.username}</Text>
-              </View>
+      <View style={styles.courtCard}>
+        <Text style={styles.cardHeaderText}>Incoming Friend Requests</Text>
+        {incomingRequests.length === 0 ? (
+          <Text style={{ color: "#64748b", marginTop: 8 }}>No incoming requests.</Text>
+        ) : (
+          allUsers
+            .filter((u) => incomingRequests.includes(u.uid))
+            .map((u) => renderUserRow(u, "accept"))
+        )}
+      </View>
 
-              <View style={{ flexDirection: "row" }}>
-                <TouchableOpacity
-                  style={{
-                    backgroundColor: "green",
-                    paddingHorizontal: 12,
-                    paddingVertical: 5,
-                    borderRadius: 5,
-                    marginRight: 5,
-                  }}
-                  onPress={() => acceptRequest(user.uid)}
-                >
-                  <Text style={{ color: "white" }}>Accept</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={{
-                    backgroundColor: "red",
-                    paddingHorizontal: 12,
-                    paddingVertical: 5,
-                    borderRadius: 5,
-                  }}
-                  onPress={() => declineRequest(user.uid)}
-                >
-                  <Text style={{ color: "white" }}>Decline</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          ))
-      )}
-
-      <Text style={{ fontSize: 18, fontWeight: "bold", marginBottom: 10, marginTop: 20 }}>
-        Friends
-      </Text>
-      {friends.length === 0 ? (
-        <Text style={{ color: "#888" }}>No friends yet. Add some from above!</Text>
-      ) : (
-        allUsers.filter((u) => friends.includes(u.uid)).map(renderFriendCard)
-      )}
+      <View style={styles.courtCard}>
+        <Text style={styles.cardHeaderText}>Friends</Text>
+        {friends.length === 0 ? (
+          <Text style={{ color: "#64748b", marginTop: 8 }}>No friends yet.</Text>
+        ) : (
+          allUsers.filter((u) => friends.includes(u.uid)).map((u) => renderUserRow(u, "remove"))
+        )}
+      </View>
     </ScrollView>
   );
 }
