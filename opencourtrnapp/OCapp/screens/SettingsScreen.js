@@ -1,3 +1,4 @@
+// screens/FriendScreen.js
 import React, { useState, useEffect } from "react";
 import {
   View,
@@ -19,9 +20,9 @@ import {
   arrayUnion,
   arrayRemove,
 } from "firebase/firestore";
-import { styles } from "../styles/globalStyles.js";
-import { auth, app } from "../firebaseConfig"; // make sure auth is initialized with AsyncStorage
+import { auth } from "../firebaseConfig"; 
 import { onAuthStateChanged } from "firebase/auth";
+import { styles } from "../styles/globalStyles.js";
 
 const defaultAvatar = require("../images/defaultProfile.png");
 
@@ -34,7 +35,7 @@ export default function FriendScreen() {
   const [loading, setLoading] = useState(true);
   const [searchText, setSearchText] = useState("");
 
-  // 🔹 Track auth state
+  // Track auth state
   useEffect(() => {
     const unsubAuth = onAuthStateChanged(auth, (user) => {
       setCurrentUser(user);
@@ -42,7 +43,7 @@ export default function FriendScreen() {
     return unsubAuth;
   }, []);
 
-  // 🔹 Fetch all users except self
+  // Fetch all users except self
   useEffect(() => {
     if (!currentUser) return;
 
@@ -71,7 +72,7 @@ export default function FriendScreen() {
     fetchUsers();
   }, [currentUser]);
 
-  // 🔹 Listen to current user's friend data in real-time
+  // Listen to current user's friend data in real-time
   useEffect(() => {
     if (!currentUser) return;
 
@@ -86,7 +87,7 @@ export default function FriendScreen() {
     return unsubSnap;
   }, [currentUser]);
 
-  // 🔹 Send Friend Request
+  // Send Friend Request
   const sendFriendRequest = async (user) => {
     if (!currentUser) return;
     try {
@@ -113,7 +114,7 @@ export default function FriendScreen() {
     }
   };
 
-  // 🔹 Accept Friend Request
+  // Accept Friend Request
   const acceptRequest = async (uid) => {
     try {
       const requesterRef = doc(db, "users", uid);
@@ -134,7 +135,7 @@ export default function FriendScreen() {
     }
   };
 
-  // 🔹 Decline Friend Request
+  // Decline Friend Request
   const declineRequest = async (uid) => {
     try {
       const requesterRef = doc(db, "users", uid);
@@ -146,6 +147,22 @@ export default function FriendScreen() {
       ]);
     } catch (err) {
       console.error("Error declining request:", err);
+    }
+  };
+
+  // Remove friend (mutual removal)
+  const removeFriend = async (uid) => {
+    try {
+      const currentRef = doc(db, "users", currentUser.uid);
+      const friendRef = doc(db, "users", uid);
+
+      await Promise.all([
+        updateDoc(currentRef, { friends: arrayRemove(uid) }),
+        updateDoc(friendRef, { friends: arrayRemove(currentUser.uid) }),
+      ]);
+    } catch (err) {
+      console.error("Error removing friend:", err);
+      Alert.alert("Failed to remove friend", "Please try again.");
     }
   };
 
@@ -208,6 +225,7 @@ export default function FriendScreen() {
       style={{
         flexDirection: "row",
         alignItems: "center",
+        justifyContent: "space-between",
         backgroundColor: "#fff",
         padding: 10,
         borderRadius: 10,
@@ -218,11 +236,24 @@ export default function FriendScreen() {
         elevation: 2,
       }}
     >
-      <Image
-        source={user.avatar}
-        style={{ width: 40, height: 40, borderRadius: 20, marginRight: 10 }}
-      />
-      <Text style={{ fontSize: 16 }}>{user.username}</Text>
+      <View style={{ flexDirection: "row", alignItems: "center" }}>
+        <Image
+          source={user.avatar}
+          style={{ width: 40, height: 40, borderRadius: 20, marginRight: 10 }}
+        />
+        <Text style={{ fontSize: 16 }}>{user.username}</Text>
+      </View>
+      <TouchableOpacity
+        onPress={() => removeFriend(user.uid)}
+        style={{
+          backgroundColor: "#e74c3c",
+          paddingHorizontal: 12,
+          paddingVertical: 5,
+          borderRadius: 5,
+        }}
+      >
+        <Text style={{ color: "#fff" }}>Remove</Text>
+      </TouchableOpacity>
     </View>
   );
 
