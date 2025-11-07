@@ -13,7 +13,7 @@ import {
   Modal,
   FlatList,
   ActivityIndicator,
-  LayoutAnimation, // 👈 NEW
+  LayoutAnimation,
   UIManager,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -31,7 +31,10 @@ import { styles } from "../styles/globalStyles";
 
 const TENOR_API_KEY = "AIzaSyDYgE5Z7qvK2PDPY8sg1GiqGcC_AVxFdho";
 
-if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
+if (
+  Platform.OS === "android" &&
+  UIManager.setLayoutAnimationEnabledExperimental
+) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
@@ -65,7 +68,6 @@ export default function CourtChatScreen({ route, navigation }) {
   }, []);
 
   const smoothDismissKeyboard = () => {
-    // Animate layout change for smoother transition
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     Keyboard.dismiss();
   };
@@ -81,6 +83,7 @@ export default function CourtChatScreen({ route, navigation }) {
     return `${hh}:${mm} ${ampm}`;
   };
 
+  // load my profile
   useEffect(() => {
     if (!user) return;
     const ref = doc(db, "users", user.uid);
@@ -96,6 +99,7 @@ export default function CourtChatScreen({ route, navigation }) {
     return () => unsub();
   }, [user]);
 
+  // live chat messages
   useEffect(() => {
     if (!courtId || !user) return;
     const msgsRef = collection(db, "courts", courtId, "messages");
@@ -206,31 +210,43 @@ export default function CourtChatScreen({ route, navigation }) {
           borderBottomRightRadius: 24,
         }}
       >
-        <TouchableOpacity
-          onPress={() => navigation.goBack()}
-          activeOpacity={0.8}
+        <View
           style={{
             flexDirection: "row",
             alignItems: "center",
-            backgroundColor: "rgba(255,255,255,0.9)",
-            paddingVertical: 6,
-            paddingHorizontal: 10,
-            borderRadius: 12,
-            width: 70,
+            justifyContent: "flex-start",
           }}
         >
-          <Ionicons name="chevron-back" size={20} color="#0b2239" />
-          <Text
+          <TouchableOpacity
+            onPress={() => navigation.goBack()}
+            activeOpacity={0.8}
             style={{
-              marginLeft: 4,
-              fontSize: 14,
-              fontWeight: "600",
-              color: "#0b2239",
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: "rgba(255,255,255,0.9)",
+              paddingVertical: 6,
+              paddingHorizontal: 12,
+              borderRadius: 12,
             }}
           >
-            Back
-          </Text>
-        </TouchableOpacity>
+            <Ionicons
+              name="chevron-back"
+              size={20}
+              color="#0b2239"
+              style={{ marginRight: 2, marginTop: 1 }}
+            />
+            <Text
+              style={{
+                fontSize: 14,
+                fontWeight: "600",
+                color: "#0b2239",
+              }}
+            >
+              Back
+            </Text>
+          </TouchableOpacity>
+        </View>
 
         <View style={{ marginTop: 14 }}>
           <Text style={{ color: "#e0f2fe", fontSize: 13 }}>Court chat</Text>
@@ -262,7 +278,7 @@ export default function CourtChatScreen({ route, navigation }) {
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
             onContentSizeChange={scrollToBottom}
-            onScrollBeginDrag={smoothDismissKeyboard} // 👈 now uses animated slide-down
+            onScrollBeginDrag={smoothDismissKeyboard}
           >
             {messages.length === 0 ? (
               <View style={{ alignItems: "center", marginTop: 40 }}>
