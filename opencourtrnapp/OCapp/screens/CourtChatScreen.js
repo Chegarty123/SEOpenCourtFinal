@@ -13,8 +13,6 @@ import {
   Modal,
   FlatList,
   ActivityIndicator,
-  LayoutAnimation,
-  UIManager,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { auth, db } from "../firebaseConfig";
@@ -26,17 +24,15 @@ import {
   orderBy,
   addDoc,
   serverTimestamp,
+  setDoc,
+  updateDoc,
+  arrayUnion,
+  arrayRemove,
 } from "firebase/firestore";
 import { styles } from "../styles/globalStyles";
 
-const TENOR_API_KEY = "AIzaSyDYgE5Z7qvK2PDPY8sg1GiqGcC_AVxFdho";
-
-if (
-  Platform.OS === "android" &&
-  UIManager.setLayoutAnimationEnabledExperimental
-) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
+const TENOR_API_KEY = "AIzaSyDYgE5Z7qvK2PDPY8sg1GiqGcC_AVxFdho"; // your Tenor key
+const REACTION_EMOJIS = ["👍", "🔥", "😂", "💪", "❤️"];
 
 export default function CourtChatScreen({ route, navigation }) {
   const { courtId, marker } = route.params || {};
@@ -56,40 +52,51 @@ export default function CourtChatScreen({ route, navigation }) {
   const [gifResults, setGifResults] = useState([]);
   const [gifLoading, setGifLoading] = useState(false);
 
+  const [typingUsers, setTypingUsers] = useState([]);
+  const [reactionPickerFor, setReactionPickerFor] = useState(null); // msg.id or null
+
+  // scroll state for "new messages" pill
+  const isAtBottomRef = useRef(true);
+  const [isAtBottom, setIsAtBottom] = useState(true);
+  const [hasNewMessage, setHasNewMessage] = useState(false);
+  const prevMsgCountRef = useRef(0);
+
   const scrollToBottom = () => {
     setTimeout(() => {
       chatScrollRef.current?.scrollToEnd({ animated: true });
+      isAtBottomRef.current = true;
+      setIsAtBottom(true);
+      setHasNewMessage(false);
     }, 50);
   };
 
+  // auto-scroll when keyboard shows
   useEffect(() => {
-    const sub = Keyboard.addListener("keyboardDidShow", scrollToBottom);
-    return () => sub.remove();
+    const subShow = Keyboard.addListener("keyboardDidShow", scrollToBottom);
+    return () => {
+      subShow.remove();
+    };
   }, []);
 
-  const smoothDismissKeyboard = () => {
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    Keyboard.dismiss();
-  };
-
+  // Format Firestore timestamp -> "4:33 PM"
   const renderTime = (ts) => {
-    if (!ts) return "now";
-    const d = ts.toDate();
-    const h = d.getHours();
-    const m = d.getMinutes();
-    const ampm = h >= 12 ? "PM" : "AM";
-    const hh = h % 12 === 0 ? 12 : h % 12;
-    const mm = m < 10 ? `0${m}` : m;
+    if (!ts || typeof ts.toDate !== "function") return "now";
+    const dateObj = ts.toDate();
+    const hours = dateObj.getHours();
+    const mins = dateObj.getMinutes();
+    const ampm = hours >= 12 ? "PM" : "AM";
+    const hh = hours % 12 === 0 ? 12 : hours % 12;
+    const mm = mins < 10 ? `0${mins}` : mins;
     return `${hh}:${mm} ${ampm}`;
   };
 
-  // load my profile
+  // Load my profile name
   useEffect(() => {
     if (!user) return;
-    const ref = doc(db, "users", user.uid);
-    const unsub = onSnapshot(ref, (snap) => {
-      if (snap.exists()) {
-        const data = snap.data();
+    const userDocRef = doc(db, "users", user.uid);
+    const unsub = onSnapshot(userDocRef, (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.data();
         setMyProfile({
           uid: user.uid,
           name: data.username || user.email.split("@")[0],
@@ -99,84 +106,210 @@ export default function CourtChatScreen({ route, navigation }) {
     return () => unsub();
   }, [user]);
 
-  // live chat messages
+  // Live chat messages
   useEffect(() => {
     if (!courtId || !user) return;
-    const msgsRef = collection(db, "courts", courtId, "messages");
-    const q = query(msgsRef, orderBy("ts", "asc"));
 
-    const unsub = onSnapshot(q, (snap) => {
-      const arr = [];
+    const msgsRef = collection(db, "courts", courtId, "messages");
+    const qMsgs = query(msgsRef, orderBy("ts", "asc"));
+
+    const unsub = onSnapshot(qMsgs, (snap) => {
+      const chatArr = [];
       snap.forEach((d) => {
         const data = d.data();
-        arr.push({
+        chatArr.push({
           id: d.id,
           userId: data.userId,
           user: data.username || "player",
           text: data.text || "",
           type: data.type || (data.gifUrl ? "gif" : "text"),
           gifUrl: data.gifUrl || null,
+          reactions: data.reactions || {}, // { "🔥": ["uid1", "uid2"], ... }
           ts: data.ts,
           mine: data.userId === user.uid,
         });
       });
-      setMessages(arr);
-      scrollToBottom();
+
+      const prevCount = prevMsgCountRef.current;
+      const newCount = chatArr.length;
+      const gotNewMessage = newCount > prevCount;
+      prevMsgCountRef.current = newCount;
+
+      setMessages(chatArr);
+
+      // IMPORTANT: no unconditional scroll here.
+      // If user is not at bottom and a new message arrives,
+      // just show the "New messages" pill.
+      if (!isAtBottomRef.current && gotNewMessage) {
+        setHasNewMessage(true);
+      }
     });
 
     return () => unsub();
   }, [courtId, user]);
 
+  // Typing indicators: listen for other users typing at this court
+  useEffect(() => {
+    if (!courtId || !user) return;
+
+    const typingRef = collection(db, "courts", courtId, "typing");
+    const unsub = onSnapshot(typingRef, (snap) => {
+      const now = Date.now();
+      const active = [];
+      snap.forEach((d) => {
+        const data = d.data();
+        if (!data.isTyping) return;
+        if (data.userId === user.uid) return;
+        if (data.ts && typeof data.ts.toDate === "function") {
+          const age = now - data.ts.toDate().getTime();
+          if (age > 15000) return; // older than 15s = stale
+        }
+        active.push(data.username || "player");
+      });
+      setTypingUsers(active);
+    });
+
+    return () => unsub();
+  }, [courtId, user]);
+
+  // Update my typing status whenever draftMessage changes
+  useEffect(() => {
+    if (!courtId || !user || !myProfile?.name) return;
+
+    const typingDocRef = doc(db, "courts", courtId, "typing", user.uid);
+    const isTyping = draftMessage.trim().length > 0;
+
+    setDoc(
+      typingDocRef,
+      {
+        userId: user.uid,
+        username: myProfile.name,
+        isTyping,
+        ts: serverTimestamp(),
+      },
+      { merge: true }
+    ).catch((err) => console.log("typing status error", err));
+
+    return () => {
+      setDoc(
+        typingDocRef,
+        {
+          userId: user.uid,
+          username: myProfile.name,
+          isTyping: false,
+          ts: serverTimestamp(),
+        },
+        { merge: true }
+      ).catch(() => {});
+    };
+  }, [draftMessage, courtId, user, myProfile?.name]);
+
   const handleSend = async () => {
     if (!draftMessage.trim() || !user || !courtId) return;
+
     const msgsRef = collection(db, "courts", courtId, "messages");
-    await addDoc(msgsRef, {
-      userId: user.uid,
-      username: myProfile.name,
-      type: "text",
-      text: draftMessage.trim(),
-      gifUrl: null,
-      ts: serverTimestamp(),
-    });
-    setDraftMessage("");
+    try {
+      await addDoc(msgsRef, {
+        userId: user.uid,
+        username: myProfile.name,
+        type: "text",
+        text: draftMessage.trim(),
+        gifUrl: null,
+        reactions: {},
+        ts: serverTimestamp(),
+      });
+      setDraftMessage("");
+      setReactionPickerFor(null);
+      scrollToBottom(); // when YOU send, always go down
+    } catch (err) {
+      console.warn("send message failed", err);
+    }
   };
 
   const sendGif = async (gifUrl) => {
     if (!gifUrl || !user || !courtId) return;
     const msgsRef = collection(db, "courts", courtId, "messages");
-    await addDoc(msgsRef, {
-      userId: user.uid,
-      username: myProfile.name,
-      type: "gif",
-      text: null,
-      gifUrl,
-      ts: serverTimestamp(),
-    });
-    setGifPickerVisible(false);
-    scrollToBottom();
+
+    try {
+      await addDoc(msgsRef, {
+        userId: user.uid,
+        username: myProfile.name,
+        type: "gif",
+        text: null,
+        gifUrl,
+        reactions: {},
+        ts: serverTimestamp(),
+      });
+      setGifPickerVisible(false);
+      setReactionPickerFor(null);
+      scrollToBottom();
+    } catch (err) {
+      console.warn("send gif failed", err);
+    }
   };
 
-  const fetchGifs = async (query) => {
-    if (!query) return;
+  const fetchGifs = async (queryText) => {
+    if (!queryText) return;
     try {
       setGifLoading(true);
+      setGifResults([]);
+
       const url = `https://tenor.googleapis.com/v2/search?q=${encodeURIComponent(
-        query
+        queryText
       )}&key=${TENOR_API_KEY}&limit=24&media_filter=gif,tinygif`;
+
       const res = await fetch(url);
       const json = await res.json();
       const results = (json.results || [])
-        .map((i) => ({
-          id: i.id,
-          url:
-            i.media_formats?.tinygif?.url || i.media_formats?.gif?.url || null,
-        }))
+        .map((item) => {
+          const tiny =
+            item.media_formats?.tinygif?.url ||
+            item.media_formats?.gif?.url ||
+            null;
+          return { id: item.id, url: tiny };
+        })
         .filter((g) => g.url);
+
       setGifResults(results);
     } catch (err) {
       console.warn("GIF search failed", err);
     } finally {
       setGifLoading(false);
+    }
+  };
+
+  // Toggle / set reaction: each user can have at most ONE reaction per message
+  const toggleReaction = async (msg, emoji) => {
+    if (!user || !courtId || !msg?.id || !emoji) return;
+    const msgRef = doc(db, "courts", courtId, "messages", msg.id);
+
+    const currentReactions = msg.reactions || {};
+    let previousEmoji = null;
+
+    Object.entries(currentReactions).forEach(([e, userIds]) => {
+      if (Array.isArray(userIds) && userIds.includes(user.uid)) {
+        previousEmoji = e;
+      }
+    });
+
+    const updates = {};
+
+    if (previousEmoji === emoji) {
+      // toggle off same emoji
+      updates[`reactions.${emoji}`] = arrayRemove(user.uid);
+    } else {
+      if (previousEmoji) {
+        updates[`reactions.${previousEmoji}`] = arrayRemove(user.uid);
+      }
+      updates[`reactions.${emoji}`] = arrayUnion(user.uid);
+    }
+
+    if (Object.keys(updates).length === 0) return;
+
+    try {
+      await updateDoc(msgRef, updates);
+    } catch (err) {
+      console.log("toggle reaction error", err);
     }
   };
 
@@ -197,6 +330,16 @@ export default function CourtChatScreen({ route, navigation }) {
     );
   }
 
+  // Build typing label
+  let typingLabel = "";
+  if (typingUsers.length === 1) {
+    typingLabel = `${typingUsers[0]} is typing...`;
+  } else if (typingUsers.length === 2) {
+    typingLabel = `${typingUsers[0]} and ${typingUsers[1]} are typing...`;
+  } else if (typingUsers.length > 2) {
+    typingLabel = `${typingUsers[0]} and ${typingUsers.length - 1} others are typing...`;
+  }
+
   return (
     <View style={{ flex: 1, backgroundColor: "#eef2f7" }}>
       {/* HEADER */}
@@ -214,7 +357,7 @@ export default function CourtChatScreen({ route, navigation }) {
           style={{
             flexDirection: "row",
             alignItems: "center",
-            justifyContent: "flex-start",
+            justifyContent: "space-between",
           }}
         >
           <TouchableOpacity
@@ -223,21 +366,16 @@ export default function CourtChatScreen({ route, navigation }) {
             style={{
               flexDirection: "row",
               alignItems: "center",
-              justifyContent: "center",
               backgroundColor: "rgba(255,255,255,0.9)",
               paddingVertical: 6,
-              paddingHorizontal: 12,
+              paddingHorizontal: 10,
               borderRadius: 12,
             }}
           >
-            <Ionicons
-              name="chevron-back"
-              size={20}
-              color="#0b2239"
-              style={{ marginRight: 2, marginTop: 1 }}
-            />
+            <Ionicons name="chevron-back" size={20} color="#0b2239" />
             <Text
               style={{
+                marginLeft: 4,
                 fontSize: 14,
                 fontWeight: "600",
                 color: "#0b2239",
@@ -274,49 +412,277 @@ export default function CourtChatScreen({ route, navigation }) {
           <ScrollView
             ref={chatScrollRef}
             style={{ flex: 1, paddingHorizontal: 12, paddingTop: 12 }}
-            contentContainerStyle={{ paddingBottom: 16 }}
+            contentContainerStyle={{
+              paddingBottom: 16,
+            }}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
-            onContentSizeChange={scrollToBottom}
-            onScrollBeginDrag={smoothDismissKeyboard}
+            // Only auto-scroll on content change if we're already at bottom
+            onContentSizeChange={() => {
+              if (isAtBottomRef.current) {
+                scrollToBottom();
+              }
+            }}
+            onScrollBeginDrag={() => Keyboard.dismiss()}
+            onScroll={({ nativeEvent }) => {
+              const { layoutMeasurement, contentOffset, contentSize } =
+                nativeEvent;
+              const paddingToBottom = 40;
+              const atBottom =
+                layoutMeasurement.height + contentOffset.y >=
+                contentSize.height - paddingToBottom;
+
+              setIsAtBottom(atBottom);
+              isAtBottomRef.current = atBottom;
+              if (atBottom) {
+                setHasNewMessage(false);
+              }
+            }}
+            scrollEventThrottle={16}
           >
             {messages.length === 0 ? (
-              <View style={{ alignItems: "center", marginTop: 40 }}>
+              <View
+                style={{
+                  alignItems: "center",
+                  marginTop: 40,
+                }}
+              >
                 <Text style={{ color: "#64748b" }}>
                   No messages yet. Start the conversation!
                 </Text>
               </View>
             ) : null}
 
-            {messages.map((m) => (
+            {messages.map((m) => {
+              const reactions = m.reactions || {};
+              const reactionEntries = Object.entries(reactions).filter(
+                ([, userIds]) => Array.isArray(userIds) && userIds.length > 0
+              );
+
+              return (
+                <TouchableOpacity
+                  key={m.id}
+                  activeOpacity={1}
+                  onLongPress={() =>
+                    setReactionPickerFor(
+                      reactionPickerFor === m.id ? null : m.id
+                    )
+                  }
+                >
+                  <View
+                    style={[
+                      styles.chatBubble,
+                      m.mine ? styles.chatBubbleMine : styles.chatBubbleOther,
+                      { marginBottom: 8 },
+                    ]}
+                  >
+                    <Text
+                      style={
+                        m.mine ? styles.chatUserMine : styles.chatUserOther
+                      }
+                    >
+                      {m.mine ? "You" : m.user}
+                    </Text>
+
+                    {m.type === "gif" && m.gifUrl ? (
+                      <Image
+                        source={{ uri: m.gifUrl }}
+                        style={{
+                          width: 200,
+                          height: 200,
+                          borderRadius: 12,
+                          marginTop: 4,
+                        }}
+                        resizeMode="cover"
+                      />
+                    ) : (
+                      <Text style={[styles.chatText, { marginTop: 2 }]}>
+                        {m.text}
+                      </Text>
+                    )}
+
+                    {/* Time + reaction summary + reaction picker button */}
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        marginTop: 6,
+                      }}
+                    >
+                      {/* time: white on my messages, gray on others */}
+                      <Text
+                        style={[
+                          styles.chatTime,
+                          m.mine && { color: "#e5f3ff" },
+                        ]}
+                      >
+                        {renderTime(m.ts)}
+                      </Text>
+
+                      <View
+                        style={{
+                          flexDirection: "row",
+                          alignItems: "center",
+                        }}
+                      >
+                        {reactionEntries.map(([emoji, userIds]) => {
+                          const userIdsArr = Array.isArray(userIds)
+                            ? userIds
+                            : [];
+                          const count = userIdsArr.length;
+                          if (count === 0) return null;
+                          const iReacted =
+                            user && userIdsArr.includes(user.uid);
+
+                          return (
+                            <TouchableOpacity
+                              key={emoji}
+                              onPress={() => toggleReaction(m, emoji)}
+                              style={{
+                                flexDirection: "row",
+                                alignItems: "center",
+                                paddingHorizontal: 6,
+                                paddingVertical: 2,
+                                borderRadius: 12,
+                                marginLeft: 4,
+                                backgroundColor: iReacted
+                                  ? "rgba(59,130,246,0.15)"
+                                  : "rgba(148,163,184,0.15)",
+                              }}
+                              activeOpacity={0.8}
+                            >
+                              <Text style={{ fontSize: 12 }}>{emoji}</Text>
+                              <Text
+                                style={{
+                                  marginLeft: 3,
+                                  fontSize: 11,
+                                  color: iReacted ? "#1d4ed8" : "#475569",
+                                }}
+                              >
+                                {count}
+                              </Text>
+                            </TouchableOpacity>
+                          );
+                        })}
+
+                        {/* Open emoji picker for this message via icon as well */}
+                        <TouchableOpacity
+                          onPress={() =>
+                            setReactionPickerFor(
+                              reactionPickerFor === m.id ? null : m.id
+                            )
+                          }
+                          style={{
+                            marginLeft: reactionEntries.length > 0 ? 6 : 0,
+                            paddingHorizontal: 4,
+                            paddingVertical: 2,
+                          }}
+                          hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+                        >
+                          <Ionicons
+                            name={
+                              reactionPickerFor === m.id
+                                ? "close-circle-outline"
+                                : "add-circle-outline"
+                            }
+                            size={18}
+                            color="#94a3b8"
+                          />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+
+                    {/* Inline emoji picker row (preset emojis) */}
+                    {reactionPickerFor === m.id && (
+                      <View
+                        style={{
+                          flexDirection: "row",
+                          marginTop: 4,
+                          paddingVertical: 4,
+                        }}
+                      >
+                        {REACTION_EMOJIS.map((emoji) => (
+                          <TouchableOpacity
+                            key={emoji}
+                            onPress={() => {
+                              toggleReaction(m, emoji);
+                              setReactionPickerFor(null); // close row after choosing
+                            }}
+                            style={{
+                              marginRight: 6,
+                              paddingHorizontal: 6,
+                              paddingVertical: 4,
+                              borderRadius: 12,
+                              backgroundColor: "rgba(148,163,184,0.2)",
+                            }}
+                            activeOpacity={0.8}
+                          >
+                            <Text style={{ fontSize: 15 }}>{emoji}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    )}
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+
+            {typingLabel ? (
               <View
-                key={m.id}
-                style={[
-                  styles.chatBubble,
-                  m.mine ? styles.chatBubbleMine : styles.chatBubbleOther,
-                  { marginBottom: 8 },
-                ]}
+                style={{
+                  marginTop: 4,
+                  marginBottom: 4,
+                  paddingHorizontal: 4,
+                }}
               >
                 <Text
-                  style={m.mine ? styles.chatUserMine : styles.chatUserOther}
+                  style={{
+                    fontSize: 11,
+                    color: "#64748b",
+                    fontStyle: "italic",
+                  }}
                 >
-                  {m.mine ? "You" : m.user}
+                  {typingLabel}
                 </Text>
-
-                {m.type === "gif" && m.gifUrl ? (
-                  <Image
-                    source={{ uri: m.gifUrl }}
-                    style={{ width: 200, height: 200, borderRadius: 12 }}
-                    resizeMode="cover"
-                  />
-                ) : (
-                  <Text style={styles.chatText}>{m.text}</Text>
-                )}
-
-                <Text style={styles.chatTime}>{renderTime(m.ts)}</Text>
               </View>
-            ))}
+            ) : null}
           </ScrollView>
+
+          {/* NEW MESSAGE BANNER */}
+          {hasNewMessage && !isAtBottom && (
+            <TouchableOpacity
+              activeOpacity={0.9}
+              onPress={scrollToBottom}
+              style={{
+                position: "absolute",
+                bottom: 80, // sits above input bar
+                alignSelf: "center",
+                flexDirection: "row",
+                alignItems: "center",
+                paddingHorizontal: 12,
+                paddingVertical: 6,
+                borderRadius: 999,
+                backgroundColor: "#0f172a",
+                shadowColor: "#000",
+                shadowOpacity: 0.15,
+                shadowRadius: 6,
+                elevation: 3,
+              }}
+            >
+              <Ionicons name="arrow-down" size={14} color="#e5f3ff" />
+              <Text
+                style={{
+                  marginLeft: 6,
+                  fontSize: 12,
+                  fontWeight: "600",
+                  color: "#e5f3ff",
+                }}
+              >
+                New messages
+              </Text>
+            </TouchableOpacity>
+          )}
 
           {/* INPUT BAR */}
           <View
@@ -328,7 +694,7 @@ export default function CourtChatScreen({ route, navigation }) {
               paddingVertical: 10,
               borderTopWidth: 1,
               borderTopColor: "#d6e2ee",
-              marginBottom: Platform.OS === "ios" ? 10 : 6,
+              marginBottom: 14, // keeps it clear of the bottom corners
             }}
           >
             <TouchableOpacity
