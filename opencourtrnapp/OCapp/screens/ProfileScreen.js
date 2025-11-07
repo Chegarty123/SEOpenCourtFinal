@@ -10,12 +10,12 @@ import {
   SafeAreaView,
   StatusBar,
   Platform,
+  StyleSheet,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import { auth, db } from "../firebaseConfig";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { signOut } from "firebase/auth";
-import { styles } from "../styles/globalStyles.js";
 
 export default function ProfileScreen({ navigation }) {
   const user = auth.currentUser;
@@ -62,7 +62,7 @@ export default function ProfileScreen({ navigation }) {
     Kings: require("../images/kings.png"),
   };
 
-  // Load profile from Firestore on mount
+  // Load saved profile
   useEffect(() => {
     if (!user) return;
 
@@ -80,14 +80,13 @@ export default function ProfileScreen({ navigation }) {
           setFavoriteTeam(data.favoriteTeam || "None");
           setMemberSince(data.memberSince || memberSince);
         } else {
-          // Create new doc with defaults
           const payload = {
-            username: username,
+            username,
             profilePic: null,
             position: "Point Guard",
             gradeLevel: "Freshman",
             favoriteTeam: "None",
-            memberSince: memberSince,
+            memberSince,
           };
           await setDoc(userDocRef, payload);
         }
@@ -97,9 +96,10 @@ export default function ProfileScreen({ navigation }) {
     };
 
     loadProfile();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Auto-save profile when changes settle
+  // Auto-save when things change
   useEffect(() => {
     if (!user) return;
 
@@ -121,9 +121,8 @@ export default function ProfileScreen({ navigation }) {
     }, 800);
 
     return () => clearTimeout(timeout);
-  }, [username, profilePic, position, gradeLevel, favoriteTeam]);
+  }, [username, profilePic, position, gradeLevel, favoriteTeam, memberSince, user]);
 
-  // Pick image from gallery
   const pickImage = async () => {
     if (!user) return;
 
@@ -158,11 +157,10 @@ export default function ProfileScreen({ navigation }) {
     }
   };
 
-  // Logout function
   const handleLogout = async () => {
     try {
       await signOut(auth);
-      navigation.replace("Login"); // Matches your stack screen name
+      navigation.replace("Login");
     } catch (error) {
       Alert.alert("Logout Failed", error.message);
     }
@@ -170,35 +168,59 @@ export default function ProfileScreen({ navigation }) {
 
   return (
     <SafeAreaView
-      style={{
-        flex: 1,
-        backgroundColor: "#f5f5f5",
-        paddingTop: Platform.OS === "android" ? StatusBar.currentHeight : 0,
-      }}
+      style={[
+        styles.safe,
+        { paddingTop: Platform.OS === "android" ? StatusBar.currentHeight : 0 },
+      ]}
     >
-      <StatusBar barStyle="dark-content" />
-      <ScrollView contentContainerStyle={styles.scrollContainer}>
-        <View style={styles.container}>
-          {/* Profile Picture */}
-          <TouchableOpacity onPress={pickImage}>
-            <Image
-              source={
-                profilePic
-                  ? { uri: profilePic }
-                  : require("../images/defaultProfile.png")
-              }
-              style={styles.profileImage}
-            />
-          </TouchableOpacity>
+      <StatusBar barStyle="light-content" />
 
-          {/* Username & Member Since */}
-          <Text style={styles.username}>{username}</Text>
-          <Text style={styles.memberSince}>Member since {memberSince}</Text>
+      {/* subtle background blobs like home/map */}
+      <View
+        pointerEvents="none"
+        style={styles.blobTop}
+      />
+      <View
+        pointerEvents="none"
+        style={styles.blobBottom}
+      />
 
-          {/* Position Selection */}
-          <View style={styles.positionContainer}>
-            <Text style={styles.label}>Natural Position:</Text>
-            <Text style={styles.positionDisplay}>{position}</Text>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+      >
+        {/* Header text – your existing top bar/time sits above this */}
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Your profile</Text>
+          <Text style={styles.headerSubtitle}>
+            Update your hoop details so friends know who&apos;s pulling up.
+          </Text>
+        </View>
+
+        {/* MAIN CARD (this used to be that big white sheet) */}
+        <View style={styles.card}>
+          {/* Avatar + name */}
+          <View style={styles.avatarSection}>
+            <TouchableOpacity onPress={pickImage} activeOpacity={0.9}>
+              <Image
+                source={
+                  profilePic
+                    ? { uri: profilePic }
+                    : require("../images/defaultProfile.png")
+                }
+                style={styles.profileImage}
+              />
+            </TouchableOpacity>
+
+            <Text style={styles.username}>{username}</Text>
+            <Text style={styles.memberSince}>Member since {memberSince}</Text>
+          </View>
+
+          {/* Natural position */}
+          <View style={styles.section}>
+            <Text style={styles.sectionLabel}>Natural Position</Text>
+            <Text style={styles.sectionValue}>{position}</Text>
+
             <View style={styles.tagContainer}>
               {[
                 "Point Guard",
@@ -226,10 +248,13 @@ export default function ProfileScreen({ navigation }) {
                 </TouchableOpacity>
               ))}
             </View>
+          </View>
 
-            {/* Grade Selection */}
-            <Text style={styles.label}>Grade Level:</Text>
-            <Text style={styles.gradeDisplay}>{gradeLevel}</Text>
+          {/* Grade level */}
+          <View style={styles.section}>
+            <Text style={styles.sectionLabel}>Grade Level</Text>
+            <Text style={styles.sectionValue}>{gradeLevel}</Text>
+
             <View style={styles.tagContainer}>
               {["Freshman", "Sophomore", "Junior", "Senior"].map((grade) => (
                 <TouchableOpacity
@@ -251,25 +276,25 @@ export default function ProfileScreen({ navigation }) {
                 </TouchableOpacity>
               ))}
             </View>
+          </View>
 
-            {/* Favorite Team */}
-            <Text style={styles.label}>Favorite NBA Team:</Text>
-            <Text style={styles.teamDisplay}>{favoriteTeam}</Text>
+          {/* Favorite NBA Team */}
+          <View style={styles.section}>
+            <Text style={styles.sectionLabel}>Favorite NBA Team</Text>
+            <Text style={styles.sectionValue}>{favoriteTeam}</Text>
+
             <View style={styles.tagContainer}>
               {Object.keys(teamLogos).map((team) => (
                 <TouchableOpacity
                   key={team}
                   style={[
                     styles.tag,
+                    styles.teamTag,
                     favoriteTeam === team && styles.tagSelected,
-                    { alignItems: "center" },
                   ]}
                   onPress={() => setFavoriteTeam(team)}
                 >
-                  <Image
-                    source={teamLogos[team]}
-                    style={{ width: 18, height: 18, marginBottom: 4 }}
-                  />
+                  <Image source={teamLogos[team]} style={styles.teamLogo} />
                   <Text
                     style={[
                       styles.tagText,
@@ -282,32 +307,156 @@ export default function ProfileScreen({ navigation }) {
               ))}
             </View>
           </View>
-
-          {/* Logout Button */}
-          <TouchableOpacity
-            onPress={handleLogout}
-            style={{
-              backgroundColor: "#e74c3c",
-              paddingVertical: 12,
-              paddingHorizontal: 25,
-              borderRadius: 25,
-              marginTop: 25,
-              alignSelf: "center",
-            }}
-          >
-            <Text
-              style={{
-                color: "#fff",
-                fontSize: 16,
-                fontWeight: "600",
-                textAlign: "center",
-              }}
-            >
-              Log Out
-            </Text>
-          </TouchableOpacity>
         </View>
+
+        {/* Logout button */}
+        <TouchableOpacity
+          onPress={handleLogout}
+          activeOpacity={0.9}
+          style={styles.logoutButton}
+        >
+          <Text style={styles.logoutText}>Log Out</Text>
+        </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  safe: {
+    flex: 1,
+    backgroundColor: "#020617",
+  },
+  blobTop: {
+    position: "absolute",
+    top: -80,
+    right: -80,
+    width: 260,
+    height: 260,
+    borderRadius: 130,
+    backgroundColor: "rgba(56,189,248,0.22)",
+  },
+  blobBottom: {
+    position: "absolute",
+    top: 180,
+    left: -100,
+    width: 260,
+    height: 260,
+    borderRadius: 130,
+    backgroundColor: "rgba(251,146,60,0.16)",
+  },
+  scrollContent: {
+    paddingHorizontal: 20,
+    paddingBottom: 32,
+  },
+  header: {
+    marginTop: 24,
+    marginBottom: 12,
+  },
+  headerTitle: {
+    fontSize: 22,
+    fontWeight: "800",
+    color: "#e5f3ff",
+    marginBottom: 4,
+  },
+  headerSubtitle: {
+    fontSize: 13,
+    color: "#9ca3af",
+  },
+  card: {
+    borderRadius: 24,
+    paddingVertical: 18,
+    paddingHorizontal: 16,
+    backgroundColor: "rgba(15,23,42,0.98)",
+    borderWidth: 1,
+    borderColor: "rgba(148,163,184,0.5)",
+    marginTop: 12,
+  },
+  avatarSection: {
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  profileImage: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    borderWidth: 2,
+    borderColor: "#38bdf8",
+  },
+  username: {
+    marginTop: 8,
+    fontSize: 20,
+    fontWeight: "700",
+    color: "#f9fafb",
+  },
+  memberSince: {
+    marginTop: 2,
+    fontSize: 13,
+    color: "#9ca3af",
+  },
+  section: {
+    marginTop: 12,
+  },
+  sectionLabel: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#cbd5f5",
+    marginBottom: 2,
+  },
+  sectionValue: {
+    fontSize: 13,
+    color: "#9ca3af",
+    marginBottom: 8,
+  },
+  tagContainer: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  tag: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: "#020617",
+    borderWidth: 1,
+    borderColor: "rgba(148,163,184,0.4)",
+    marginBottom: 8,
+  },
+  teamTag: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  teamLogo: {
+    width: 18,
+    height: 18,
+  },
+  tagSelected: {
+    backgroundColor: "#38bdf8",
+    borderColor: "#38bdf8",
+  },
+  tagText: {
+    fontSize: 13,
+    color: "#e5e7eb",
+    fontWeight: "500",
+  },
+  tagTextSelected: {
+    color: "#020617",
+    fontWeight: "700",
+  },
+  logoutButton: {
+    marginTop: 20,
+    alignSelf: "center",
+    width: "100%",
+    maxWidth: 420,
+    paddingVertical: 12,
+    borderRadius: 999,
+    backgroundColor: "#ef4444",
+    alignItems: "center",
+  },
+  logoutText: {
+    color: "#ffffff",
+    fontSize: 15,
+    fontWeight: "700",
+  },
+});

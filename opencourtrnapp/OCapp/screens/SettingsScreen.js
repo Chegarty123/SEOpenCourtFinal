@@ -9,6 +9,9 @@ import {
   TextInput,
   ActivityIndicator,
   Alert,
+  SafeAreaView,
+  StatusBar,
+  Platform,
 } from "react-native";
 import { db, auth } from "../firebaseConfig";
 import {
@@ -96,11 +99,14 @@ export default function FriendScreen({ navigation }) {
         incomingRequests.includes(user.uid) ||
         friends.includes(user.uid)
       ) {
-        Alert.alert("Already connected", "You already have a connection with this user.");
+        Alert.alert(
+          "Already connected",
+          "You already have a connection with this user."
+        );
         return;
       }
 
-      // 🔹 Instant UI feedback (add to outgoingRequests immediately)
+      // Instant UI feedback
       setOutgoingRequests((prev) => [...prev, user.uid]);
 
       const senderRef = doc(db, "users", currentUser.uid);
@@ -112,7 +118,6 @@ export default function FriendScreen({ navigation }) {
       ]);
     } catch (err) {
       console.error("Error sending friend request:", err);
-      // revert UI if failed
       setOutgoingRequests((prev) => prev.filter((id) => id !== user.uid));
       Alert.alert("Error", "Failed to send friend request. Please try again.");
     }
@@ -175,19 +180,41 @@ export default function FriendScreen({ navigation }) {
 
   if (loading || !currentUser) {
     return (
-      <View
-        style={[
-          styles.container,
-          { justifyContent: "center", alignItems: "center" },
-        ]}
+      <SafeAreaView
+        style={{
+          flex: 1,
+          backgroundColor: "#020617",
+          justifyContent: "center",
+          alignItems: "center",
+          paddingTop: Platform.OS === "android" ? StatusBar.currentHeight : 0,
+        }}
       >
-        <ActivityIndicator size="large" />
-        <Text style={{ marginTop: 10 }}>Loading friends...</Text>
-      </View>
+        <StatusBar barStyle="light-content" />
+        <ActivityIndicator size="large" color="#38bdf8" />
+        <Text style={{ marginTop: 10, color: "#e5e7eb" }}>
+          Loading friends...
+        </Text>
+      </SafeAreaView>
     );
   }
 
-  // ⬇️ Row renderer with live icon change
+  const cardStyle = {
+    backgroundColor: "rgba(15,23,42,0.96)",
+    borderRadius: 18,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: "rgba(148,163,184,0.45)",
+  };
+
+  const titleStyle = {
+    ...styles.cardHeaderText,
+    color: "#e5e7eb",
+  };
+
+  const mutedText = { color: "#9ca3af", marginTop: 8, fontSize: 13 };
+
+  // Row renderer
   const renderUserRow = (user, actionType = "add") => (
     <View
       key={user.uid}
@@ -195,7 +222,7 @@ export default function FriendScreen({ navigation }) {
         flexDirection: "row",
         alignItems: "center",
         paddingVertical: 8,
-        borderBottomColor: "#e5e7eb",
+        borderBottomColor: "#1f2937",
         borderBottomWidth: 1,
       }}
     >
@@ -217,14 +244,14 @@ export default function FriendScreen({ navigation }) {
           style={{
             fontSize: 14,
             fontWeight: "600",
-            color: "#0b2239",
+            color: "#e5e7eb",
           }}
         >
           {user.username}
         </Text>
       </TouchableOpacity>
 
-      {/* Actions on the right (add / accept / remove) */}
+      {/* Actions on the right */}
       {actionType === "add" && (
         outgoingRequests.includes(user.uid) ? (
           <View style={{ flexDirection: "row", alignItems: "center" }}>
@@ -235,7 +262,7 @@ export default function FriendScreen({ navigation }) {
           </View>
         ) : (
           <TouchableOpacity onPress={() => sendFriendRequest(user)}>
-            <Ionicons name="person-add-outline" size={22} color="#1f6fb2" />
+            <Ionicons name="person-add-outline" size={22} color="#38bdf8" />
           </TouchableOpacity>
         )
       )}
@@ -246,7 +273,11 @@ export default function FriendScreen({ navigation }) {
             onPress={() => acceptRequest(user.uid)}
             style={{ marginRight: 10 }}
           >
-            <Ionicons name="checkmark-circle-outline" size={22} color="#16a34a" />
+            <Ionicons
+              name="checkmark-circle-outline"
+              size={22}
+              color="#22c55e"
+            />
           </TouchableOpacity>
           <TouchableOpacity onPress={() => declineRequest(user.uid)}>
             <Ionicons name="close-circle-outline" size={22} color="#ef4444" />
@@ -263,71 +294,115 @@ export default function FriendScreen({ navigation }) {
   );
 
   return (
-    <ScrollView
-      style={styles.homeWrap}
-      contentContainerStyle={{ paddingBottom: 24 }}
-      showsVerticalScrollIndicator={false}
+    <SafeAreaView
+      style={{
+        flex: 1,
+        backgroundColor: "#020617",
+        paddingTop: Platform.OS === "android" ? StatusBar.currentHeight : 0,
+      }}
     >
-      {/* Search bar */}
-      <TextInput
-        placeholder="Search users..."
-        value={searchText}
-        onChangeText={setSearchText}
+      <StatusBar barStyle="light-content" />
+
+      {/* Subtle background blobs */}
+      <View
         style={{
-          backgroundColor: "#fff",
-          padding: 10,
-          borderRadius: 10,
-          marginBottom: 15,
-          fontSize: 16,
-          shadowColor: "#000",
-          shadowOpacity: 0.05,
-          shadowRadius: 5,
-          elevation: 2,
+          position: "absolute",
+          top: -60,
+          left: -40,
+          width: 180,
+          height: 180,
+          borderRadius: 90,
+          backgroundColor: "#0f172a",
+          opacity: 0.9,
+        }}
+      />
+      <View
+        style={{
+          position: "absolute",
+          top: 120,
+          right: -60,
+          width: 200,
+          height: 200,
+          borderRadius: 100,
+          backgroundColor: "#1d4ed8",
+          opacity: 0.3,
         }}
       />
 
-      {/* Search results */}
-      {searchText.length > 0 && (
-        <View style={styles.courtCard}>
-          <Text style={styles.cardHeaderText}>Search Results</Text>
-          {filteredUsers.length === 0 ? (
-            <Text style={{ color: "#64748b", marginTop: 8 }}>
-              No users found.
-            </Text>
+      <ScrollView
+        style={{ flex: 1, paddingHorizontal: 20, paddingTop: 24 }}
+        contentContainerStyle={{ paddingBottom: 32 }}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Small header */}
+        <Text
+          style={{
+            fontSize: 22,
+            fontWeight: "800",
+            color: "#e5e7eb",
+            marginBottom: 14,
+          }}
+        >
+          Friends & Requests
+        </Text>
+        <Text style={{ color: "#9ca3af", marginBottom: 18, fontSize: 13 }}>
+          Search for players, send requests, and manage your hoop squad.
+        </Text>
+
+        {/* Search bar */}
+        <TextInput
+          placeholder="Search users..."
+          placeholderTextColor="#6b7280"
+          value={searchText}
+          onChangeText={setSearchText}
+          style={{
+            backgroundColor: "rgba(15,23,42,0.95)",
+            color: "#e5e7eb",
+            padding: 10,
+            borderRadius: 12,
+            marginBottom: 16,
+            fontSize: 16,
+            borderWidth: 1,
+            borderColor: "rgba(148,163,184,0.6)",
+          }}
+        />
+
+        {/* Search results */}
+        {searchText.length > 0 && (
+          <View style={cardStyle}>
+            <Text style={titleStyle}>Search Results</Text>
+            {filteredUsers.length === 0 ? (
+              <Text style={mutedText}>No users found.</Text>
+            ) : (
+              filteredUsers.map((u) => renderUserRow(u, "add"))
+            )}
+          </View>
+        )}
+
+        {/* Incoming requests */}
+        <View style={cardStyle}>
+          <Text style={titleStyle}>Incoming Friend Requests</Text>
+          {incomingRequests.length === 0 ? (
+            <Text style={mutedText}>No incoming requests.</Text>
           ) : (
-            filteredUsers.map((u) => renderUserRow(u, "add"))
+            allUsers
+              .filter((u) => incomingRequests.includes(u.uid))
+              .map((u) => renderUserRow(u, "accept"))
           )}
         </View>
-      )}
 
-      {/* Incoming requests */}
-      <View style={styles.courtCard}>
-        <Text style={styles.cardHeaderText}>Incoming Friend Requests</Text>
-        {incomingRequests.length === 0 ? (
-          <Text style={{ color: "#64748b", marginTop: 8 }}>
-            No incoming requests.
-          </Text>
-        ) : (
-          allUsers
-            .filter((u) => incomingRequests.includes(u.uid))
-            .map((u) => renderUserRow(u, "accept"))
-        )}
-      </View>
-
-      {/* Friends list */}
-      <View style={styles.courtCard}>
-        <Text style={styles.cardHeaderText}>Friends</Text>
-        {friends.length === 0 ? (
-          <Text style={{ color: "#64748b", marginTop: 8 }}>
-            No friends yet.
-          </Text>
-        ) : (
-          allUsers
-            .filter((u) => friends.includes(u.uid))
-            .map((u) => renderUserRow(u, "remove"))
-        )}
-      </View>
-    </ScrollView>
+        {/* Friends list */}
+        <View style={cardStyle}>
+          <Text style={titleStyle}>Friends</Text>
+          {friends.length === 0 ? (
+            <Text style={mutedText}>No friends yet.</Text>
+          ) : (
+            allUsers
+              .filter((u) => friends.includes(u.uid))
+              .map((u) => renderUserRow(u, "remove"))
+          )}
+        </View>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
-

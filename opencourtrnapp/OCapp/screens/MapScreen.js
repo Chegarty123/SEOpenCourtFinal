@@ -1,3 +1,4 @@
+// screens/MapScreen.js
 import React, { useState, useEffect, useRef } from "react";
 import {
   View,
@@ -23,7 +24,7 @@ export default function MapScreen({ navigation }) {
   const [hasCentered, setHasCentered] = useState(false);
   const [currentRegion, setCurrentRegion] = useState(null);
 
-  // ✅ Get user location and update continuously
+  // Get user location and update continuously
   useEffect(() => {
     (async () => {
       let { status } = await Location.requestForegroundPermissionsAsync();
@@ -55,7 +56,7 @@ export default function MapScreen({ navigation }) {
     })();
   }, []);
 
-  // ✅ Updated helper — works for both main & fullscreen maps
+  // Helper to fly map camera
   const flyTo = (region, mapToUse = mapRef) => {
     if (!region || !mapToUse?.current) return;
     mapToUse.current.animateToRegion(region, 1000);
@@ -67,7 +68,7 @@ export default function MapScreen({ navigation }) {
       flyTo(userLocation);
       setHasCentered(true);
     }
-  }, [userLocation]);
+  }, [userLocation, hasCentered]);
 
   const { height } = Dimensions.get("window");
 
@@ -75,10 +76,36 @@ export default function MapScreen({ navigation }) {
     <View
       style={{
         flex: 1,
-        backgroundColor: "#eef2f7",
+        backgroundColor: "#020617",
         paddingTop: Platform.OS === "ios" ? 70 : 20,
       }}
     >
+      {/* background shapes */}
+      <View
+        pointerEvents="none"
+        style={{
+          position: "absolute",
+          top: -80,
+          right: -60,
+          width: 240,
+          height: 240,
+          borderRadius: 120,
+          backgroundColor: "rgba(56,189,248,0.22)",
+        }}
+      />
+      <View
+        pointerEvents="none"
+        style={{
+          position: "absolute",
+          top: 160,
+          left: -80,
+          width: 260,
+          height: 260,
+          borderRadius: 130,
+          backgroundColor: "rgba(251,146,60,0.18)",
+        }}
+      />
+
       {/* HEADER */}
       <View
         style={{
@@ -90,33 +117,46 @@ export default function MapScreen({ navigation }) {
         }}
       >
         <View style={{ flexShrink: 1 }}>
-          <Text style={{ color: "#0b2239", fontSize: 14, fontWeight: "500" }}>
-            Courts Near You
+          <Text
+            style={{
+              color: "#e5f3ff",
+              fontSize: 14,
+              fontWeight: "500",
+            }}
+          >
+            Courts near you
           </Text>
-          <Text style={{ color: "#0b2239", fontSize: 24, fontWeight: "700" }}>
+          <Text
+            style={{
+              color: "#f9fafb",
+              fontSize: 24,
+              fontWeight: "800",
+            }}
+          >
             Find a run 🏀
           </Text>
         </View>
 
         <View
           style={{
-            backgroundColor: "#fff",
+            backgroundColor: "rgba(15,23,42,0.95)",
             borderRadius: 9999,
             width: 48,
             height: 48,
             alignItems: "center",
             justifyContent: "center",
             shadowColor: "#000",
-            shadowOpacity: 0.08,
-            shadowRadius: 6,
-            shadowOffset: { width: 0, height: 3 },
-            elevation: 3,
+            shadowOpacity: 0.35,
+            shadowRadius: 10,
+            shadowOffset: { width: 0, height: 5 },
+            borderWidth: 1,
+            borderColor: "rgba(148,163,184,0.8)",
           }}
         >
           <Image
             source={require("../images/OCLogo.png")}
             resizeMode="contain"
-            style={{ width: 36, height: 36 }}
+            style={{ width: 32, height: 32 }}
           />
         </View>
       </View>
@@ -126,38 +166,40 @@ export default function MapScreen({ navigation }) {
         style={{
           flex: 1,
           marginHorizontal: 16,
-          borderRadius: 20,
+          borderRadius: 22,
           overflow: "hidden",
-          backgroundColor: "#000",
+          backgroundColor: "#020617",
+          borderWidth: 1,
+          borderColor: "rgba(148,163,184,0.6)",
           shadowColor: "#000",
-          shadowOpacity: 0.15,
-          shadowRadius: 10,
-          shadowOffset: { width: 0, height: 4 },
-          elevation: 4,
+          shadowOpacity: 0.35,
+          shadowRadius: 12,
+          shadowOffset: { width: 0, height: 6 },
+          elevation: 6,
         }}
       >
         <MapView
-  ref={mapRef}
-  style={{ flex: 1 }}
-  mapType="satellite"
-  region={
-    currentRegion ||
-    userLocation || {
-      latitude: markers[0]?.coordinates.latitude || 0,
-      longitude: markers[0]?.coordinates.longitude || 0,
-      latitudeDelta: 0.0075,
-      longitudeDelta: 0.0075,
-    }
-  }
-  onRegionChangeComplete={(region) => setCurrentRegion(region)} // 👈 keep in sync
->
+          ref={mapRef}
+          style={{ flex: 1 }}
+          mapType="satellite"
+          region={
+            currentRegion ||
+            userLocation || {
+              latitude: markers[0]?.coordinates.latitude || 0,
+              longitude: markers[0]?.coordinates.longitude || 0,
+              latitudeDelta: 0.0075,
+              longitudeDelta: 0.0075,
+            }
+          }
+          onRegionChangeComplete={(region) => setCurrentRegion(region)}
+        >
           {/* Court markers */}
           {markers.map((marker) => (
             <Marker
               key={marker.id}
               title={marker.name}
               coordinate={marker.coordinates}
-              onPress={() => flyTo(marker.coordinates, mapRef)} // ✅ explicitly use mapRef
+              onPress={() => flyTo(marker.coordinates, mapRef)}
             />
           ))}
 
@@ -167,7 +209,7 @@ export default function MapScreen({ navigation }) {
               coordinate={userLocation}
               title="You"
               pinColor="dodgerblue"
-              onPress={() => flyTo(userLocation, mapRef)} // ✅ explicitly use mapRef
+              onPress={() => flyTo(userLocation, mapRef)}
             />
           )}
         </MapView>
@@ -175,59 +217,63 @@ export default function MapScreen({ navigation }) {
         {/* Fullscreen toggle */}
         <TouchableOpacity
           onPress={() => {
-  if (currentRegion && fullscreenMapRef.current) {
-    fullscreenMapRef.current.animateToRegion(currentRegion, 0);
-  }
-  setIsFullscreen(true);
-}}
+            if (currentRegion && fullscreenMapRef.current) {
+              fullscreenMapRef.current.animateToRegion(currentRegion, 0);
+            }
+            setIsFullscreen(true);
+          }}
           activeOpacity={0.9}
           style={{
             position: "absolute",
             top: 16,
             right: 16,
-            backgroundColor: "#ffffff",
-            borderRadius: 10,
+            backgroundColor: "rgba(15,23,42,0.96)",
+            borderRadius: 12,
             padding: 8,
+            borderWidth: 1,
+            borderColor: "rgba(148,163,184,0.8)",
             shadowColor: "#000",
-            shadowOpacity: 0.15,
-            shadowRadius: 8,
-            shadowOffset: { width: 0, height: 3 },
-            elevation: 4,
+            shadowOpacity: 0.35,
+            shadowRadius: 10,
+            shadowOffset: { width: 0, height: 4 },
+            elevation: 5,
           }}
         >
-          <Ionicons name="expand-outline" size={20} color="#0b2239" />
+          <Ionicons name="expand-outline" size={20} color="#e5f3ff" />
         </TouchableOpacity>
 
         {/* My Location */}
         <TouchableOpacity
           activeOpacity={0.9}
-          onPress={() => flyTo(userLocation, mapRef)} // ✅ explicitly use mapRef
+          onPress={() => flyTo(userLocation, mapRef)}
           style={{
             position: "absolute",
             right: 16,
             bottom: 16,
-            backgroundColor: "#ffffff",
+            backgroundColor: "rgba(15,23,42,0.98)",
             paddingHorizontal: 14,
             paddingVertical: 10,
-            borderRadius: 12,
+            borderRadius: 14,
             flexDirection: "row",
             alignItems: "center",
+            borderWidth: 1,
+            borderColor: "rgba(148,163,184,0.8)",
             shadowColor: "#000",
-            shadowOpacity: 0.15,
-            shadowRadius: 8,
-            shadowOffset: { width: 0, height: 3 },
-            elevation: 4,
+            shadowOpacity: 0.35,
+            shadowRadius: 10,
+            shadowOffset: { width: 0, height: 4 },
+            elevation: 5,
           }}
         >
           <Ionicons
             name="locate-outline"
             size={18}
-            color="#0b2239"
+            color="#e5f3ff"
             style={{ marginRight: 6 }}
           />
           <Text
             style={{
-              color: "#0b2239",
+              color: "#e5f3ff",
               fontSize: 14,
               fontWeight: "600",
             }}
@@ -237,22 +283,22 @@ export default function MapScreen({ navigation }) {
         </TouchableOpacity>
       </View>
 
-      {/* ✅ FULLSCREEN MAP MODAL */}
+      {/* FULLSCREEN MAP MODAL */}
       <Modal visible={isFullscreen} animationType="fade" transparent={true}>
-        <View style={{ flex: 1, backgroundColor: "#000" }}>
+        <View style={{ flex: 1, backgroundColor: "#020617" }}>
           <MapView
-  ref={fullscreenMapRef}
-  style={{ flex: 1 }}
-  mapType="satellite"
-  region={currentRegion || userLocation}
-  onRegionChangeComplete={(region) => setCurrentRegion(region)} // 👈 sync region
->
+            ref={fullscreenMapRef}
+            style={{ flex: 1 }}
+            mapType="satellite"
+            region={currentRegion || userLocation}
+            onRegionChangeComplete={(region) => setCurrentRegion(region)}
+          >
             {markers.map((marker) => (
               <Marker
                 key={marker.id}
                 title={marker.name}
                 coordinate={marker.coordinates}
-                onPress={() => flyTo(marker.coordinates, fullscreenMapRef)} // ✅ correct reference
+                onPress={() => flyTo(marker.coordinates, fullscreenMapRef)}
               />
             ))}
 
@@ -261,7 +307,7 @@ export default function MapScreen({ navigation }) {
                 coordinate={userLocation}
                 title="You"
                 pinColor="dodgerblue"
-                onPress={() => flyTo(userLocation, fullscreenMapRef)} // ✅ correct reference
+                onPress={() => flyTo(userLocation, fullscreenMapRef)}
               />
             )}
           </MapView>
@@ -274,47 +320,53 @@ export default function MapScreen({ navigation }) {
               position: "absolute",
               top: 40,
               right: 20,
-              backgroundColor: "#ffffff",
-              borderRadius: 10,
+              backgroundColor: "rgba(15,23,42,0.96)",
+              borderRadius: 12,
               padding: 8,
+              borderWidth: 1,
+              borderColor: "rgba(148,163,184,0.8)",
               shadowColor: "#000",
-              shadowOpacity: 0.2,
-              shadowRadius: 6,
-              shadowOffset: { width: 0, height: 3 },
-              elevation: 4,
+              shadowOpacity: 0.35,
+              shadowRadius: 10,
+              shadowOffset: { width: 0, height: 4 },
+              elevation: 5,
             }}
           >
-            <Ionicons name="close-outline" size={22} color="#0b2239" />
+            <Ionicons name="close-outline" size={22} color="#e5f3ff" />
           </TouchableOpacity>
 
-          {/* ✅ My Location Button in Fullscreen */}
+          {/* My Location Button in Fullscreen */}
           <TouchableOpacity
             activeOpacity={0.9}
-            onPress={() => flyTo(userLocation, fullscreenMapRef)} // ✅ correct reference
+            onPress={() => flyTo(userLocation, fullscreenMapRef)}
             style={{
               position: "absolute",
               right: 20,
               bottom: 30,
-              backgroundColor: "#ffffff",
+              backgroundColor: "rgba(15,23,42,0.98)",
               paddingHorizontal: 14,
               paddingVertical: 10,
-              borderRadius: 12,
+              borderRadius: 14,
               flexDirection: "row",
               alignItems: "center",
+              borderWidth: 1,
+              borderColor: "rgba(148,163,184,0.8)",
               shadowColor: "#000",
-              shadowOpacity: 0.15,
-              shadowRadius: 8,
-              shadowOffset: { width: 0, height: 3 },
-              elevation: 4,
+              shadowOpacity: 0.35,
+              shadowRadius: 10,
+              shadowOffset: { width: 0, height: 4 },
+              elevation: 5,
             }}
           >
             <Ionicons
               name="locate-outline"
               size={18}
-              color="#0b2239"
+              color="#e5f3ff"
               style={{ marginRight: 6 }}
             />
-            <Text style={{ color: "#0b2239", fontSize: 14, fontWeight: "600" }}>
+            <Text
+              style={{ color: "#e5f3ff", fontSize: 14, fontWeight: "600" }}
+            >
               My Location
             </Text>
           </TouchableOpacity>
@@ -324,17 +376,19 @@ export default function MapScreen({ navigation }) {
       {/* COURT LIST */}
       <View
         style={{
-          backgroundColor: "#fff",
+          backgroundColor: "rgba(15,23,42,0.96)",
           marginTop: 16,
-          borderTopLeftRadius: 20,
-          borderTopRightRadius: 20,
+          borderTopLeftRadius: 22,
+          borderTopRightRadius: 22,
           paddingTop: 16,
           paddingBottom: 24,
           paddingHorizontal: 16,
+          borderTopWidth: 1,
+          borderColor: "rgba(148,163,184,0.7)",
           shadowColor: "#000",
-          shadowOpacity: 0.08,
-          shadowRadius: 12,
-          shadowOffset: { width: 0, height: -2 },
+          shadowOpacity: 0.45,
+          shadowRadius: 16,
+          shadowOffset: { width: 0, height: -4 },
           elevation: 10,
         }}
       >
@@ -350,17 +404,17 @@ export default function MapScreen({ navigation }) {
             <Text
               style={{
                 fontSize: 18,
-                fontWeight: "700",
-                color: "#0b2239",
+                fontWeight: "800",
+                color: "#e5f3ff",
               }}
             >
-              All Courts
+              All courts
             </Text>
             <Text
               style={{
                 fontSize: 13,
                 fontWeight: "400",
-                color: "#64748b",
+                color: "#9ca3af",
                 marginTop: 2,
               }}
             >
@@ -370,17 +424,19 @@ export default function MapScreen({ navigation }) {
 
           <View
             style={{
-              backgroundColor: "#eef2f7",
+              backgroundColor: "rgba(15,23,42,0.9)",
               borderRadius: 9999,
               paddingHorizontal: 10,
               paddingVertical: 4,
+              borderWidth: 1,
+              borderColor: "rgba(148,163,184,0.7)",
             }}
           >
             <Text
               style={{
                 fontSize: 12,
                 fontWeight: "600",
-                color: "#0b2239",
+                color: "#93c5fd",
               }}
             >
               {markers.length} courts
@@ -402,16 +458,16 @@ export default function MapScreen({ navigation }) {
               activeOpacity={0.9}
               style={{
                 width: 240,
-                backgroundColor: "#f8fafc",
-                borderRadius: 16,
+                backgroundColor: "rgba(15,23,42,0.95)",
+                borderRadius: 18,
                 marginRight: 12,
                 borderWidth: 1,
-                borderColor: "#dbe3ee",
+                borderColor: "rgba(148,163,184,0.7)",
                 shadowColor: "#000",
-                shadowOpacity: 0.05,
-                shadowRadius: 6,
-                shadowOffset: { width: 0, height: 2 },
-                elevation: 2,
+                shadowOpacity: 0.3,
+                shadowRadius: 8,
+                shadowOffset: { width: 0, height: 3 },
+                elevation: 4,
                 overflow: "hidden",
               }}
               onPress={() => {
@@ -428,7 +484,7 @@ export default function MapScreen({ navigation }) {
               <View style={{ padding: 12 }}>
                 <Text
                   style={{
-                    color: "#0b2239",
+                    color: "#e5f3ff",
                     fontSize: 16,
                     fontWeight: "700",
                     marginBottom: 4,
@@ -440,7 +496,7 @@ export default function MapScreen({ navigation }) {
 
                 <Text
                   style={{
-                    color: "#64748b",
+                    color: "#cbd5f5",
                     fontSize: 13,
                     fontWeight: "400",
                     lineHeight: 16,
@@ -461,10 +517,10 @@ export default function MapScreen({ navigation }) {
                   <View
                     style={{
                       flexDirection: "row",
-                      backgroundColor: "#fff",
+                      backgroundColor: "rgba(15,23,42,0.9)",
                       borderRadius: 9999,
                       borderWidth: 1,
-                      borderColor: "#cbd5e1",
+                      borderColor: "rgba(148,163,184,0.7)",
                       paddingHorizontal: 8,
                       paddingVertical: 4,
                       alignItems: "center",
@@ -473,12 +529,12 @@ export default function MapScreen({ navigation }) {
                     <Ionicons
                       name="people-outline"
                       size={14}
-                      color="#0b2239"
+                      color="#e5f3ff"
                       style={{ marginRight: 4 }}
                     />
                     <Text
                       style={{
-                        color: "#0b2239",
+                        color: "#e5f3ff",
                         fontSize: 12,
                         fontWeight: "600",
                       }}
@@ -490,18 +546,18 @@ export default function MapScreen({ navigation }) {
                   <View style={{ flexDirection: "row", alignItems: "center" }}>
                     <Text
                       style={{
-                        color: "#1e5fa9",
+                        color: "#93c5fd",
                         fontSize: 13,
                         fontWeight: "600",
                         marginRight: 4,
                       }}
                     >
-                      View Court
+                      View court
                     </Text>
                     <Ionicons
                       name="chevron-forward"
                       size={16}
-                      color="#1e5fa9"
+                      color="#93c5fd"
                     />
                   </View>
                 </View>
@@ -513,4 +569,3 @@ export default function MapScreen({ navigation }) {
     </View>
   );
 }
-
