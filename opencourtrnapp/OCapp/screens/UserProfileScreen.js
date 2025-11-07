@@ -261,14 +261,6 @@ export default function UserProfileScreen({ route, navigation }) {
             <Text style={ui.statNumber}>{profile.friends?.length || 0}</Text>
             <Text style={ui.statLabel}>Friends</Text>
           </View>
-          <View style={ui.statItem}>
-            <Text style={ui.statNumber}>{profile.incomingRequests?.length || 0}</Text>
-            <Text style={ui.statLabel}>Incoming</Text>
-          </View>
-          <View style={ui.statItem}>
-            <Text style={ui.statNumber}>{profile.outgoingRequests?.length || 0}</Text>
-            <Text style={ui.statLabel}>Outgoing</Text>
-          </View>
         </View>
 
         {currentUser && currentUser.uid !== userId && (
@@ -352,7 +344,7 @@ const ui = StyleSheet.create({
   metaText: { fontSize: 13, color: "#9ca3af", marginTop: 2 },
   statsRow: {
     flexDirection: "row",
-    justifyContent: "space-between",
+    justifyContent: "center",
     marginTop: 14,
     marginBottom: 10,
     width: "80%",
@@ -444,3 +436,4 @@ const ui = StyleSheet.create({
   },
   modalClose: { position: "absolute", top: 50, right: 30 },
 });
+

@@ -97,7 +97,6 @@ export default function ProfileScreen({ navigation }) {
     };
 
     loadProfile();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Auto-save when things change
@@ -160,13 +159,8 @@ export default function ProfileScreen({ navigation }) {
 
   const handleLogout = async () => {
     try {
-      // Sign out from Firebase
       await signOut(auth);
-  
-      // Clear the "rememberMe" flag so splash won’t auto-login next time
       await AsyncStorage.removeItem("rememberMe");
-  
-      // Navigate back to Login
       navigation.reset({
         index: 0,
         routes: [{ name: "Login" }],
@@ -175,7 +169,6 @@ export default function ProfileScreen({ navigation }) {
       console.log("Error signing out:", err);
     }
   };
-  
 
   return (
     <SafeAreaView
@@ -186,21 +179,15 @@ export default function ProfileScreen({ navigation }) {
     >
       <StatusBar barStyle="light-content" />
 
-      {/* subtle background blobs like home/map */}
-      <View
-        pointerEvents="none"
-        style={styles.blobTop}
-      />
-      <View
-        pointerEvents="none"
-        style={styles.blobBottom}
-      />
+      {/* background blobs */}
+      <View pointerEvents="none" style={styles.blobTop} />
+      <View pointerEvents="none" style={styles.blobBottom} />
 
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-        {/* Header text – your existing top bar/time sits above this */}
+        {/* Header */}
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Your profile</Text>
           <Text style={styles.headerSubtitle}>
@@ -208,7 +195,7 @@ export default function ProfileScreen({ navigation }) {
           </Text>
         </View>
 
-        {/* MAIN CARD (this used to be that big white sheet) */}
+        {/* MAIN CARD */}
         <View style={styles.card}>
           {/* Avatar + name */}
           <View style={styles.avatarSection}>
@@ -261,31 +248,33 @@ export default function ProfileScreen({ navigation }) {
             </View>
           </View>
 
-          {/* Grade level */}
+          {/* Grade level (with "Other" added) */}
           <View style={styles.section}>
             <Text style={styles.sectionLabel}>Grade Level</Text>
             <Text style={styles.sectionValue}>{gradeLevel}</Text>
 
             <View style={styles.tagContainer}>
-              {["Freshman", "Sophomore", "Junior", "Senior"].map((grade) => (
-                <TouchableOpacity
-                  key={grade}
-                  style={[
-                    styles.tag,
-                    gradeLevel === grade && styles.tagSelected,
-                  ]}
-                  onPress={() => setGradeLevel(grade)}
-                >
-                  <Text
+              {["Freshman", "Sophomore", "Junior", "Senior", "Other"].map(
+                (grade) => (
+                  <TouchableOpacity
+                    key={grade}
                     style={[
-                      styles.tagText,
-                      gradeLevel === grade && styles.tagTextSelected,
+                      styles.tag,
+                      gradeLevel === grade && styles.tagSelected,
                     ]}
+                    onPress={() => setGradeLevel(grade)}
                   >
-                    {grade}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+                    <Text
+                      style={[
+                        styles.tagText,
+                        gradeLevel === grade && styles.tagTextSelected,
+                      ]}
+                    >
+                      {grade}
+                    </Text>
+                  </TouchableOpacity>
+                )
+              )}
             </View>
           </View>
 
@@ -335,7 +324,6 @@ export default function ProfileScreen({ navigation }) {
             Log Out
           </Text>
         </TouchableOpacity>
-
       </ScrollView>
     </SafeAreaView>
   );
@@ -461,21 +449,6 @@ const styles = StyleSheet.create({
   },
   tagTextSelected: {
     color: "#020617",
-    fontWeight: "700",
-  },
-  logoutButton: {
-    marginTop: 20,
-    alignSelf: "center",
-    width: "100%",
-    maxWidth: 420,
-    paddingVertical: 12,
-    borderRadius: 999,
-    backgroundColor: "#ef4444",
-    alignItems: "center",
-  },
-  logoutText: {
-    color: "#ffffff",
-    fontSize: 15,
     fontWeight: "700",
   },
 });
