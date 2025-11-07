@@ -28,6 +28,7 @@ import {
   serverTimestamp,
   setDoc,
   updateDoc,
+  deleteDoc,              // 👈 added for delete / unsend
 } from "firebase/firestore";
 
 const TENOR_API_KEY = "AIzaSyDYgE5Z7qvK2PDPY8sg1GiqGcC_AVxFdho"; // your Tenor key
@@ -95,6 +96,32 @@ export default function CourtChatScreen({ route, navigation }) {
     const hh = hours % 12 === 0 ? 12 : hours % 12;
     const mm = mins < 10 ? `0${mins}` : mins;
     return `${hh}:${mm} ${ampm}`;
+  };
+
+  // Helpers for date separators
+  const isSameDay = (d1, d2) => {
+    return (
+      d1.getFullYear() === d2.getFullYear() &&
+      d1.getMonth() === d2.getMonth() &&
+      d1.getDate() === d2.getDate()
+    );
+  };
+
+  const formatDateLabel = (ts) => {
+    if (!ts || typeof ts.toDate !== "function") return "";
+    const date = ts.toDate();
+    const today = new Date();
+    const yesterday = new Date();
+    yesterday.setDate(today.getDate() - 1);
+
+    if (isSameDay(date, today)) return "Today";
+    if (isSameDay(date, yesterday)) return "Yesterday";
+
+    return date.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
   };
 
   // Load my profile info
@@ -288,6 +315,18 @@ export default function CourtChatScreen({ route, navigation }) {
     setReactionPickerFor(null);
   };
 
+  // 🔴 Delete / unsend message (only used for your own messages in UI)
+  const handleDeleteMessage = async (messageId) => {
+    if (!courtId || !user || !messageId) return;
+    try {
+      const msgRef = doc(db, "courts", courtId, "messages", messageId);
+      await deleteDoc(msgRef);
+      closeReactionPicker();
+    } catch (err) {
+      console.log("Error deleting message:", err);
+    }
+  };
+
   // Tenor GIF search
   const searchGifs = async () => {
     if (!gifSearch.trim()) {
@@ -329,6 +368,12 @@ export default function CourtChatScreen({ route, navigation }) {
       typingUsers.length - 1
     } others are typing...`;
   }
+
+  // 👤 Tap username in chat -> go to profile
+  const handlePressUser = (userId) => {
+    if (!userId) return;
+    navigation.navigate("UserProfile", { userId });
+  };
 
   return (
     <View style={{ flex: 1, backgroundColor: "#020617" }}>
@@ -430,7 +475,7 @@ export default function CourtChatScreen({ route, navigation }) {
             }}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
-            keyboardDismissMode="on-drag"   // 👈 dismiss keyboard when you scroll
+            keyboardDismissMode="on-drag" // dismiss keyboard when you scroll
             onContentSizeChange={() => {
               // First load: jump to bottom without animation
               if (!initialScrollDoneRef.current) {
@@ -474,171 +519,267 @@ export default function CourtChatScreen({ route, navigation }) {
               </View>
             ) : null}
 
-            {messages.map((m) => {
-              const reactions = m.reactions || {};
-              const reactionEntries = Object.entries(reactions).filter(
-                ([, users]) => Array.isArray(users) && users.length > 0
-              );
+            {/* 🔹 Messages with date separators */}
+            {(() => {
+              let lastDateKey = null;
+              return messages.map((m) => {
+                const reactions = m.reactions || {};
+                const reactionEntries = Object.entries(reactions).filter(
+                  ([, users]) => Array.isArray(users) && users.length > 0
+                );
 
-              const isMine = m.mine;
-              const bubbleAlign = isMine ? "flex-end" : "flex-start";
-              const bgColor = isMine ? "#0f172a" : "#020617";
-              const borderColor = isMine
-                ? "rgba(96,165,250,0.7)"
-                : "rgba(148,163,184,0.6)";
+                const isMine = m.mine;
+                const bubbleAlign = isMine ? "flex-end" : "flex-start";
+                const bgColor = isMine ? "#0f172a" : "#020617";
+                const borderColor = isMine
+                  ? "rgba(96,165,250,0.7)"
+                  : "rgba(148,163,184,0.6)";
 
-              return (
-                <View
-                  key={m.id}
-                  style={{
-                    marginBottom: 10,
-                    alignItems: bubbleAlign,
-                  }}
-                >
-                  <TouchableOpacity
-                    activeOpacity={0.85}
-                    onLongPress={() => openReactionPicker(m.id)}
-                    style={{
-                      paddingHorizontal: 10,
-                      paddingVertical: 6,
-                      borderRadius: 12,
-                      maxWidth: "78%",
-                      backgroundColor: bgColor,
-                      borderWidth: 1,
-                      borderColor,
-                    }}
-                  >
-                    <Text
-                      style={{
-                        fontSize: 11,
-                        fontWeight: "700",
-                        marginBottom: 2,
-                        color: isMine ? "#e5f3ff" : "#cbd5f5",
-                      }}
-                    >
-                      {isMine ? "You" : m.user}
-                    </Text>
+                // figure out if we need a date header before this message
+                let dateLabel = "";
+                if (m.ts && typeof m.ts.toDate === "function") {
+                  const d = m.ts.toDate();
+                  const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+                  if (key !== lastDateKey) {
+                    lastDateKey = key;
+                    dateLabel = formatDateLabel(m.ts);
+                  }
+                }
 
-                    {m.type === "gif" && m.gifUrl ? (
-                      <Image
-                        source={{ uri: m.gifUrl }}
-                        style={{
-                          width: 200,
-                          height: 180,
-                          borderRadius: 10,
-                          backgroundColor: "#020617",
-                        }}
-                        resizeMode="cover"
-                      />
-                    ) : (
-                      <Text
-                        style={{
-                          color: "#e5e7eb",
-                          fontSize: 15,
-                          lineHeight: 20,
-                        }}
-                      >
-                        {m.text}
-                      </Text>
-                    )}
+                return (
+                  <View key={m.id} style={{ marginBottom: 10 }}>
+                    {dateLabel ? (
+                        <View
+                            style={{
+                            alignItems: "center",
+                            marginVertical: 16, // add space above and below
+                            position: "relative",
+                            }}
+                        >
+                            {/* faint horizontal divider line */}
+                            <View
+                            style={{
+                                position: "absolute",
+                                top: "50%",
+                                left: 0,
+                                right: 0,
+                                height: 1,
+                                backgroundColor: "rgba(148,163,184,0.25)", // faint divider
+                            }}
+                            />
+                            {/* floating date chip */}
+                            <View
+                            style={{
+                                paddingHorizontal: 14,
+                                paddingVertical: 4,
+                                borderRadius: 999,
+                                backgroundColor: "#0f172a",
+                                borderWidth: 1,
+                                borderColor: "rgba(148,163,184,0.7)",
+                            }}
+                            >
+                            <Text
+                                style={{
+                                color: "#e5f3ff",
+                                fontSize: 12,
+                                fontWeight: "700",
+                                textTransform: "uppercase",
+                                letterSpacing: 0.5,
+                                }}
+                            >
+                                {dateLabel}
+                            </Text>
+                            </View>
+                        </View>
+                    ) : null}
+
 
                     <View
                       style={{
-                        flexDirection: "row",
-                        justifyContent: "flex-end",
-                        marginTop: 6,
-                        alignItems: "center",
+                        alignItems: bubbleAlign,
                       }}
                     >
-                      {reactionEntries.length > 0 && (
+                      <TouchableOpacity
+                        activeOpacity={0.85}
+                        onLongPress={() => openReactionPicker(m.id)}
+                        style={{
+                          paddingHorizontal: 10,
+                          paddingVertical: 6,
+                          borderRadius: 12,
+                          maxWidth: "78%",
+                          backgroundColor: bgColor,
+                          borderWidth: 1,
+                          borderColor,
+                        }}
+                      >
+                        {/* username -> tap to open profile */}
+                        <TouchableOpacity
+                          activeOpacity={0.7}
+                          onPress={() => handlePressUser(m.userId)}
+                        >
+                          <Text
+                            style={{
+                              fontSize: 11,
+                              fontWeight: "700",
+                              marginBottom: 2,
+                              color: isMine ? "#e5f3ff" : "#cbd5f5",
+                            }}
+                          >
+                            {isMine ? "You" : m.user}
+                          </Text>
+                        </TouchableOpacity>
+
+                        {m.type === "gif" && m.gifUrl ? (
+                          <Image
+                            source={{ uri: m.gifUrl }}
+                            style={{
+                              width: 200,
+                              height: 180,
+                              borderRadius: 10,
+                              backgroundColor: "#020617",
+                            }}
+                            resizeMode="cover"
+                          />
+                        ) : (
+                          <Text
+                            style={{
+                              color: "#e5e7eb",
+                              fontSize: 15,
+                              lineHeight: 20,
+                            }}
+                          >
+                            {m.text}
+                          </Text>
+                        )}
+
                         <View
                           style={{
                             flexDirection: "row",
-                            marginRight: 6,
-                            paddingHorizontal: 6,
-                            paddingVertical: 2,
-                            borderRadius: 999,
-                            backgroundColor: "rgba(15,23,42,0.9)",
-                            borderWidth: 1,
-                            borderColor: "rgba(148,163,184,0.7)",
+                            justifyContent: "flex-end",
+                            marginTop: 6,
+                            alignItems: "center",
                           }}
                         >
-                          {reactionEntries.map(([emoji, users], idx) => (
-                            <Text
-                              key={`${m.id}-${emoji}-${idx}`}
+                          {reactionEntries.length > 0 && (
+                            <View
                               style={{
-                                fontSize: 12,
-                                marginRight: 4,
-                                color: "#e5e7eb", // easier to see
+                                flexDirection: "row",
+                                marginRight: 6,
+                                paddingHorizontal: 6,
+                                paddingVertical: 2,
+                                borderRadius: 999,
+                                backgroundColor: "rgba(15,23,42,0.9)",
+                                borderWidth: 1,
+                                borderColor: "rgba(148,163,184,0.7)",
                               }}
                             >
-                              {emoji} {users.length}
-                            </Text>
-                          ))}
+                              {reactionEntries.map(
+                                ([emoji, users], idx) => (
+                                  <Text
+                                    key={`${m.id}-${emoji}-${idx}`}
+                                    style={{
+                                      fontSize: 12,
+                                      marginRight: 4,
+                                      color: "#e5e7eb",
+                                    }}
+                                  >
+                                    {emoji} {users.length}
+                                  </Text>
+                                )
+                              )}
+                            </View>
+                          )}
+
+                          <Text
+                            style={{
+                              fontSize: 11,
+                              color: "#9ca3af",
+                            }}
+                          >
+                            {renderTime(m.ts)}
+                          </Text>
                         </View>
-                      )}
+                      </TouchableOpacity>
 
-                      <Text
-                        style={{
-                          fontSize: 11,
-                          color: "#9ca3af",
-                        }}
-                      >
-                        {renderTime(m.ts)}
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
-
-                  {/* Inline reaction picker */}
-                  {reactionPickerFor === m.id && (
-                    <View
-                      style={{
-                        flexDirection: "row",
-                        marginTop: 4,
-                        paddingHorizontal: 8,
-                      }}
-                    >
-                      {REACTION_EMOJIS.map((emoji) => (
-                        <TouchableOpacity
-                          key={emoji}
+                      {/* Inline reaction + delete picker */}
+                      {reactionPickerFor === m.id && (
+                        <View
                           style={{
-                            marginRight: 8,
-                            width: 32,
-                            height: 32,
-                            borderRadius: 16,
+                            flexDirection: "row",
+                            marginTop: 4,
+                            paddingHorizontal: 8,
                             alignItems: "center",
-                            justifyContent: "center",
-                            backgroundColor: "#0f172a",
-                            borderWidth: 1,
-                            borderColor: "rgba(148,163,184,0.8)",
-                          }}
-                          onPress={() => {
-                            toggleReaction(m.id, emoji);
-                            closeReactionPicker();
                           }}
                         >
-                          <Text style={{ fontSize: 18 }}>{emoji}</Text>
-                        </TouchableOpacity>
-                      ))}
-                      <TouchableOpacity
-                        style={{
-                          marginLeft: 4,
-                          alignItems: "center",
-                          justifyContent: "center",
-                        }}
-                        onPress={closeReactionPicker}
-                      >
-                        <Ionicons
-                          name="close-circle-outline"
-                          size={22}
-                          color="#9ca3af"
-                        />
-                      </TouchableOpacity>
+                          {REACTION_EMOJIS.map((emoji) => (
+                            <TouchableOpacity
+                              key={emoji}
+                              style={{
+                                marginRight: 8,
+                                width: 32,
+                                height: 32,
+                                borderRadius: 16,
+                                alignItems: "center",
+                                justifyContent: "center",
+                                backgroundColor: "#0f172a",
+                                borderWidth: 1,
+                                borderColor: "rgba(148,163,184,0.8)",
+                              }}
+                              onPress={() => {
+                                toggleReaction(m.id, emoji);
+                                closeReactionPicker();
+                              }}
+                            >
+                              <Text style={{ fontSize: 18 }}>
+                                {emoji}
+                              </Text>
+                            </TouchableOpacity>
+                          ))}
+
+                          {/* 🗑 delete button only for your own messages */}
+                          {isMine && (
+                            <TouchableOpacity
+                              style={{
+                                marginRight: 8,
+                                width: 32,
+                                height: 32,
+                                borderRadius: 16,
+                                alignItems: "center",
+                                justifyContent: "center",
+                                backgroundColor: "#1f2937",
+                                borderWidth: 1,
+                                borderColor: "rgba(248,113,113,0.7)",
+                              }}
+                              onPress={() => handleDeleteMessage(m.id)}
+                            >
+                              <Ionicons
+                                name="trash-outline"
+                                size={18}
+                                color="#fca5a5"
+                              />
+                            </TouchableOpacity>
+                          )}
+
+                          <TouchableOpacity
+                            style={{
+                              alignItems: "center",
+                              justifyContent: "center",
+                            }}
+                            onPress={closeReactionPicker}
+                          >
+                            <Ionicons
+                              name="close-circle-outline"
+                              size={22}
+                              color="#9ca3af"
+                            />
+                          </TouchableOpacity>
+                        </View>
+                      )}
                     </View>
-                  )}
-                </View>
-              );
-            })}
+                  </View>
+                );
+              });
+            })()}
           </ScrollView>
 
           {/* New message pill */}
