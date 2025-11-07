@@ -400,7 +400,7 @@ export const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#eef3f9',
     paddingHorizontal: 20,
-    paddingTop: 56,
+    paddingTop: 70,
   },
   homeHeader: {
     flexDirection: 'row',

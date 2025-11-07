@@ -76,7 +76,7 @@ export default function MapScreen({ navigation }) {
       style={{
         flex: 1,
         backgroundColor: "#eef2f7",
-        paddingTop: Platform.OS === "ios" ? 50 : 20,
+        paddingTop: Platform.OS === "ios" ? 70 : 20,
       }}
     >
       {/* HEADER */}
