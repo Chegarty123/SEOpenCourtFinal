@@ -12,6 +12,7 @@ import {
   Pressable,
   StatusBar,
   StyleSheet,
+  FlatList,
 } from "react-native";
 import {
   doc,
@@ -32,31 +33,41 @@ export default function UserProfileScreen({ route, navigation }) {
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState(null);
   const [imageModalVisible, setImageModalVisible] = useState(false);
+  const [friendsModalVisible, setFriendsModalVisible] = useState(false);
+  const [friendsList, setFriendsList] = useState([]);
 
   const [friends, setFriends] = useState([]);
   const [incomingRequests, setIncomingRequests] = useState([]);
   const [outgoingRequests, setOutgoingRequests] = useState([]);
 
   useEffect(() => {
-    const loadProfile = async () => {
-      if (!userId) {
-        setLoading(false);
-        return;
-      }
-      try {
-        const userRef = doc(db, "users", userId);
-        const snap = await getDoc(userRef);
-        if (snap.exists()) setProfile(snap.data());
-        else setProfile(null);
-      } catch (err) {
-        console.error("Error loading user profile:", err);
-        Alert.alert("Error", "Could not load player profile.");
-      } finally {
-        setLoading(false);
-      }
-    };
+    if (!userId) {
+      setLoading(false);
+      return;
+    }
 
-    loadProfile();
+    const userRef = doc(db, "users", userId);
+    const unsub = onSnapshot(userRef, async (snap) => {
+      if (snap.exists()) {
+        const data = snap.data();
+        setProfile(data);
+        if (data.friends && data.friends.length > 0) {
+          // fetch each friend's profile
+          const friendProfiles = await Promise.all(
+            data.friends.map(async (fid) => {
+              const fSnap = await getDoc(doc(db, "users", fid));
+              return fSnap.exists() ? { id: fid, ...fSnap.data() } : null;
+            })
+          );
+          setFriendsList(friendProfiles.filter(Boolean));
+        } else {
+          setFriendsList([]);
+        }
+      } else setProfile(null);
+      setLoading(false);
+    });
+
+    return () => unsub();
   }, [userId]);
 
   useEffect(() => {
@@ -231,7 +242,6 @@ export default function UserProfileScreen({ route, navigation }) {
     <View style={ui.screen}>
       <StatusBar barStyle="light-content" />
 
-      {/* simple dark header with back arrow */}
       <View style={ui.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Ionicons name="chevron-back" size={28} color="#e5e7eb" />
@@ -256,11 +266,12 @@ export default function UserProfileScreen({ route, navigation }) {
         <Text style={ui.username}>{profile.username}</Text>
         <Text style={ui.metaText}>Member since {profile.memberSince}</Text>
 
+        {/* FRIENDS COUNT - now clickable */}
         <View style={ui.statsRow}>
-          <View style={ui.statItem}>
+          <TouchableOpacity onPress={() => setFriendsModalVisible(true)} style={ui.statItem}>
             <Text style={ui.statNumber}>{profile.friends?.length || 0}</Text>
             <Text style={ui.statLabel}>Friends</Text>
-          </View>
+          </TouchableOpacity>
         </View>
 
         {currentUser && currentUser.uid !== userId && (
@@ -283,6 +294,48 @@ export default function UserProfileScreen({ route, navigation }) {
         </View>
       </ScrollView>
 
+      {/* Friend List Modal */}
+      <Modal
+        visible={friendsModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setFriendsModalVisible(false)}
+      >
+        <View style={ui.modalBackdrop}>
+          <View style={ui.friendModalContainer}>
+            <View style={ui.friendModalHeader}>
+              <Text style={ui.friendModalTitle}>Friends</Text>
+              <TouchableOpacity onPress={() => setFriendsModalVisible(false)}>
+                <Ionicons name="close" size={24} color="#fff" />
+              </TouchableOpacity>
+            </View>
+
+            {friendsList.length > 0 ? (
+              <FlatList
+                data={friendsList}
+                keyExtractor={(item) => item.id}
+                renderItem={({ item }) => (
+                  <View style={ui.friendItem}>
+                    <Image
+                      source={
+                        item.profilePic
+                          ? { uri: item.profilePic }
+                          : require("../images/defaultProfile.png")
+                      }
+                      style={ui.friendImage}
+                    />
+                    <Text style={ui.friendName}>{item.username}</Text>
+                  </View>
+                )}
+              />
+            ) : (
+              <Text style={ui.emptyText}>No friends yet.</Text>
+            )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* Profile Image Modal */}
       <Modal
         visible={imageModalVisible}
         transparent
@@ -424,9 +477,45 @@ const ui = StyleSheet.create({
   sectionValue: { marginTop: 2, fontSize: 13, color: "#e5f3ff" },
   modalBackdrop: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.9)",
+    backgroundColor: "rgba(0,0,0,0.85)",
     justifyContent: "center",
     alignItems: "center",
+  },
+  friendModalContainer: {
+    width: "85%",
+    maxHeight: "70%",
+    backgroundColor: "rgba(15,23,42,0.95)",
+    borderRadius: 20,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "rgba(148,163,184,0.4)",
+  },
+  friendModalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 10,
+  },
+  friendModalTitle: { fontSize: 18, fontWeight: "700", color: "#fff" },
+  friendItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255,255,255,0.1)",
+  },
+  friendImage: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginRight: 12,
+  },
+  friendName: { fontSize: 15, color: "#f3f4f6", fontWeight: "600" },
+  emptyText: {
+    textAlign: "center",
+    color: "#9ca3af",
+    fontSize: 14,
+    marginTop: 20,
   },
   modalImage: {
     width: "90%",
@@ -436,4 +525,5 @@ const ui = StyleSheet.create({
   },
   modalClose: { position: "absolute", top: 50, right: 30 },
 });
+
 
