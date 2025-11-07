@@ -100,6 +100,9 @@ export default function FriendScreen({ navigation }) {
         return;
       }
 
+      // 🔹 Instant UI feedback (add to outgoingRequests immediately)
+      setOutgoingRequests((prev) => [...prev, user.uid]);
+
       const senderRef = doc(db, "users", currentUser.uid);
       const receiverRef = doc(db, "users", user.uid);
 
@@ -109,6 +112,9 @@ export default function FriendScreen({ navigation }) {
       ]);
     } catch (err) {
       console.error("Error sending friend request:", err);
+      // revert UI if failed
+      setOutgoingRequests((prev) => prev.filter((id) => id !== user.uid));
+      Alert.alert("Error", "Failed to send friend request. Please try again.");
     }
   };
 
@@ -181,7 +187,7 @@ export default function FriendScreen({ navigation }) {
     );
   }
 
-  // ⬇️ Row renderer with profile navigation wired in
+  // ⬇️ Row renderer with live icon change
   const renderUserRow = (user, actionType = "add") => (
     <View
       key={user.uid}
@@ -220,10 +226,20 @@ export default function FriendScreen({ navigation }) {
 
       {/* Actions on the right (add / accept / remove) */}
       {actionType === "add" && (
-        <TouchableOpacity onPress={() => sendFriendRequest(user)}>
-          <Ionicons name="person-add-outline" size={22} color="#1f6fb2" />
-        </TouchableOpacity>
+        outgoingRequests.includes(user.uid) ? (
+          <View style={{ flexDirection: "row", alignItems: "center" }}>
+            <Ionicons name="hourglass-outline" size={20} color="#9ca3af" />
+            <Text style={{ fontSize: 12, color: "#9ca3af", marginLeft: 4 }}>
+              Pending
+            </Text>
+          </View>
+        ) : (
+          <TouchableOpacity onPress={() => sendFriendRequest(user)}>
+            <Ionicons name="person-add-outline" size={22} color="#1f6fb2" />
+          </TouchableOpacity>
+        )
       )}
+
       {actionType === "accept" && (
         <View style={{ flexDirection: "row" }}>
           <TouchableOpacity
@@ -237,6 +253,7 @@ export default function FriendScreen({ navigation }) {
           </TouchableOpacity>
         </View>
       )}
+
       {actionType === "remove" && (
         <TouchableOpacity onPress={() => removeFriend(user.uid)}>
           <Ionicons name="trash-outline" size={22} color="#ef4444" />
@@ -313,3 +330,4 @@ export default function FriendScreen({ navigation }) {
     </ScrollView>
   );
 }
+
