@@ -7,6 +7,9 @@ import {
   Image,
   ScrollView,
   Alert,
+  SafeAreaView,
+  StatusBar,
+  Platform,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import { auth, db } from "../firebaseConfig";
@@ -166,98 +169,145 @@ export default function ProfileScreen({ navigation }) {
   };
 
   return (
-    <ScrollView contentContainerStyle={styles.scrollContainer}>
-      <View style={styles.container}>
-        {/* Profile Picture */}
-        <TouchableOpacity onPress={pickImage}>
-          <Image
-            source={
-              profilePic
-                ? { uri: profilePic }
-                : require("../images/defaultProfile.png")
-            }
-            style={styles.profileImage}
-          />
-        </TouchableOpacity>
+    <SafeAreaView
+      style={{
+        flex: 1,
+        backgroundColor: "#f5f5f5",
+        paddingTop: Platform.OS === "android" ? StatusBar.currentHeight : 0,
+      }}
+    >
+      <StatusBar barStyle="dark-content" />
+      <ScrollView contentContainerStyle={styles.scrollContainer}>
+        <View style={styles.container}>
+          {/* Profile Picture */}
+          <TouchableOpacity onPress={pickImage}>
+            <Image
+              source={
+                profilePic
+                  ? { uri: profilePic }
+                  : require("../images/defaultProfile.png")
+              }
+              style={styles.profileImage}
+            />
+          </TouchableOpacity>
 
-        {/* Username & Member Since */}
-        <Text style={styles.username}>{username}</Text>
-        <Text style={styles.memberSince}>Member since {memberSince}</Text>
+          {/* Username & Member Since */}
+          <Text style={styles.username}>{username}</Text>
+          <Text style={styles.memberSince}>Member since {memberSince}</Text>
 
-        {/* Position Selection */}
-        <View style={styles.positionContainer}>
-          <Text style={styles.label}>Natural Position:</Text>
-          <Text style={styles.positionDisplay}>{position}</Text>
-          <View style={styles.tagContainer}>
-            {["Point Guard", "Shooting Guard", "Small Forward", "Power Forward", "Center"].map(
-              (pos) => (
+          {/* Position Selection */}
+          <View style={styles.positionContainer}>
+            <Text style={styles.label}>Natural Position:</Text>
+            <Text style={styles.positionDisplay}>{position}</Text>
+            <View style={styles.tagContainer}>
+              {[
+                "Point Guard",
+                "Shooting Guard",
+                "Small Forward",
+                "Power Forward",
+                "Center",
+              ].map((pos) => (
                 <TouchableOpacity
                   key={pos}
-                  style={[styles.tag, position === pos && styles.tagSelected]}
+                  style={[
+                    styles.tag,
+                    position === pos && styles.tagSelected,
+                  ]}
                   onPress={() => setPosition(pos)}
                 >
-                  <Text style={[styles.tagText, position === pos && styles.tagTextSelected]}>
+                  <Text
+                    style={[
+                      styles.tagText,
+                      position === pos && styles.tagTextSelected,
+                    ]}
+                  >
                     {pos}
                   </Text>
                 </TouchableOpacity>
-              )
-            )}
+              ))}
+            </View>
+
+            {/* Grade Selection */}
+            <Text style={styles.label}>Grade Level:</Text>
+            <Text style={styles.gradeDisplay}>{gradeLevel}</Text>
+            <View style={styles.tagContainer}>
+              {["Freshman", "Sophomore", "Junior", "Senior"].map((grade) => (
+                <TouchableOpacity
+                  key={grade}
+                  style={[
+                    styles.tag,
+                    gradeLevel === grade && styles.tagSelected,
+                  ]}
+                  onPress={() => setGradeLevel(grade)}
+                >
+                  <Text
+                    style={[
+                      styles.tagText,
+                      gradeLevel === grade && styles.tagTextSelected,
+                    ]}
+                  >
+                    {grade}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* Favorite Team */}
+            <Text style={styles.label}>Favorite NBA Team:</Text>
+            <Text style={styles.teamDisplay}>{favoriteTeam}</Text>
+            <View style={styles.tagContainer}>
+              {Object.keys(teamLogos).map((team) => (
+                <TouchableOpacity
+                  key={team}
+                  style={[
+                    styles.tag,
+                    favoriteTeam === team && styles.tagSelected,
+                    { alignItems: "center" },
+                  ]}
+                  onPress={() => setFavoriteTeam(team)}
+                >
+                  <Image
+                    source={teamLogos[team]}
+                    style={{ width: 18, height: 18, marginBottom: 4 }}
+                  />
+                  <Text
+                    style={[
+                      styles.tagText,
+                      favoriteTeam === team && styles.tagTextSelected,
+                    ]}
+                  >
+                    {team}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
           </View>
 
-          {/* Grade Selection */}
-          <Text style={styles.label}>Grade Level:</Text>
-          <Text style={styles.gradeDisplay}>{gradeLevel}</Text>
-          <View style={styles.tagContainer}>
-            {["Freshman", "Sophomore", "Junior", "Senior"].map((grade) => (
-              <TouchableOpacity
-                key={grade}
-                style={[styles.tag, gradeLevel === grade && styles.tagSelected]}
-                onPress={() => setGradeLevel(grade)}
-              >
-                <Text style={[styles.tagText, gradeLevel === grade && styles.tagTextSelected]}>
-                  {grade}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          {/* Favorite Team */}
-          <Text style={styles.label}>Favorite NBA Team:</Text>
-          <Text style={styles.teamDisplay}>{favoriteTeam}</Text>
-          <View style={styles.tagContainer}>
-            {Object.keys(teamLogos).map((team) => (
-              <TouchableOpacity
-                key={team}
-                style={[styles.tag, favoriteTeam === team && styles.tagSelected, { alignItems: "center" }]}
-                onPress={() => setFavoriteTeam(team)}
-              >
-                <Image source={teamLogos[team]} style={{ width: 18, height: 18, marginBottom: 4 }} />
-                <Text style={[styles.tagText, favoriteTeam === team && styles.tagTextSelected]}>
-                  {team}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+          {/* Logout Button */}
+          <TouchableOpacity
+            onPress={handleLogout}
+            style={{
+              backgroundColor: "#e74c3c",
+              paddingVertical: 12,
+              paddingHorizontal: 25,
+              borderRadius: 25,
+              marginTop: 25,
+              alignSelf: "center",
+            }}
+          >
+            <Text
+              style={{
+                color: "#fff",
+                fontSize: 16,
+                fontWeight: "600",
+                textAlign: "center",
+              }}
+            >
+              Log Out
+            </Text>
+          </TouchableOpacity>
         </View>
-
-        {/* Logout Button */}
-        <TouchableOpacity
-          onPress={handleLogout}
-          style={{
-            backgroundColor: "#e74c3c",
-            paddingVertical: 12,
-            paddingHorizontal: 25,
-            borderRadius: 25,
-            marginTop: 25,
-            alignSelf: "center",
-          }}
-        >
-          <Text style={{ color: "#fff", fontSize: 16, fontWeight: "600", textAlign: "center" }}>
-            Log Out
-          </Text>
-        </TouchableOpacity>
-      </View>
-    </ScrollView>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
-
