@@ -16,6 +16,7 @@ import * as ImagePicker from "expo-image-picker";
 import { auth, db } from "../firebaseConfig";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { signOut } from "firebase/auth";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export default function ProfileScreen({ navigation }) {
   const user = auth.currentUser;
@@ -159,12 +160,22 @@ export default function ProfileScreen({ navigation }) {
 
   const handleLogout = async () => {
     try {
+      // Sign out from Firebase
       await signOut(auth);
-      navigation.replace("Login");
-    } catch (error) {
-      Alert.alert("Logout Failed", error.message);
+  
+      // Clear the "rememberMe" flag so splash won’t auto-login next time
+      await AsyncStorage.removeItem("rememberMe");
+  
+      // Navigate back to Login
+      navigation.reset({
+        index: 0,
+        routes: [{ name: "Login" }],
+      });
+    } catch (err) {
+      console.log("Error signing out:", err);
     }
   };
+  
 
   return (
     <SafeAreaView
@@ -312,11 +323,19 @@ export default function ProfileScreen({ navigation }) {
         {/* Logout button */}
         <TouchableOpacity
           onPress={handleLogout}
-          activeOpacity={0.9}
-          style={styles.logoutButton}
+          style={{
+            backgroundColor: "#ef4444",
+            paddingVertical: 12,
+            borderRadius: 12,
+            alignItems: "center",
+            marginTop: 20,
+          }}
         >
-          <Text style={styles.logoutText}>Log Out</Text>
+          <Text style={{ color: "#fff", fontWeight: "700", fontSize: 16 }}>
+            Log Out
+          </Text>
         </TouchableOpacity>
+
       </ScrollView>
     </SafeAreaView>
   );
