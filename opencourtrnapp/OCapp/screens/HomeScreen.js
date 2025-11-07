@@ -22,6 +22,9 @@ import {
 import markers from "../assets/markers";
 import { styles } from "../styles/globalStyles";
 
+// 🔵 OC logo (adjust path if needed)
+const OCLogo = require("../images/OCLogo.png");
+
 // Haversine distance helper (km)
 function haversineDistanceKm(lat1, lon1, lat2, lon2) {
   const toRad = (v) => (v * Math.PI) / 180;
@@ -60,8 +63,8 @@ function formatTimeAgo(ts) {
   return `${diffD}d ago`;
 }
 
-// 🔑 OpenWeather API key – put your key here
-const OPEN_WEATHER_API_KEY = "31336c5775706826c542c0924128a6ca";
+// 🔑 OpenWeather API key – you already added yours here
+const OPEN_WEATHER_API_KEY = "7c7c1ba29a0c5fb4593205a3b1e1e6a4";
 
 export default function HomeScreen({ navigation }) {
   const user = auth.currentUser;
@@ -151,31 +154,19 @@ export default function HomeScreen({ navigation }) {
     (async () => {
       try {
         setWeatherLoading(true);
-        setWeatherError(null);
-
         const url = `https://api.openweathermap.org/data/2.5/weather?lat=${
           location.latitude
         }&lon=${location.longitude}&units=imperial&appid=${OPEN_WEATHER_API_KEY}`;
-
         const res = await fetch(url);
         if (!res.ok) {
           console.log("Weather HTTP error:", res.status);
-          setWeatherError("Weather unavailable");
-          setWeather(null);
-          return;
         }
-
         const json = await res.json();
         if (cancelled) return;
 
-        console.log("Weather JSON:", json); // helpful while testing
-
-        const cod = json.cod;
-        const isOk = cod === 200 || cod === "200";
-
-        if (!isOk) {
-          console.log("Weather error (cod not 200):", json);
-          setWeatherError(json.message || "Weather unavailable");
+        if (json.cod !== 200) {
+          console.log("Weather error:", json);
+          setWeatherError("Weather unavailable");
           setWeather(null);
           return;
         }
@@ -449,10 +440,10 @@ export default function HomeScreen({ navigation }) {
           width: 180,
           marginRight: 10,
           padding: 10,
-          borderRadius: 12,
-          backgroundColor: "#f9fafb",
+          borderRadius: 14,
+          backgroundColor: "rgba(15,23,42,0.9)",
           borderWidth: 1,
-          borderColor: "#e2e8f0",
+          borderColor: "rgba(148,163,184,0.6)",
         }}
         activeOpacity={0.9}
         onPress={() => navigation.navigate("CourtDetail", { marker })}
@@ -461,7 +452,7 @@ export default function HomeScreen({ navigation }) {
           style={{
             fontSize: 13,
             fontWeight: "700",
-            color: "#0b2239",
+            color: "#e5f3ff",
           }}
           numberOfLines={1}
         >
@@ -472,7 +463,7 @@ export default function HomeScreen({ navigation }) {
           style={{
             marginTop: 4,
             fontSize: 11,
-            color: "#64748b",
+            color: "#9ca3af",
           }}
           numberOfLines={1}
         >
@@ -486,7 +477,7 @@ export default function HomeScreen({ navigation }) {
             style={{
               marginTop: 2,
               fontSize: 11,
-              color: "#16a34a",
+              color: "#4ade80",
             }}
             numberOfLines={1}
           >
@@ -503,22 +494,22 @@ export default function HomeScreen({ navigation }) {
           }}
         >
           {amICheckedIn && (
-            <Ionicons
-              name="radio-button-on-outline"
-              size={11}
-              color="#10b981"
-            />
-          )}
-          {amICheckedIn && (
-            <Text
-              style={{
-                marginLeft: 4,
-                fontSize: 10,
-                color: "#10b981",
-              }}
-            >
-              You&apos;re here
-            </Text>
+            <>
+              <Ionicons
+                name="radio-button-on-outline"
+                size={11}
+                color="#22c55e"
+              />
+              <Text
+                style={{
+                  marginLeft: 4,
+                  fontSize: 10,
+                  color: "#bbf7d0",
+                }}
+              >
+                You&apos;re here
+              </Text>
+            </>
           )}
           {distanceLabel && (
             <Text
@@ -557,13 +548,13 @@ export default function HomeScreen({ navigation }) {
             width: 28,
             height: 28,
             borderRadius: 14,
-            backgroundColor: "#e0f2fe",
+            backgroundColor: "rgba(56,189,248,0.2)",
             alignItems: "center",
             justifyContent: "center",
             marginRight: 8,
           }}
         >
-          <Ionicons name="person-outline" size={15} color="#0b2239" />
+          <Ionicons name="person-outline" size={15} color="#e0f2fe" />
         </View>
 
         <View style={{ flex: 1 }}>
@@ -571,7 +562,7 @@ export default function HomeScreen({ navigation }) {
             style={{
               fontSize: 12,
               fontWeight: "600",
-              color: "#0b2239",
+              color: "#e5f3ff",
             }}
             numberOfLines={1}
           >
@@ -580,7 +571,7 @@ export default function HomeScreen({ navigation }) {
           <Text
             style={{
               fontSize: 11,
-              color: "#64748b",
+              color: "#9ca3af",
               marginTop: 1,
             }}
             numberOfLines={1}
@@ -617,7 +608,7 @@ export default function HomeScreen({ navigation }) {
             width: 28,
             height: 28,
             borderRadius: 8,
-            backgroundColor: "#e5e7eb",
+            backgroundColor: "rgba(148,163,184,0.25)",
             alignItems: "center",
             justifyContent: "center",
             marginRight: 8,
@@ -626,7 +617,7 @@ export default function HomeScreen({ navigation }) {
           <Ionicons
             name="chatbubbles-outline"
             size={15}
-            color="#0b2239"
+            color="#e5f3ff"
           />
         </View>
 
@@ -635,7 +626,7 @@ export default function HomeScreen({ navigation }) {
             style={{
               fontSize: 12,
               fontWeight: "600",
-              color: "#0b2239",
+              color: "#e5f3ff",
             }}
             numberOfLines={1}
           >
@@ -644,7 +635,7 @@ export default function HomeScreen({ navigation }) {
           <Text
             style={{
               fontSize: 11,
-              color: "#64748b",
+              color: "#cbd5f5",
               marginTop: 1,
             }}
             numberOfLines={1}
@@ -665,429 +656,600 @@ export default function HomeScreen({ navigation }) {
     );
   };
 
-  /* ========== UI ========== */
-
   const greeting = getGreeting();
 
   return (
-    <View style={styles.homeWrap}>
+    <View style={{ flex: 1, backgroundColor: "#020617" }}>
+      {/* subtle background "basketball / court" shapes */}
+      <View
+        pointerEvents="none"
+        style={{
+          position: "absolute",
+          top: -80,
+          right: -60,
+          width: 260,
+          height: 260,
+          borderRadius: 130,
+          backgroundColor: "rgba(56,189,248,0.25)",
+        }}
+      />
+      <View
+        pointerEvents="none"
+        style={{
+          position: "absolute",
+          top: 140,
+          left: -80,
+          width: 280,
+          height: 280,
+          borderRadius: 140,
+          backgroundColor: "rgba(251,146,60,0.18)",
+        }}
+      />
+      <View
+        pointerEvents="none"
+        style={{
+          position: "absolute",
+          bottom: -120,
+          right: -40,
+          width: 260,
+          height: 260,
+          borderRadius: 130,
+          backgroundColor: "rgba(15,23,42,0.9)",
+        }}
+      />
+
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 24 }}
       >
-        {/* HEADER */}
-        <View style={styles.homeHeader}>
-          <View>
-            <Text style={styles.homeTitle}>{greeting}</Text>
-            <Text style={styles.homeName}>{displayName || "Player"}</Text>
-          </View>
-
-          <TouchableOpacity
-            onPress={() => navigation.navigate("Profile")}
-            activeOpacity={0.8}
-          >
-            <Image
-              source={
-                userDoc?.profilePic
-                  ? { uri: userDoc.profilePic }
-                  : require("../images/defaultProfile.png")
-              }
-              style={{
-                width: 44,
-                height: 44,
-                borderRadius: 22,
-                borderWidth: 1,
-                borderColor: "#dbeafe",
-              }}
-            />
-          </TouchableOpacity>
-        </View>
-
-        <Text style={styles.homeLead}>
-          Quick view of your runs, who&apos;s hooping, and active courts.
-        </Text>
-
-        {/* COMPACT STATS + WEATHER CARD */}
+        {/* main content wrapper (re-using your homeWrap for spacing) */}
         <View
           style={[
-            styles.courtCard,
-            { paddingVertical: 10, paddingHorizontal: 12 },
+            styles.homeWrap,
+            {
+              backgroundColor: "transparent",
+            },
           ]}
         >
+          {/* HEADER with logo */}
           <View
-            style={{
-              flexDirection: "row",
-              justifyContent: "space-between",
-            }}
+            style={[
+              styles.homeHeader,
+              { marginBottom: 6, alignItems: "center" },
+            ]}
           >
-            {/* Stats side */}
-            <View style={{ flex: 2, marginRight: 10 }}>
-              <Text
-                style={{
-                  fontSize: 13,
-                  fontWeight: "700",
-                  color: "#0b2239",
-                }}
-              >
-                Your week
-              </Text>
-              <View
-                style={{
-                  flexDirection: "row",
-                  marginTop: 4,
-                }}
-              >
-                <View style={{ flex: 1 }}>
-                  <Text
-                    style={{
-                      fontSize: 16,
-                      fontWeight: "800",
-                      color: "#0f172a",
-                    }}
-                  >
-                    {weeklyCheckIns}
-                  </Text>
-                  <Text
-                    style={{
-                      fontSize: 11,
-                      color: "#64748b",
-                    }}
-                  >
-                    Runs
-                  </Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text
-                    style={{
-                      fontSize: 16,
-                      fontWeight: "800",
-                      color: "#0f172a",
-                    }}
-                  >
-                    {courtsVisitedCount}
-                  </Text>
-                  <Text
-                    style={{
-                      fontSize: 11,
-                      color: "#64748b",
-                    }}
-                  >
-                    Courts
-                  </Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text
-                    style={{
-                      fontSize: 16,
-                      fontWeight: "800",
-                      color: "#0f172a",
-                    }}
-                  >
-                    {totalCheckIns}
-                  </Text>
-                  <Text
-                    style={{
-                      fontSize: 11,
-                      color: "#64748b",
-                    }}
-                  >
-                    All-time
-                  </Text>
-                </View>
-              </View>
-
-              <Text
-                style={{
-                  fontSize: 11,
-                  color: "#6b7280",
-                  marginTop: 4,
-                }}
-                numberOfLines={1}
-              >
-                {weeklySummary}
-              </Text>
-            </View>
-
-            {/* Weather side */}
             <View
               style={{
-                flex: 1.3,
-                paddingLeft: 10,
-                borderLeftWidth: 1,
-                borderLeftColor: "#e5e7eb",
-                justifyContent: "center",
+                flexDirection: "row",
+                alignItems: "center",
+                flex: 1,
               }}
             >
-              <Text
+              <View
                 style={{
-                  fontSize: 13,
-                  fontWeight: "700",
-                  color: "#0b2239",
+                  width: 40,
+                  height: 40,
+                  borderRadius: 20,
+                  backgroundColor: "rgba(15,23,42,0.9)",
+                  marginRight: 10,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  borderWidth: 1,
+                  borderColor: "rgba(148,163,184,0.5)",
+                  overflow: "hidden",
                 }}
               >
-                Weather
-              </Text>
+                <Image
+                  source={OCLogo}
+                  style={{ width: 32, height: 32, resizeMode: "contain" }}
+                />
+              </View>
+              <View>
+                <Text
+                  style={[
+                    styles.homeTitle,
+                    { color: "#e0f2fe", fontSize: 16 },
+                  ]}
+                >
+                  {greeting}
+                </Text>
+                <Text
+                  style={[
+                    styles.homeName,
+                    { color: "#f9fafb", fontSize: 22 },
+                  ]}
+                >
+                  {displayName || "Player"}
+                </Text>
+              </View>
+            </View>
 
-              {weatherLoading ? (
-                <View style={{ flexDirection: "row", marginTop: 4 }}>
-                  <ActivityIndicator size="small" />
-                </View>
-              ) : weather ? (
+            <TouchableOpacity
+              onPress={() => navigation.navigate("Profile")}
+              activeOpacity={0.8}
+            >
+              <Image
+                source={
+                  userDoc?.profilePic
+                    ? { uri: userDoc.profilePic }
+                    : require("../images/defaultProfile.png")
+                }
+                style={{
+                  width: 44,
+                  height: 44,
+                  borderRadius: 22,
+                  borderWidth: 2,
+                  borderColor: "#38bdf8",
+                }}
+              />
+            </TouchableOpacity>
+          </View>
+
+          <Text
+            style={[
+              styles.homeLead,
+              {
+                color: "#9ca3af",
+                marginBottom: 10,
+              },
+            ]}
+          >
+            Quick view of your runs, who&apos;s hooping, and active courts on
+            OpenCourt.
+          </Text>
+
+          {/* COMPACT STATS + WEATHER CARD */}
+          <View
+            style={[
+              styles.courtCard,
+              {
+                paddingVertical: 12,
+                paddingHorizontal: 12,
+                backgroundColor: "rgba(15,23,42,0.95)",
+                borderColor: "rgba(148,163,184,0.7)",
+              },
+            ]}
+          >
+            <View
+              style={{
+                flexDirection: "row",
+                justifyContent: "space-between",
+              }}
+            >
+              {/* Stats side */}
+              <View style={{ flex: 2, marginRight: 10 }}>
+                <Text
+                  style={{
+                    fontSize: 13,
+                    fontWeight: "700",
+                    color: "#e5f3ff",
+                  }}
+                >
+                  Your week
+                </Text>
                 <View
                   style={{
                     flexDirection: "row",
-                    alignItems: "center",
                     marginTop: 4,
                   }}
                 >
-                  <Ionicons
-                    name="sunny-outline"
-                    size={18}
-                    color="#f97316"
-                  />
-                  <View style={{ marginLeft: 6 }}>
+                  <View style={{ flex: 1 }}>
                     <Text
                       style={{
-                        fontSize: 14,
-                        fontWeight: "700",
-                        color: "#0f172a",
+                        fontSize: 16,
+                        fontWeight: "800",
+                        color: "#f9fafb",
                       }}
                     >
-                      {weather.temp}°F
+                      {weeklyCheckIns}
                     </Text>
                     <Text
                       style={{
                         fontSize: 11,
-                        color: "#64748b",
+                        color: "#9ca3af",
                       }}
                     >
-                      {weather.condition}
+                      Runs
+                    </Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text
+                      style={{
+                        fontSize: 16,
+                        fontWeight: "800",
+                        color: "#f9fafb",
+                      }}
+                    >
+                      {courtsVisitedCount}
+                    </Text>
+                    <Text
+                      style={{
+                        fontSize: 11,
+                        color: "#9ca3af",
+                      }}
+                    >
+                      Courts
+                    </Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text
+                      style={{
+                        fontSize: 16,
+                        fontWeight: "800",
+                        color: "#f9fafb",
+                      }}
+                    >
+                      {totalCheckIns}
+                    </Text>
+                    <Text
+                      style={{
+                        fontSize: 11,
+                        color: "#9ca3af",
+                      }}
+                    >
+                      All-time
                     </Text>
                   </View>
                 </View>
-              ) : (
+
                 <Text
                   style={{
                     fontSize: 11,
-                    color: "#64748b",
+                    color: "#cbd5f5",
                     marginTop: 4,
                   }}
-                  numberOfLines={2}
+                  numberOfLines={1}
                 >
-                  {locationError
-                    ? "Enable location to see local weather."
-                    : weatherError
-                    ? weatherError
-                    : OPEN_WEATHER_API_KEY
-                    ? "Weather not available."
-                    : "Add your OpenWeather API key to show local conditions."}
+                  {weeklySummary}
                 </Text>
-              )}
+              </View>
+
+              {/* Weather side */}
+              <View
+                style={{
+                  flex: 1.3,
+                  paddingLeft: 10,
+                  borderLeftWidth: 1,
+                  borderLeftColor: "rgba(148,163,184,0.6)",
+                  justifyContent: "center",
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 13,
+                    fontWeight: "700",
+                    color: "#e5f3ff",
+                  }}
+                >
+                  Weather
+                </Text>
+
+                {weatherLoading ? (
+                  <View style={{ flexDirection: "row", marginTop: 4 }}>
+                    <ActivityIndicator size="small" />
+                  </View>
+                ) : weather ? (
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      marginTop: 4,
+                    }}
+                  >
+                    <Ionicons
+                      name="sunny-outline"
+                      size={18}
+                      color="#fbbf24"
+                    />
+                    <View style={{ marginLeft: 6 }}>
+                      <Text
+                        style={{
+                          fontSize: 14,
+                          fontWeight: "700",
+                          color: "#f9fafb",
+                        }}
+                      >
+                        {weather.temp}°F
+                      </Text>
+                      <Text
+                        style={{
+                          fontSize: 11,
+                          color: "#e5e7eb",
+                        }}
+                      >
+                        {weather.condition}
+                      </Text>
+                    </View>
+                  </View>
+                ) : (
+                  <Text
+                    style={{
+                      fontSize: 11,
+                      color: "#9ca3af",
+                      marginTop: 4,
+                    }}
+                    numberOfLines={2}
+                  >
+                    {locationError
+                      ? "Enable location to see local weather."
+                      : OPEN_WEATHER_API_KEY
+                      ? "Weather not available."
+                      : "Add your OpenWeather API key to show local conditions."}
+                  </Text>
+                )}
+              </View>
             </View>
           </View>
-        </View>
 
-        {/* ACTIVITY CARD: Chats + Friend activity */}
-        <View
-          style={[
-            styles.courtCard,
-            { marginTop: 12, paddingVertical: 10, paddingHorizontal: 12 },
-          ]}
-        >
-          <View style={styles.cardHeaderRow}>
-            <Text style={styles.cardHeaderText}>Court activity</Text>
-            <Text style={styles.cardHeaderPresence}>Chats & friends</Text>
-          </View>
+          {/* ACTIVITY CARD: Chats + Friend activity */}
+          <View
+            style={[
+              styles.courtCard,
+              {
+                marginTop: 12,
+                paddingVertical: 10,
+                paddingHorizontal: 12,
+                backgroundColor: "rgba(15,23,42,0.95)",
+                borderColor: "rgba(148,163,184,0.7)",
+              },
+            ]}
+          >
+            <View style={styles.cardHeaderRow}>
+              <Text
+                style={[
+                  styles.cardHeaderText,
+                  { color: "#e5f3ff", fontSize: 14 },
+                ]}
+              >
+                Court activity
+              </Text>
+              <Text
+                style={[
+                  styles.cardHeaderPresence,
+                  { color: "#93c5fd" },
+                ]}
+              >
+                Chats & friends
+              </Text>
+            </View>
 
-          {/* Active chats */}
-          <View style={{ marginTop: 4 }}>
-            <Text
-              style={{
-                fontSize: 12,
-                fontWeight: "600",
-                color: "#0b2239",
-                marginBottom: 4,
-              }}
-            >
-              Active chats
-            </Text>
-
-            {activeChats.length === 0 ? (
+            {/* Active chats */}
+            <View style={{ marginTop: 4 }}>
               <Text
                 style={{
-                  fontSize: 11,
-                  color: "#9ca3af",
+                  fontSize: 12,
+                  fontWeight: "600",
+                  color: "#e5f3ff",
                   marginBottom: 4,
                 }}
               >
-                No active court chats yet.
+                Active chats
               </Text>
-            ) : (
-              activeChats.map(renderChatTeaserRow)
-            )}
-          </View>
 
-          {/* Divider */}
-          <View
-            style={{
-              height: 1,
-              backgroundColor: "#e5e7eb",
-              marginVertical: 6,
-            }}
-          />
-
-          {/* Friends */}
-          <View>
-            <Text
-              style={{
-                fontSize: 12,
-                fontWeight: "600",
-                color: "#0b2239",
-                marginBottom: 4,
-              }}
-            >
-              Friends hooping
-            </Text>
-
-            {friendsHooping.length === 0 ? (
-              <Text
-                style={{
-                  fontSize: 11,
-                  color: "#9ca3af",
-                }}
-              >
-                No friends checked in right now.
-              </Text>
-            ) : (
-              friendsHooping.slice(0, 4).map(renderFriendsActivityRow)
-            )}
-          </View>
-        </View>
-
-        {/* COURT ROWS – horizontal & compact */}
-        <View
-          style={[
-            styles.courtCard,
-            { marginTop: 12, paddingVertical: 10, paddingHorizontal: 12 },
-          ]}
-        >
-          <View style={styles.cardHeaderRow}>
-            <Text style={styles.cardHeaderText}>Courts</Text>
-            <Text style={styles.cardHeaderPresence}>
-              Nearby & top runs
-            </Text>
-          </View>
-
-          {/* Nearby courts horizontal */}
-          <View style={{ marginTop: 4 }}>
-            <Text
-              style={{
-                fontSize: 12,
-                fontWeight: "600",
-                color: "#0b2239",
-                marginBottom: 4,
-              }}
-            >
-              Near you
-            </Text>
-            {checkingLocation && nearbyCourts.length === 0 ? (
-              <View style={{ flexDirection: "row", alignItems: "center" }}>
-                <ActivityIndicator size="small" />
+              {activeChats.length === 0 ? (
                 <Text
                   style={{
-                    marginLeft: 6,
                     fontSize: 11,
-                    color: "#64748b",
+                    color: "#9ca3af",
+                    marginBottom: 4,
                   }}
                 >
-                  Finding nearby courts...
+                  No active court chats yet.
                 </Text>
-              </View>
-            ) : nearbyCourts.length === 0 ? (
-              <Text
-                style={{
-                  fontSize: 11,
-                  color: "#9ca3af",
-                }}
-              >
-                No courts configured yet. Check the map tab.
-              </Text>
-            ) : (
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={{ paddingVertical: 2 }}
-              >
-                {nearbyCourts.map(renderCourtPill)}
-              </ScrollView>
-            )}
-          </View>
+              ) : (
+                activeChats.map(renderChatTeaserRow)
+              )}
+            </View>
 
-          {/* Divider */}
-          <View
-            style={{
-              height: 1,
-              backgroundColor: "#e5e7eb",
-              marginVertical: 6,
-            }}
-          />
-
-          {/* Top courts horizontal */}
-          <View>
-            <Text
+            {/* Divider */}
+            <View
               style={{
-                fontSize: 12,
-                fontWeight: "600",
-                color: "#0b2239",
-                marginBottom: 4,
+                height: 1,
+                backgroundColor: "rgba(75,85,99,0.7)",
+                marginVertical: 6,
               }}
-            >
-              Top courts right now
-            </Text>
-            {topCourts.length === 0 ? (
+            />
+
+            {/* Friends */}
+            <View>
               <Text
                 style={{
-                  fontSize: 11,
-                  color: "#9ca3af",
+                  fontSize: 12,
+                  fontWeight: "600",
+                  color: "#e5f3ff",
+                  marginBottom: 4,
                 }}
               >
-                No active runs yet. Start one at your favorite court.
+                Friends hooping
               </Text>
-            ) : (
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={{ paddingVertical: 2 }}
-              >
-                {topCourts.map(renderCourtPill)}
-              </ScrollView>
-            )}
-          </View>
-        </View>
 
-        {/* BANNER CTA */}
-        <TouchableOpacity
-          style={[styles.banner, { marginTop: 16 }]}
-          activeOpacity={0.9}
-          onPress={() => navigation.navigate("Map")}
-        >
-          <View style={styles.bannerIcon}>
-            <Ionicons name="map-outline" size={20} color="#0b2239" />
+              {friendsHooping.length === 0 ? (
+                <Text
+                  style={{
+                    fontSize: 11,
+                    color: "#9ca3af",
+                  }}
+                >
+                  No friends checked in right now.
+                </Text>
+              ) : (
+                friendsHooping.slice(0, 4).map(renderFriendsActivityRow)
+              )}
+            </View>
           </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.bannerTitle}>
-              Open full map of courts
-            </Text>
-            <Text style={styles.bannerSub}>
-              See every court, player counts, and chat.
-            </Text>
+
+          {/* COURT ROWS – horizontal & compact */}
+          <View
+            style={[
+              styles.courtCard,
+              {
+                marginTop: 12,
+                paddingVertical: 10,
+                paddingHorizontal: 12,
+                backgroundColor: "rgba(15,23,42,0.95)",
+                borderColor: "rgba(148,163,184,0.7)",
+              },
+            ]}
+          >
+            <View style={styles.cardHeaderRow}>
+              <Text
+                style={[
+                  styles.cardHeaderText,
+                  { color: "#e5f3ff", fontSize: 14 },
+                ]}
+              >
+                Courts
+              </Text>
+              <Text
+                style={[
+                  styles.cardHeaderPresence,
+                  { color: "#93c5fd" },
+                ]}
+              >
+                Nearby & top runs
+              </Text>
+            </View>
+
+            {/* Nearby courts horizontal */}
+            <View style={{ marginTop: 4 }}>
+              <Text
+                style={{
+                  fontSize: 12,
+                  fontWeight: "600",
+                  color: "#e5f3ff",
+                  marginBottom: 4,
+                }}
+              >
+                Near you
+              </Text>
+              {checkingLocation && nearbyCourts.length === 0 ? (
+                <View
+                  style={{ flexDirection: "row", alignItems: "center" }}
+                >
+                  <ActivityIndicator size="small" />
+                  <Text
+                    style={{
+                      marginLeft: 6,
+                      fontSize: 11,
+                      color: "#9ca3af",
+                    }}
+                  >
+                    Finding nearby courts...
+                  </Text>
+                </View>
+              ) : nearbyCourts.length === 0 ? (
+                <Text
+                  style={{
+                    fontSize: 11,
+                    color: "#9ca3af",
+                  }}
+                >
+                  No courts configured yet. Check the map tab.
+                </Text>
+              ) : (
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={{ paddingVertical: 2 }}
+                >
+                  {nearbyCourts.map(renderCourtPill)}
+                </ScrollView>
+              )}
+            </View>
+
+            {/* Divider */}
+            <View
+              style={{
+                height: 1,
+                backgroundColor: "rgba(75,85,99,0.7)",
+                marginVertical: 6,
+              }}
+            />
+
+            {/* Top courts horizontal */}
+            <View>
+              <Text
+                style={{
+                  fontSize: 12,
+                  fontWeight: "600",
+                  color: "#e5f3ff",
+                  marginBottom: 4,
+                }}
+              >
+                Top courts right now
+              </Text>
+              {topCourts.length === 0 ? (
+                <Text
+                  style={{
+                    fontSize: 11,
+                    color: "#9ca3af",
+                  }}
+                >
+                  No active runs yet. Start one at your favorite court.
+                </Text>
+              ) : (
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={{ paddingVertical: 2 }}
+                >
+                  {topCourts.map(renderCourtPill)}
+                </ScrollView>
+              )}
+            </View>
           </View>
-          <Ionicons
-            name="chevron-forward"
-            size={20}
-            color="#0b2239"
-          />
-        </TouchableOpacity>
+
+          {/* BANNER CTA */}
+          <TouchableOpacity
+            style={[
+              styles.banner,
+              {
+                marginTop: 16,
+                backgroundColor: "rgba(15,23,42,0.96)",
+                borderRadius: 18,
+                borderWidth: 1,
+                borderColor: "rgba(56,189,248,0.6)",
+              },
+            ]}
+            activeOpacity={0.9}
+            onPress={() => navigation.navigate("Map")}
+          >
+            <View
+              style={[
+                styles.bannerIcon,
+                {
+                  backgroundColor: "rgba(56,189,248,0.18)",
+                  borderRadius: 999,
+                },
+              ]}
+            >
+              <Ionicons name="map-outline" size={20} color="#e5f3ff" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text
+                style={[
+                  styles.bannerTitle,
+                  { color: "#e5f3ff", fontSize: 14 },
+                ]}
+              >
+                Open full map of courts
+              </Text>
+              <Text
+                style={[
+                  styles.bannerSub,
+                  { color: "#9ca3af", fontSize: 12 },
+                ]}
+              >
+                See every court, live player counts, and chat.
+              </Text>
+            </View>
+            <Ionicons
+              name="chevron-forward"
+              size={20}
+              color="#93c5fd"
+            />
+          </TouchableOpacity>
+        </View>
       </ScrollView>
     </View>
   );
