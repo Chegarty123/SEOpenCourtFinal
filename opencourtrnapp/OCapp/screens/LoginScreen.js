@@ -138,8 +138,8 @@ export default function LoginScreen({ navigation }) {
                   }}
                 >
                   <Image
-                    source={require("../images/OCLogo.png")}
-                    style={{ width: 32, height: 32, borderRadius: 16 }}
+                    source={require("../images/OCLOGOnoText.png")}
+                    style={{ width: 55, height: 55, borderRadius: 16 }}
                     resizeMode="contain"
                   />
                 </View>

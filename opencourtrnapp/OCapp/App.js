@@ -20,7 +20,7 @@ export default function App() {
   return (
     <NavigationContainer>
 
-      <StatusBar style="dark" />
+      <StatusBar style="light" />
 
       <Stack.Navigator initialRouteName="Login">
         <Stack.Screen

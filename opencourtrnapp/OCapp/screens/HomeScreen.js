@@ -24,6 +24,7 @@ import { styles } from "../styles/globalStyles";
 
 // 🔵 OC logo (adjust path if needed)
 const OCLogo = require("../images/OCLogo.png");
+const OCLOGOnoText = require("../images/OCLOGOnoText.png");
 
 // Haversine distance helper (km)
 function haversineDistanceKm(lat1, lon1, lat2, lon2) {
