@@ -6,6 +6,9 @@ import {
   TouchableOpacity,
   Image,
   ScrollView,
+  SafeAreaView,
+  StatusBar,
+  Platform,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { auth, db } from "../firebaseConfig";
@@ -15,17 +18,18 @@ import {
   deleteDoc,
   collection,
   onSnapshot,
+  serverTimestamp,
   query,
   orderBy,
-  serverTimestamp,
+  getDoc,
 } from "firebase/firestore";
-import { styles } from "../styles/globalStyles";
 
 export default function CourtDetailScreen({ route, navigation }) {
   const { marker } = route.params || {};
   const courtId = marker?.id;
   const user = auth.currentUser;
 
+  // current user profile (for check-in info)
   const [myProfile, setMyProfile] = useState({
     uid: user?.uid || "me",
     name: user?.email ? user.email.split("@")[0] : "you",
@@ -35,32 +39,31 @@ export default function CourtDetailScreen({ route, navigation }) {
 
   const [playersHere, setPlayersHere] = useState([]);
   const [checkedIn, setCheckedIn] = useState(false);
-
   const [messages, setMessages] = useState([]);
 
   // format Firestore timestamp -> "4:33 PM"
   const renderTime = (ts) => {
     if (!ts) return "now";
     const dateObj = ts.toDate();
-    const hours = dateObj.getHours();
+    let hours = dateObj.getHours();
     const mins = dateObj.getMinutes();
     const ampm = hours >= 12 ? "PM" : "AM";
-    const hh = hours % 12 === 0 ? 12 : hours % 12;
-    const mm = mins < 10 ? `0${mins}` : mins;
-    return `${hh}:${mm} ${ampm}`;
+    hours = hours % 12 || 12;
+    const minsStr = mins < 10 ? `0${mins}` : `${mins}`;
+    return `${hours}:${minsStr} ${ampm}`;
   };
 
-  // live-load my profile (so we know my avatar/name for check-ins)
+  // load my profile from Firestore so check-in uses username + avatar
   useEffect(() => {
     if (!user) return;
 
-    const userDocRef = doc(db, "users", user.uid);
+    const userRef = doc(db, "users", user.uid);
 
     const unsub = onSnapshot(
-      userDocRef,
-      (snapshot) => {
-        if (snapshot.exists()) {
-          const data = snapshot.data();
+      userRef,
+      (snap) => {
+        if (snap.exists()) {
+          const data = snap.data();
           setMyProfile({
             uid: user.uid,
             name:
@@ -70,6 +73,7 @@ export default function CourtDetailScreen({ route, navigation }) {
             note: "hooping now",
           });
         } else {
+          // fallback
           setMyProfile({
             uid: user.uid,
             name: user.email ? user.email.split("@")[0] : "you",
@@ -79,48 +83,14 @@ export default function CourtDetailScreen({ route, navigation }) {
         }
       },
       (err) => {
-        console.warn("Failed to load profile", err);
-        setMyProfile({
-          uid: user?.uid || "me",
-          name: user?.email ? user.email.split("@")[0] : "you",
-          avatar: null,
-          note: "hooping now",
-        });
+        console.warn("failed to load my profile", err);
       }
     );
 
     return () => unsub();
   }, [user]);
 
-  // keep my check-in avatar in sync with my profile while I'm checked in
-  useEffect(() => {
-    if (!user || !courtId) return;
-    if (!checkedIn) return;
-
-    const myCheckinRef = doc(db, "courts", courtId, "checkins", user.uid);
-
-    setDoc(
-      myCheckinRef,
-      {
-        username: myProfile.name || "player",
-        avatar:
-          myProfile.avatar || "https://i.pravatar.cc/100?img=68",
-        note: myProfile.note || "hooping now",
-      },
-      { merge: true }
-    ).catch((err) => {
-      console.warn("sync check-in avatar failed", err);
-    });
-  }, [
-    myProfile.avatar,
-    myProfile.name,
-    myProfile.note,
-    checkedIn,
-    courtId,
-    user,
-  ]);
-
-  // live check-ins
+  // listen to check-ins on this court
   useEffect(() => {
     if (!courtId || !user) return;
 
@@ -131,7 +101,7 @@ export default function CourtDetailScreen({ route, navigation }) {
       snap.forEach((d) => {
         const data = d.data();
         list.push({
-          id: d.id, // this is the userId
+          id: d.id, // userId
           name: data.username || "player",
           avatar:
             data.avatar ||
@@ -142,7 +112,6 @@ export default function CourtDetailScreen({ route, navigation }) {
       });
 
       setPlayersHere(list);
-
       const amICheckedIn = list.some((p) => p.id === user.uid);
       setCheckedIn(amICheckedIn);
     });
@@ -150,7 +119,7 @@ export default function CourtDetailScreen({ route, navigation }) {
     return () => unsub();
   }, [courtId, user]);
 
-  // live chat (just for preview)
+  // listen to recent messages for preview
   useEffect(() => {
     if (!courtId || !user) return;
 
@@ -165,7 +134,7 @@ export default function CourtDetailScreen({ route, navigation }) {
           id: d.id,
           userId: data.userId,
           user: data.username || "player",
-          text: data.text,
+          text: data.text || "",
           ts: data.ts,
           mine: data.userId === user.uid,
         });
@@ -176,7 +145,7 @@ export default function CourtDetailScreen({ route, navigation }) {
     return () => unsub();
   }, [courtId, user]);
 
-  // toggle check-in
+  // toggle check-in / check-out
   const handleCheckInToggle = async () => {
     if (!user || !courtId) return;
 
@@ -212,66 +181,91 @@ export default function CourtDetailScreen({ route, navigation }) {
       : null;
 
   return (
-    <View style={{ flex: 1, backgroundColor: "#eef2f7" }}>
-      <View style={[styles.courtScreenWrap, { flex: 1 }]}>
-        {/* HERO HEADER */}
-        <View style={styles.courtHeroContainer}>
-          <Image
-            source={{ uri: marker?.image }}
-            style={styles.courtHeroImage}
-            resizeMode="cover"
-          />
-          <View style={styles.courtHeroOverlay} />
+    <SafeAreaView
+      style={{
+        flex: 1,
+        backgroundColor: "#020617",
+        paddingTop: Platform.OS === "android" ? StatusBar.currentHeight : 0,
+      }}
+    >
+      <StatusBar barStyle="light-content" />
 
-          {/* Back button */}
-          <View style={styles.courtHeroTopRow}>
+      {/* background blobs to match rest of dark theme */}
+      <View pointerEvents="none" style={ui.blobTop} />
+      <View pointerEvents="none" style={ui.blobBottom} />
+
+      <View style={ui.screen}>
+        {/* HERO with image + back button */}
+        <View style={ui.hero}>
+          {marker?.image ? (
+            <Image
+              source={{ uri: marker.image }}
+              style={ui.heroImage}
+              resizeMode="cover"
+            />
+          ) : null}
+          <View style={ui.heroOverlay} />
+
+          {/* back arrow */}
+          <View style={ui.heroTopRow}>
             <TouchableOpacity
-              style={styles.courtBackBtn}
               onPress={() => navigation.goBack()}
+              activeOpacity={0.9}
+              style={ui.heroBackBtn}
             >
-              <Ionicons name="chevron-back" size={20} color="#0b2239" />
-              <Text style={styles.courtBackBtnText}>Back</Text>
+              <Ionicons name="chevron-back" size={22} color="#e5f3ff" />
             </TouchableOpacity>
           </View>
 
-          {/* Court info */}
-          <View style={styles.courtHeroBottom}>
-            <Text style={styles.courtName}>
-              {marker?.name || "Court Name"}
+          {/* court info over image */}
+          <View style={ui.heroBottom}>
+            <Text style={ui.courtName}>
+              {marker?.name || "Court name"}
             </Text>
-            <Text style={styles.courtSubText}>
-              {marker?.description ||
-                "Outdoor court • Lights • Full court"}
+            <Text style={ui.courtSubText}>
+              {marker?.description || "Outdoor court • Lights • Full court"}
             </Text>
 
-            <View style={styles.courtStatsRow}>
-              <View style={styles.courtStatChip}>
+            <View style={ui.courtStatsRow}>
+              <View style={ui.courtStatChip}>
                 <Ionicons
                   name="people-outline"
-                  size={16}
-                  color="#0b2239"
+                  size={14}
+                  color="#e5f3ff"
                 />
-                <Text style={styles.courtStatText}>
+                <Text style={ui.courtStatText}>
                   {playersHere.length} here now
                 </Text>
               </View>
 
-              <View style={styles.courtStatChip}>
-                <Ionicons name="star" size={16} color="#0b2239" />
-                <Text style={styles.courtStatText}>4.6 rating</Text>
+              {typeof marker?.distanceMiles === "number" && (
+                <View style={ui.courtStatChip}>
+                  <Ionicons name="navigate-outline" size={14} color="#e5f3ff" />
+                  <Text style={ui.courtStatText}>
+                    {marker.distanceMiles.toFixed(1)} mi away
+                  </Text>
+                </View>
+              )}
+
+              <View style={ui.courtStatChip}>
+                <Ionicons name="star" size={14} color="#e5f3ff" />
+                <Text style={ui.courtStatText}>4.6 rating</Text>
               </View>
             </View>
           </View>
         </View>
 
-        {/* MAIN CONTENT BELOW HERO */}
-        <View style={{ flex: 1, paddingHorizontal: 16, paddingTop: 16 }}>
+        {/* MAIN CONTENT */}
+        <ScrollView
+          contentContainerStyle={ui.content}
+          showsVerticalScrollIndicator={false}
+        >
           {/* WHO'S HERE CARD */}
-          <View style={styles.courtCard}>
-            <View style={styles.cardHeaderRow}>
-              <Text style={styles.cardHeaderText}>Who's on this court</Text>
+          <View style={ui.card}>
+            <View style={ui.cardHeaderRow}>
+              <Text style={ui.cardHeaderText}>Who&apos;s on this court</Text>
 
-              <View style={styles.cardHeaderRight}>
+              <View style={ui.cardHeaderRight}>
                 <Ionicons
                   name="radio-button-on-outline"
                   size={14}
@@ -279,32 +273,34 @@ export default function CourtDetailScreen({ route, navigation }) {
                 />
                 <Text
                   style={[
-                    styles.cardHeaderPresence,
-                    { color: checkedIn ? "#10b981" : "#64748b" },
+                    ui.cardHeaderPresence,
+                    { color: checkedIn ? "#22c55e" : "#9ca3af" },
                   ]}
                 >
-                  {checkedIn
-                    ? "You are checked in"
-                    : "You are not checked in"}
+                  {checkedIn ? "You are here" : "You're not checked in"}
                 </Text>
               </View>
             </View>
 
-            {/* avatars row */}
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.playersRow}
+              contentContainerStyle={ui.playersRow}
             >
+              {playersHere.length === 0 && (
+                <Text style={ui.emptyText}>
+                  Nobody&apos;s checked in yet. Be the first to pull up.
+                </Text>
+              )}
+
               {playersHere.map((p) => (
                 <TouchableOpacity
                   key={p.id}
-                  style={styles.playerBubble}
+                  style={ui.playerBubble}
                   onPress={() =>
-                    navigation.navigate("UserProfile", {
-                      userId: p.id,
-                    })
+                    navigation.navigate("UserProfile", { userId: p.id })
                   }
+                  activeOpacity={0.9}
                 >
                   <Image
                     source={
@@ -312,23 +308,23 @@ export default function CourtDetailScreen({ route, navigation }) {
                         ? { uri: p.avatar }
                         : require("../images/defaultProfile.png")
                     }
-                    style={styles.playerAvatar}
+                    style={ui.playerAvatar}
                   />
-                  <Text style={styles.playerName} numberOfLines={1}>
+                  <Text style={ui.playerName} numberOfLines={1}>
                     {p.name}
                   </Text>
-                  <Text style={styles.playerNote} numberOfLines={1}>
+                  <Text style={ui.playerNote} numberOfLines={1}>
                     {p.note}
                   </Text>
                 </TouchableOpacity>
               ))}
             </ScrollView>
 
-            {/* check in/out button */}
+            {/* Check in / out button */}
             <TouchableOpacity
               style={[
-                styles.checkInBtn,
-                checkedIn && styles.checkOutBtn,
+                ui.checkInBtn,
+                checkedIn && ui.checkOutBtn,
               ]}
               onPress={handleCheckInToggle}
               activeOpacity={0.9}
@@ -338,80 +334,61 @@ export default function CourtDetailScreen({ route, navigation }) {
                 size={18}
                 color="#fff"
               />
-              <Text style={styles.checkInBtnText}>
+              <Text style={ui.checkInBtnText}>
                 {checkedIn ? "Check Out" : "Check In"}
               </Text>
             </TouchableOpacity>
           </View>
 
           {/* CHAT PREVIEW CARD */}
-          <View style={styles.courtCard}>
-            <View style={styles.cardHeaderRow}>
-              <Text style={styles.cardHeaderText}>Court chat</Text>
-              <Text style={styles.chatHintText}>
-                See the latest message or open the full conversation.
-              </Text>
+          <View style={ui.card}>
+            <View style={ui.cardHeaderRow}>
+              <Text style={ui.cardHeaderText}>Court chat</Text>
             </View>
 
             {lastMessage ? (
-              <View
-                style={{
-                  paddingVertical: 10,
-                  paddingHorizontal: 12,
-                  borderRadius: 12,
-                  backgroundColor: "#f8fafc",
-                  borderWidth: 1,
-                  borderColor: "#e2e8f0",
-                  marginBottom: 10,
-                }}
-              >
+              <View style={ui.chatPreviewWrap}>
                 <Text
-                  style={{
-                    fontSize: 12,
-                    color: "#64748b",
-                    marginBottom: 4,
-                  }}
+                  style={[
+                    ui.chatMetaText,
+                    { marginBottom: 4 },
+                  ]}
                 >
                   Last message · {renderTime(lastMessage.ts)}
                 </Text>
-                <Text
-                  style={{
-                    fontSize: 14,
-                    fontWeight: "600",
-                    color: "#0b2239",
-                  }}
-                  numberOfLines={1}
+                <View
+                  style={[
+                    ui.chatBubble,
+                    lastMessage.mine
+                      ? ui.chatBubbleMine
+                      : ui.chatBubbleOther,
+                  ]}
                 >
-                  {lastMessage.user}
-                </Text>
-                <Text
-                  style={{
-                    fontSize: 14,
-                    color: "#475569",
-                    marginTop: 2,
-                  }}
-                  numberOfLines={2}
-                >
-                  {lastMessage.text}
-                </Text>
+                  <Text
+                    style={
+                      lastMessage.mine ? ui.chatUserMine : ui.chatUserOther
+                    }
+                  >
+                    {lastMessage.user}
+                  </Text>
+                  <Text
+                    style={
+                      lastMessage.mine ? ui.chatTextMine : ui.chatTextOther
+                    }
+                    numberOfLines={2}
+                  >
+                    {lastMessage.text || "Media"}
+                  </Text>
+                </View>
               </View>
             ) : (
-              <Text
-                style={{
-                  fontSize: 13,
-                  color: "#64748b",
-                  marginBottom: 10,
-                }}
-              >
-                No messages yet. Be the first to say something.
+              <Text style={ui.chatHintText}>
+                No messages yet. Start the first conversation for this court.
               </Text>
             )}
 
             <TouchableOpacity
-              style={[
-                styles.checkInBtn,
-                { backgroundColor: "#1f6fb2", marginTop: 4 },
-              ]}
+              style={[ui.checkInBtn, { backgroundColor: "#1f6fb2", marginTop: 6 }]}
               activeOpacity={0.9}
               onPress={() =>
                 navigation.navigate("CourtChat", {
@@ -425,11 +402,244 @@ export default function CourtDetailScreen({ route, navigation }) {
                 size={18}
                 color="#fff"
               />
-              <Text style={styles.checkInBtnText}>Open court chat</Text>
+              <Text style={ui.checkInBtnText}>Open court chat</Text>
             </TouchableOpacity>
           </View>
-        </View>
+        </ScrollView>
       </View>
-    </View>
+    </SafeAreaView>
   );
 }
+
+const ui = {
+  screen: {
+    flex: 1,
+    backgroundColor: "#020617",
+  },
+  blobTop: {
+    position: "absolute",
+    top: -100,
+    right: -80,
+    width: 260,
+    height: 260,
+    borderRadius: 130,
+    backgroundColor: "rgba(56,189,248,0.22)",
+  },
+  blobBottom: {
+    position: "absolute",
+    top: 220,
+    left: -110,
+    width: 260,
+    height: 260,
+    borderRadius: 130,
+    backgroundColor: "rgba(251,146,60,0.16)",
+  },
+  hero: {
+    width: "100%",
+    height: 230,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+    overflow: "hidden",
+    backgroundColor: "#020617",
+    marginBottom: 8,
+  },
+  heroImage: {
+    position: "absolute",
+    width: "100%",
+    height: "100%",
+  },
+  heroOverlay: {
+    position: "absolute",
+    width: "100%",
+    height: "100%",
+    backgroundColor: "rgba(15,23,42,0.55)",
+  },
+  heroTopRow: {
+    paddingHorizontal: 18,
+    paddingTop: 16,
+  },
+  heroBackBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "rgba(15,23,42,0.8)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  heroBottom: {
+    position: "absolute",
+    left: 18,
+    right: 18,
+    bottom: 18,
+  },
+  courtName: {
+    color: "#f9fafb",
+    fontSize: 24,
+    fontWeight: "800",
+    marginBottom: 4,
+  },
+  courtSubText: {
+    color: "#d1d5db",
+    fontSize: 13,
+    marginBottom: 12,
+  },
+  courtStatsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  courtStatChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(15,23,42,0.9)",
+    borderRadius: 999,
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+  },
+  courtStatText: {
+    color: "#e5f3ff",
+    fontWeight: "600",
+    fontSize: 12,
+    marginLeft: 4,
+  },
+  content: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 32,
+  },
+  card: {
+    backgroundColor: "rgba(15,23,42,0.98)",
+    borderRadius: 20,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: "rgba(148,163,184,0.45)",
+  },
+  cardHeaderRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  cardHeaderText: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#e5f3ff",
+  },
+  cardHeaderRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  cardHeaderPresence: {
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  playersRow: {
+    paddingVertical: 8,
+  },
+  emptyText: {
+    color: "#9ca3af",
+    fontSize: 13,
+  },
+  playerBubble: {
+    width: 96,
+    marginRight: 12,
+    alignItems: "center",
+    backgroundColor: "#020617",
+    borderRadius: 16,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderWidth: 1,
+    borderColor: "rgba(148,163,184,0.5)",
+  },
+  playerAvatar: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    borderWidth: 2,
+    borderColor: "#38bdf8",
+    marginBottom: 6,
+  },
+  playerName: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#e5f3ff",
+    maxWidth: "100%",
+    textAlign: "center",
+  },
+  playerNote: {
+    fontSize: 11,
+    color: "#9ca3af",
+    maxWidth: "100%",
+    textAlign: "center",
+  },
+  checkInBtn: {
+    marginTop: 14,
+    backgroundColor: "#1f6fb2",
+    borderRadius: 999,
+    paddingVertical: 11,
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 8,
+  },
+  checkOutBtn: {
+    backgroundColor: "#ef4444",
+  },
+  checkInBtnText: {
+    color: "#fff",
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  chatHintText: {
+    marginTop: 4,
+    color: "#9ca3af",
+    fontSize: 12,
+    fontWeight: "400",
+  },
+  chatPreviewWrap: {
+    marginTop: 4,
+  },
+  chatMetaText: {
+    color: "#9ca3af",
+    fontSize: 11,
+  },
+  chatBubble: {
+    maxWidth: "100%",
+    borderRadius: 14,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    marginTop: 6,
+  },
+  chatBubbleMine: {
+    alignSelf: "flex-end",
+    backgroundColor: "#1f6fb2",
+  },
+  chatBubbleOther: {
+    alignSelf: "flex-start",
+    backgroundColor: "#020617",
+    borderWidth: 1,
+    borderColor: "rgba(148,163,184,0.5)",
+  },
+  chatUserMine: {
+    color: "#fff",
+    fontSize: 11,
+    fontWeight: "700",
+    marginBottom: 2,
+  },
+  chatUserOther: {
+    color: "#e5f3ff",
+    fontSize: 11,
+    fontWeight: "700",
+    marginBottom: 2,
+  },
+  chatTextMine: {
+    color: "#e5f3ff",
+    fontSize: 13,
+  },
+  chatTextOther: {
+    color: "#e5f3ff",
+    fontSize: 13,
+  },
+};

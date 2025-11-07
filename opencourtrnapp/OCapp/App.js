@@ -21,7 +21,7 @@ export default function App() {
     <NavigationContainer>
 
       <StatusBar style="dark" />
-      
+
       <Stack.Navigator initialRouteName="Login">
         <Stack.Screen
           name="Login"
@@ -51,7 +51,7 @@ export default function App() {
         <Stack.Screen
           name="UserProfile"
           component={UserProfileScreen}
-          options={{ title: "Player Profile" }}
+          options={{ headerShown: false }}
         />
         <Stack.Screen
           name="CourtChat"

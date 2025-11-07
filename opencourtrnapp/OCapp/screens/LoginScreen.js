@@ -9,188 +9,508 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  StatusBar,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { auth } from "../firebaseConfig";
-import { styles } from "../styles/globalStyles";
 
 export default function LoginScreen({ navigation }) {
   const [email, setEmail] = useState("");
-  const [pw, setPw] = useState("");
-  const [showPw, setShowPw] = useState(false);
-  const [rememberMe, setRememberMe] = useState(true);
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   const handleLogin = async () => {
-    if (!email || !pw) {
-      alert("Please enter email and password");
+    setError("");
+
+    const trimmedEmail = email.trim().toLowerCase();
+
+    if (!trimmedEmail || !password) {
+      setError("Enter your Villanova email and password to continue.");
       return;
     }
+
+    setLoading(true);
     try {
-      await signInWithEmailAndPassword(auth, email.trim(), pw);
+      await signInWithEmailAndPassword(auth, trimmedEmail, password);
       navigation.replace("MainTabs");
-    } catch (error) {
-      alert(error.message);
+    } catch (err) {
+      console.log("Login error:", err);
+      let msg = "Unable to sign in. Check your details and try again.";
+      if (err.code === "auth/invalid-email") {
+        msg = "That email doesn’t look right.";
+      } else if (err.code === "auth/user-not-found") {
+        msg = "No account found with that email.";
+      } else if (err.code === "auth/wrong-password") {
+        msg = "Incorrect password. Try again.";
+      } else if (err.code === "auth/too-many-requests") {
+        msg = "Too many attempts. Please wait a bit and try again.";
+      }
+      setError(msg);
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
     <KeyboardAvoidingView
-      style={{ flex: 1, backgroundColor: "#f3f6fb" }}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-      // tweak this number if you want the screen to lift more/less
-      keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
+      style={{ flex: 1, backgroundColor: "#020617" }}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
-      <ScrollView
-        contentContainerStyle={{ flexGrow: 1 }}
-        keyboardShouldPersistTaps="handled"
-      >
-        <View style={styles.authScreen}>
-          {/* Banner */}
-          <View style={styles.hero}>
-            {/* decorative map lines */}
-            <View
-              style={[
-                styles.mapLine,
-                { top: 26, transform: [{ rotate: "8deg" }] },
-              ]}
-            />
-            <View
-              style={[
-                styles.mapLine,
-                { top: 74, transform: [{ rotate: "-6deg" }] },
-              ]}
-            />
-            <View
-              style={[
-                styles.mapLine,
-                { top: 122, transform: [{ rotate: "4deg" }] },
-              ]}
-            />
+      <StatusBar barStyle="light-content" />
+      <View style={{ flex: 1 }}>
+        {/* Background orbs */}
+        <View
+          pointerEvents="none"
+          style={{
+            position: "absolute",
+            width: 260,
+            height: 260,
+            borderRadius: 130,
+            backgroundColor: "rgba(37,99,235,0.18)", // blue
+            top: -80,
+            right: -60,
+          }}
+        />
+        <View
+          pointerEvents="none"
+          style={{
+            position: "absolute",
+            width: 220,
+            height: 220,
+            borderRadius: 110,
+            backgroundColor: "rgba(147,51,234,0.14)", // purple
+            top: 120,
+            left: -70,
+          }}
+        />
+        <View
+          pointerEvents="none"
+          style={{
+            position: "absolute",
+            width: 260,
+            height: 260,
+            borderRadius: 130,
+            backgroundColor: "rgba(56,189,248,0.12)", // cyan
+            bottom: -90,
+            right: -80,
+          }}
+        />
 
-            {/* logo circle */}
-            <View style={styles.logoBadge}>
-              <Image
-                source={require("../images/OCLogo.png")}
-                style={{ width: 76, height: 76 }}
-                resizeMode="contain"
-              />
-            </View>
-          </View>
+        <ScrollView
+          contentContainerStyle={{
+            flexGrow: 1,
+          }}
+          keyboardShouldPersistTaps="handled"
+        >
+          <View
+            style={{
+              flex: 1,
+              paddingHorizontal: 20,
+              paddingTop: 72, // pulled content down a bit
+              paddingBottom: 24,
+              justifyContent: "space-between",
+            }}
+          >
+            <View>
+              {/* Logo + app name */}
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  marginBottom: 18,
+                }}
+              >
+                <View
+                  style={{
+                    width: 48,
+                    height: 48,
+                    borderRadius: 24,
+                    backgroundColor: "#020617",
+                    borderWidth: 1,
+                    borderColor: "rgba(148,163,184,0.4)",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    marginRight: 12,
+                  }}
+                >
+                  <Image
+                    source={require("../images/OCLogo.png")}
+                    style={{ width: 32, height: 32, borderRadius: 16 }}
+                    resizeMode="contain"
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text
+                    style={{
+                      color: "#e5f3ff",
+                      fontSize: 20,
+                      fontWeight: "700",
+                    }}
+                  >
+                    OpenCourt
+                  </Text>
+                  <Text
+                    style={{
+                      color: "#9ca3af",
+                      fontSize: 13,
+                      marginTop: 2,
+                    }}
+                  >
+                    Track the run, find your squad, hoop more.
+                  </Text>
+                </View>
+              </View>
 
-          {/* Sign-in card */}
-          <View style={styles.authCard}>
-            <Text style={styles.authTitle}>Welcome to OpenCourt</Text>
-            <Text style={styles.authSubtitle}>
-              Sign in to find courts and see live activity
-            </Text>
+              {/* Heading block – nudged down */}
+              <View style={{ marginTop: 10 }}>
+                <Text
+                  style={{
+                    color: "#f9fafb",
+                    fontSize: 26,
+                    fontWeight: "800",
+                    marginBottom: 4,
+                  }}
+                >
+                  Welcome back
+                </Text>
+                <Text
+                  style={{
+                    color: "#9ca3af",
+                    fontSize: 14,
+                    marginBottom: 22,
+                  }}
+                >
+                  Sign in with your Villanova email to get back on the court.
+                </Text>
+              </View>
 
-            {/* Email */}
-            <View style={{ marginTop: 16 }}>
-              <Text style={styles.authLabel}>Email</Text>
-              <TextInput
-                style={styles.authInput}
-                placeholder="you@school.edu"
-                placeholderTextColor="#8aa0b6"
-                value={email}
-                onChangeText={setEmail}
-                autoCapitalize="none"
-                keyboardType="email-address"
-                returnKeyType="next"
-              />
-            </View>
+              {/* Error banner */}
+              {error ? (
+                <View
+                  style={{
+                    backgroundColor: "rgba(248,113,113,0.1)",
+                    borderWidth: 1,
+                    borderColor: "rgba(248,113,113,0.4)",
+                    borderRadius: 12,
+                    paddingHorizontal: 12,
+                    paddingVertical: 10,
+                    marginBottom: 16,
+                    flexDirection: "row",
+                    alignItems: "center",
+                  }}
+                >
+                  <Ionicons name="alert-circle" size={18} color="#fecaca" />
+                  <Text
+                    style={{
+                      color: "#fecaca",
+                      marginLeft: 8,
+                      fontSize: 13,
+                    }}
+                  >
+                    {error}
+                  </Text>
+                </View>
+              ) : null}
 
-            {/* Password */}
-            <View style={{ marginTop: 12 }}>
-              <Text style={styles.authLabel}>Password</Text>
-              <View style={{ position: "relative" }}>
-                <TextInput
-                  style={[styles.authInput, { paddingRight: 44 }]}
-                  placeholder="••••••••"
-                  placeholderTextColor="#8aa0b6"
-                  value={pw}
-                  onChangeText={setPw}
-                  secureTextEntry={!showPw}
-                  returnKeyType="done"
-                  onSubmitEditing={handleLogin}
-                />
-                <TouchableOpacity
-                  style={styles.eyeBtn}
-                  onPress={() => setShowPw((s) => !s)}
-                  accessibilityLabel={showPw ? "Hide password" : "Show password"}
+              {/* Email */}
+              <View style={{ marginBottom: 14 }}>
+                <Text
+                  style={{
+                    color: "#e5e7eb",
+                    fontWeight: "600",
+                    marginBottom: 6,
+                    fontSize: 14,
+                  }}
+                >
+                  Villanova email
+                </Text>
+                <View
+                  style={{
+                    borderWidth: 1,
+                    borderColor: "#1f2937",
+                    backgroundColor: "#020617",
+                    borderRadius: 14,
+                    paddingHorizontal: 12,
+                    paddingVertical: 10,
+                    flexDirection: "row",
+                    alignItems: "center",
+                  }}
                 >
                   <Ionicons
-                    name={showPw ? "eye-off" : "eye"}
-                    size={20}
-                    color="#516b86"
+                    name="mail-outline"
+                    size={18}
+                    color="#6b7280"
+                    style={{ marginRight: 6 }}
                   />
+                  <TextInput
+                    style={{
+                      flex: 1,
+                      color: "#e5e7eb",
+                      paddingVertical: 4,
+                      fontSize: 15,
+                    }}
+                    placeholder="you@villanova.edu"
+                    placeholderTextColor="#6b7280"
+                    value={email}
+                    onChangeText={setEmail}
+                    autoCapitalize="none"
+                    keyboardType="email-address"
+                    returnKeyType="next"
+                  />
+                </View>
+              </View>
+
+              {/* Password */}
+              <View style={{ marginBottom: 8 }}>
+                <Text
+                  style={{
+                    color: "#e5e7eb",
+                    fontWeight: "600",
+                    marginBottom: 6,
+                    fontSize: 14,
+                  }}
+                >
+                  Password
+                </Text>
+                <View
+                  style={{
+                    borderWidth: 1,
+                    borderColor: "#1f2937",
+                    backgroundColor: "#020617",
+                    borderRadius: 14,
+                    paddingHorizontal: 12,
+                    paddingVertical: 10,
+                    flexDirection: "row",
+                    alignItems: "center",
+                  }}
+                >
+                  <Ionicons
+                    name="lock-closed-outline"
+                    size={18}
+                    color="#6b7280"
+                    style={{ marginRight: 6 }}
+                  />
+                  <TextInput
+                    style={{
+                      flex: 1,
+                      color: "#e5e7eb",
+                      paddingVertical: 4,
+                      fontSize: 15,
+                    }}
+                    placeholder="••••••••"
+                    placeholderTextColor="#6b7280"
+                    secureTextEntry={!showPassword}
+                    value={password}
+                    onChangeText={setPassword}
+                    returnKeyType="done"
+                    onSubmitEditing={handleLogin}
+                  />
+                  <TouchableOpacity
+                    onPress={() => setShowPassword((prev) => !prev)}
+                  >
+                    <Ionicons
+                      name={showPassword ? "eye-off-outline" : "eye-outline"}
+                      size={20}
+                      color="#9ca3af"
+                    />
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Remember + Forgot */}
+              <View
+                style={{
+                  flexDirection: "row",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginBottom: 18,
+                }}
+              >
+                <TouchableOpacity
+                  style={{ flexDirection: "row", alignItems: "center" }}
+                  onPress={() => setRememberMe((prev) => !prev)}
+                >
+                  <View
+                    style={{
+                      width: 18,
+                      height: 18,
+                      borderRadius: 6,
+                      borderWidth: 1,
+                      borderColor: rememberMe
+                        ? "#60a5fa"
+                        : "rgba(148,163,184,0.7)",
+                      backgroundColor: rememberMe ? "#1d4ed8" : "transparent",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      marginRight: 6,
+                    }}
+                  >
+                    {rememberMe && (
+                      <Ionicons name="checkmark" size={12} color="#e5f3ff" />
+                    )}
+                  </View>
+                  <Text style={{ color: "#9ca3af", fontSize: 13 }}>
+                    Remember me
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity onPress={() => {}}>
+                  <Text
+                    style={{
+                      color: "#93c5fd",
+                      fontSize: 13,
+                      fontWeight: "500",
+                    }}
+                  >
+                    Forgot password?
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Primary button */}
+              <TouchableOpacity
+                onPress={handleLogin}
+                disabled={loading}
+                style={{
+                  backgroundColor: loading ? "#1d4ed8aa" : "#2563eb",
+                  borderRadius: 999,
+                  paddingVertical: 13,
+                  alignItems: "center",
+                  marginBottom: 16,
+                  shadowColor: "#1d4ed8",
+                  shadowOpacity: 0.5,
+                  shadowRadius: 16,
+                  shadowOffset: { width: 0, height: 10 },
+                  elevation: 4,
+                }}
+              >
+                <Text
+                  style={{
+                    color: "#eff6ff",
+                    fontSize: 16,
+                    fontWeight: "700",
+                  }}
+                >
+                  {loading ? "Signing in..." : "Sign in"}
+                </Text>
+              </TouchableOpacity>
+
+              {/* Divider + faux social */}
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  marginVertical: 12,
+                }}
+              >
+                <View
+                  style={{
+                    flex: 1,
+                    height: 1,
+                    backgroundColor: "#111827",
+                  }}
+                />
+                <Text
+                  style={{
+                    color: "#6b7280",
+                    fontSize: 12,
+                    marginHorizontal: 10,
+                  }}
+                >
+                  or continue with
+                </Text>
+                <View
+                  style={{
+                    flex: 1,
+                    height: 1,
+                    backgroundColor: "#111827",
+                  }}
+                />
+              </View>
+
+              <View
+                style={{
+                  flexDirection: "row",
+                  justifyContent: "space-between",
+                  marginBottom: 10,
+                }}
+              >
+                <TouchableOpacity
+                  style={{
+                    flex: 1,
+                    marginRight: 6,
+                    borderRadius: 999,
+                    borderWidth: 1,
+                    borderColor: "#1f2937",
+                    paddingVertical: 10,
+                    alignItems: "center",
+                    backgroundColor: "rgba(15,23,42,0.9)",
+                  }}
+                  onPress={() => {}}
+                >
+                  <Text
+                    style={{
+                      color: "#e5e7eb",
+                      fontSize: 14,
+                      fontWeight: "500",
+                    }}
+                  >
+                    Google
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={{
+                    flex: 1,
+                    marginLeft: 6,
+                    borderRadius: 999,
+                    borderWidth: 1,
+                    borderColor: "#1f2937",
+                    paddingVertical: 10,
+                    alignItems: "center",
+                    backgroundColor: "rgba(15,23,42,0.9)",
+                  }}
+                  onPress={() => {}}
+                >
+                  <Text
+                    style={{
+                      color: "#e5e7eb",
+                      fontSize: 14,
+                      fontWeight: "500",
+                    }}
+                  >
+                    Apple
+                  </Text>
                 </TouchableOpacity>
               </View>
             </View>
 
-            {/* remember + forgot */}
-            <View style={styles.rowBetween}>
-              <TouchableOpacity
-                style={styles.remember}
-                onPress={() => setRememberMe((v) => !v)}
-                activeOpacity={0.8}
-              >
-                <View
-                  style={[
-                    styles.checkbox,
-                    rememberMe && styles.checkboxChecked,
-                  ]}
+            {/* Footer */}
+            <View
+              style={{
+                alignItems: "center",
+                marginTop: 8,
+              }}
+            >
+              <Text style={{ color: "#6b7280", fontSize: 13 }}>
+                New here?{" "}
+                <Text
+                  style={{
+                    color: "#93c5fd",
+                    fontWeight: "600",
+                  }}
+                  onPress={() => navigation.navigate("Signup")}
                 >
-                  {rememberMe && (
-                    <Ionicons name="checkmark" size={14} color="#fff" />
-                  )}
-                </View>
-                <Text style={styles.rememberText}>Remember me</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                onPress={() => alert("Forgot password flow goes here")}
-              >
-                <Text style={styles.linkBrand}>Forgot password?</Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* CTA */}
-            <TouchableOpacity style={styles.primaryBtn} onPress={handleLogin}>
-              <Ionicons name="log-in-outline" size={18} color="#fff" />
-              <Text style={styles.primaryBtnText}>Sign in</Text>
-            </TouchableOpacity>
-
-            {/* Divider */}
-            <View style={styles.dividerRow}>
-              <View style={styles.divider} />
-              <Text style={styles.dividerText}>or continue with</Text>
-              <View style={styles.divider} />
-            </View>
-
-            {/* Social (placeholder) */}
-            <View style={styles.socialRow}>
-              <TouchableOpacity style={styles.socialBtn}>
-                <Text style={styles.socialText}>Google</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.socialBtn}>
-                <Text style={styles.socialText}>Apple</Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Footer link */}
-            <Text style={styles.footerText}>
-              New here?{" "}
-              <Text
-                style={styles.linkBrand}
-                onPress={() => navigation.navigate("Signup")}
-              >
-                Create an account
+                  Create an account
+                </Text>
               </Text>
-            </Text>
+            </View>
           </View>
-        </View>
-      </ScrollView>
+        </ScrollView>
+      </View>
     </KeyboardAvoidingView>
   );
 }
