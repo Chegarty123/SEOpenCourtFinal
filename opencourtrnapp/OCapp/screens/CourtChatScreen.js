@@ -8,6 +8,7 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
+  Keyboard,              // 👈 NEW
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { auth, db } from "../firebaseConfig";
@@ -40,6 +41,12 @@ export default function CourtChatScreen({ route, navigation }) {
       chatScrollRef.current?.scrollToEnd({ animated: true });
     }, 50);
   };
+
+  // 👇 Scroll again when the keyboard is fully open
+  useEffect(() => {
+    const sub = Keyboard.addListener("keyboardDidShow", scrollToBottom);
+    return () => sub.remove();
+  }, []);
 
   // Format Firestore timestamp -> "4:33 PM"
   const renderTime = (ts) => {
@@ -90,6 +97,7 @@ export default function CourtChatScreen({ route, navigation }) {
         });
       });
       setMessages(chatArr);
+      // keep us at the bottom whenever new messages land
       scrollToBottom();
     });
 
@@ -98,8 +106,8 @@ export default function CourtChatScreen({ route, navigation }) {
 
   const handleSend = async () => {
     if (!draftMessage.trim() || !user || !courtId) return;
-    const msgsRef = collection(db, "courts", courtId, "messages");
 
+    const msgsRef = collection(db, "courts", courtId, "messages");
     try {
       await addDoc(msgsRef, {
         userId: user.uid,
@@ -108,7 +116,7 @@ export default function CourtChatScreen({ route, navigation }) {
         ts: serverTimestamp(),
       });
       setDraftMessage("");
-      scrollToBottom();
+      // keyboardDidShow + contentSizeChange will keep scroll correct
     } catch (err) {
       console.warn("send message failed", err);
     }
@@ -132,87 +140,88 @@ export default function CourtChatScreen({ route, navigation }) {
   }
 
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1, backgroundColor: "#eef2f7" }}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-      keyboardVerticalOffset={Platform.OS === "ios" ? 10 : 0}
-    >
-      <View style={{ flex: 1 }}>
-        {/* HEADER */}
+    <View style={{ flex: 1, backgroundColor: "#eef2f7" }}>
+      {/* HEADER (back chip + title) */}
+      <View
+        style={{
+          paddingTop: Platform.OS === "ios" ? 52 : 20,
+          paddingBottom: 14,
+          paddingHorizontal: 16,
+          backgroundColor: "#38bdf8",
+          borderBottomLeftRadius: 24,
+          borderBottomRightRadius: 24,
+        }}
+      >
         <View
           style={{
-            paddingTop: Platform.OS === "ios" ? 52 : 20,
-            paddingBottom: 14,
-            paddingHorizontal: 16,
-            backgroundColor: "#38bdf8",
-            borderBottomLeftRadius: 24,
-            borderBottomRightRadius: 24,
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
           }}
         >
-          <View
+          <TouchableOpacity
+            onPress={() => navigation.goBack()}
+            activeOpacity={0.8}
             style={{
               flexDirection: "row",
               alignItems: "center",
-              justifyContent: "space-between",
+              backgroundColor: "rgba(255,255,255,0.9)",
+              paddingVertical: 6,
+              paddingHorizontal: 10,
+              borderRadius: 12,
             }}
           >
-            <TouchableOpacity
-              onPress={() => navigation.goBack()}
-              activeOpacity={0.8}
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                backgroundColor: "rgba(255,255,255,0.9)",
-                paddingVertical: 6,
-                paddingHorizontal: 10,
-                borderRadius: 12,
-              }}
-            >
-              <Ionicons name="chevron-back" size={20} color="#0b2239" />
-              <Text
-                style={{
-                  marginLeft: 4,
-                  fontSize: 14,
-                  fontWeight: "600",
-                  color: "#0b2239",
-                }}
-              >
-                Back
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          <View style={{ marginTop: 14 }}>
-            <Text style={{ color: "#e0f2fe", fontSize: 13 }}>Court chat</Text>
+            <Ionicons name="chevron-back" size={20} color="#0b2239" />
             <Text
               style={{
-                color: "#f9fafb",
-                fontSize: 20,
-                fontWeight: "800",
-                marginTop: 2,
+                marginLeft: 4,
+                fontSize: 14,
+                fontWeight: "600",
+                color: "#0b2239",
               }}
-              numberOfLines={1}
             >
-              {marker?.name || "Court"}
+              Back
             </Text>
-          </View>
+          </TouchableOpacity>
         </View>
 
-        {/* CHAT AREA (messages + input) */}
+        <View style={{ marginTop: 14 }}>
+          <Text style={{ color: "#e0f2fe", fontSize: 13 }}>Court chat</Text>
+          <Text
+            style={{
+              color: "#f9fafb",
+              fontSize: 20,
+              fontWeight: "800",
+              marginTop: 2,
+            }}
+            numberOfLines={1}
+          >
+            {marker?.name || "Court"}
+          </Text>
+        </View>
+      </View>
+
+      {/* CHAT + INPUT */}
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        // 👇 this tells iOS how far down your custom header is
+        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
+      >
         <View style={{ flex: 1 }}>
           <ScrollView
             ref={chatScrollRef}
             style={{ flex: 1, paddingHorizontal: 12, paddingTop: 12 }}
             contentContainerStyle={{
-              paddingBottom: 12, // space above input bar
+              paddingBottom: 16, // space above input
             }}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
+            onContentSizeChange={scrollToBottom}
           >
             {messages.length === 0 ? (
               <View
                 style={{
-                  flex: 1,
                   alignItems: "center",
                   marginTop: 40,
                 }}
@@ -229,10 +238,12 @@ export default function CourtChatScreen({ route, navigation }) {
                 style={[
                   styles.chatBubble,
                   m.mine ? styles.chatBubbleMine : styles.chatBubbleOther,
-                  { marginBottom: 8 }, // space between messages
+                  { marginBottom: 8 },
                 ]}
               >
-                <Text style={m.mine ? styles.chatUserMine : styles.chatUserOther}>
+                <Text
+                  style={m.mine ? styles.chatUserMine : styles.chatUserOther}
+                >
                   {m.mine ? "You" : m.user}
                 </Text>
                 <Text style={styles.chatText}>{m.text}</Text>
@@ -241,23 +252,26 @@ export default function CourtChatScreen({ route, navigation }) {
             ))}
           </ScrollView>
 
-          {/* INPUT BAR (sits at bottom, pushes messages up when keyboard opens) */}
+          {/* INPUT BAR */}
           <View
-            style={[
-              styles.chatInputBar,
-              {
-                position: "relative", // override absolute from globalStyles
-              },
-            ]}
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              backgroundColor: "#fff",
+              paddingHorizontal: 12,
+              paddingVertical: 10,
+              borderTopWidth: 1,
+              borderTopColor: "#d6e2ee",
+            }}
           >
             <TextInput
               style={[styles.chatInput, { marginRight: 10 }]}
-              placeholder="Message this court..."
+              placeholder="Message this court."
               placeholderTextColor="#8aa0b6"
               value={draftMessage}
               onChangeText={setDraftMessage}
               returnKeyType="send"
-              onFocus={scrollToBottom} // when you tap, scroll everything up
+              onFocus={scrollToBottom}  // when you tap, jump to latest
               onSubmitEditing={handleSend}
             />
             <TouchableOpacity
@@ -269,7 +283,7 @@ export default function CourtChatScreen({ route, navigation }) {
             </TouchableOpacity>
           </View>
         </View>
-      </View>
-    </KeyboardAvoidingView>
+      </KeyboardAvoidingView>
+    </View>
   );
 }
