@@ -808,6 +808,7 @@ export default function HomeScreen({ navigation }) {
                 paddingHorizontal: 12,
                 backgroundColor: "rgba(15,23,42,0.95)",
                 borderColor: "rgba(148,163,184,0.7)",
+                borderWidth: 1,
               },
             ]}
           >
@@ -992,9 +993,11 @@ export default function HomeScreen({ navigation }) {
                 paddingHorizontal: 12,
                 backgroundColor: "rgba(15,23,42,0.95)",
                 borderColor: "rgba(148,163,184,0.7)",
+                borderWidth: 1,
               },
             ]}
           >
+
             <View style={styles.cardHeaderRow}>
               <Text
                 style={[
@@ -1089,9 +1092,11 @@ export default function HomeScreen({ navigation }) {
                 paddingHorizontal: 12,
                 backgroundColor: "rgba(15,23,42,0.95)",
                 borderColor: "rgba(148,163,184,0.7)",
+                borderWidth: 1,
               },
             ]}
           >
+
             <View style={styles.cardHeaderRow}>
               <Text
                 style={[

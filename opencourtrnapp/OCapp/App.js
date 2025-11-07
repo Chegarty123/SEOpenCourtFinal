@@ -5,7 +5,7 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { StatusBar } from "expo-status-bar";
 
 // screens
-import SplashScreen from "./screens/SplashScreen";   // 👈 NEW
+import SplashScreen from "./screens/SplashScreen";
 import LoginScreen from "./screens/LoginScreen";
 import SignupScreen from "./screens/SignupScreen";
 import MainTabs from "./screens/MainTabs";
@@ -21,13 +21,39 @@ export default function App() {
     <NavigationContainer>
       <StatusBar style="light" />
       <Stack.Navigator
-        initialRouteName="Splash"   // 👈 Start on Splash
-        screenOptions={{ headerShown: false }}
+        initialRouteName="Splash"
+        screenOptions={{
+          headerShown: false,
+          animation: "slide_from_right", // default for most pushes
+        }}
       >
-        <Stack.Screen name="Splash" component={SplashScreen} />
-        <Stack.Screen name="Login" component={LoginScreen} />
-        <Stack.Screen name="Signup" component={SignupScreen} />
-        <Stack.Screen name="MainTabs" component={MainTabs} />
+        {/* First screen – just appears, no transition into it */}
+        <Stack.Screen
+          name="Splash"
+          component={SplashScreen}
+        />
+
+        {/* Splash -> Login will fade */}
+        <Stack.Screen
+          name="Login"
+          component={LoginScreen}
+          options={{ animation: "fade" }}
+        />
+
+        {/* Login -> Signup slides from right, Signup -> Login slides from left */}
+        <Stack.Screen
+          name="Signup"
+          component={SignupScreen}
+        />
+
+        {/* Splash -> MainTabs (home) will also fade */}
+        <Stack.Screen
+          name="MainTabs"
+          component={MainTabs}
+          options={{ animation: "fade" }}
+        />
+
+        {/* These all use slide_from_right (default) */}
         <Stack.Screen name="MapScreen" component={MapScreen} />
         <Stack.Screen name="CourtDetail" component={CourtDetailScreen} />
         <Stack.Screen name="UserProfile" component={UserProfileScreen} />

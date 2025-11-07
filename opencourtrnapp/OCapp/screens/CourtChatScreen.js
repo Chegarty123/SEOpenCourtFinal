@@ -28,7 +28,7 @@ import {
   serverTimestamp,
   setDoc,
   updateDoc,
-  deleteDoc,              // 👈 added for delete / unsend
+  deleteDoc, // delete / unsend
 } from "firebase/firestore";
 
 const TENOR_API_KEY = "AIzaSyDYgE5Z7qvK2PDPY8sg1GiqGcC_AVxFdho"; // your Tenor key
@@ -62,6 +62,16 @@ export default function CourtChatScreen({ route, navigation }) {
   const prevMsgCountRef = useRef(0);
   const initialScrollDoneRef = useRef(false);
   const [initialRenderDone, setInitialRenderDone] = useState(false);
+
+  // 👉 for double-tap detection
+  const lastTapRef = useRef({ time: 0, msgId: null });
+
+  // 👉 for swipe-down-to-close on GIF picker header
+  const headerSwipeStartY = useRef(null);
+
+  // 👉 for reaction details modal ("who reacted with what")
+  const [reactionDetail, setReactionDetail] = useState(null); // { messageId, entries: [{emoji, users:[{id,name}]}] }
+  const [reactionDetailLoading, setReactionDetailLoading] = useState(false);
 
   const scrollToBottom = () => {
     setTimeout(() => {
@@ -315,7 +325,7 @@ export default function CourtChatScreen({ route, navigation }) {
     setReactionPickerFor(null);
   };
 
-  // 🔴 Delete / unsend message (only used for your own messages in UI)
+  // 🔴 Delete / unsend message (only for your own messages in UI)
   const handleDeleteMessage = async (messageId) => {
     if (!courtId || !user || !messageId) return;
     try {
@@ -373,6 +383,70 @@ export default function CourtChatScreen({ route, navigation }) {
   const handlePressUser = (userId) => {
     if (!userId) return;
     navigation.navigate("UserProfile", { userId });
+  };
+
+  // ❤️ Double-tap on message bubble to toggle heart reaction
+  const handleMessagePress = (msgId) => {
+    const now = Date.now();
+    const { time, msgId: lastId } = lastTapRef.current;
+
+    if (lastId === msgId && now - time < 250) {
+      // double tap detected -> toggle heart
+      toggleReaction(msgId, "❤️");
+    }
+
+    lastTapRef.current = { time: now, msgId };
+  };
+
+  // 🧑‍🤝‍🧑 Open reaction details modal: "who reacted with what"
+  const openReactionDetails = async (message) => {
+    const reactions = message.reactions || {};
+    const entries = Object.entries(reactions).filter(
+      ([, users]) => Array.isArray(users) && users.length > 0
+    );
+    if (!entries.length) return;
+
+    setReactionDetailLoading(true);
+    setReactionDetail({ messageId: message.id, entries: [] });
+
+    try {
+      const detailedEntries = await Promise.all(
+        entries.map(async ([emoji, userIds]) => {
+          const users = await Promise.all(
+            userIds.map(async (uid) => {
+              try {
+                const snap = await getDoc(doc(db, "users", uid));
+                if (snap.exists()) {
+                  const data = snap.data();
+                  const name =
+                    data.username ||
+                    (data.email ? data.email.split("@")[0] : "Player");
+                  return { id: uid, name };
+                }
+              } catch (err) {
+                console.log("Error fetching user for reaction:", err);
+              }
+              return { id: uid, name: "Player" };
+            })
+          );
+          return { emoji, users };
+        })
+      );
+
+      setReactionDetail({
+        messageId: message.id,
+        entries: detailedEntries,
+      });
+    } catch (err) {
+      console.log("Error building reaction detail:", err);
+    } finally {
+      setReactionDetailLoading(false);
+    }
+  };
+
+  const closeReactionDetails = () => {
+    setReactionDetail(null);
+    setReactionDetailLoading(false);
   };
 
   return (
@@ -549,50 +623,49 @@ export default function CourtChatScreen({ route, navigation }) {
                 return (
                   <View key={m.id} style={{ marginBottom: 10 }}>
                     {dateLabel ? (
+                      <View
+                        style={{
+                          alignItems: "center",
+                          marginVertical: 16,
+                          position: "relative",
+                        }}
+                      >
+                        {/* faint horizontal divider line */}
                         <View
-                            style={{
-                            alignItems: "center",
-                            marginVertical: 16, // add space above and below
-                            position: "relative",
-                            }}
+                          style={{
+                            position: "absolute",
+                            top: "50%",
+                            left: 0,
+                            right: 0,
+                            height: 1,
+                            backgroundColor: "rgba(148,163,184,0.25)",
+                          }}
+                        />
+                        {/* floating date chip */}
+                        <View
+                          style={{
+                            paddingHorizontal: 14,
+                            paddingVertical: 4,
+                            borderRadius: 999,
+                            backgroundColor: "#0f172a",
+                            borderWidth: 1,
+                            borderColor: "rgba(148,163,184,0.7)",
+                          }}
                         >
-                            {/* faint horizontal divider line */}
-                            <View
+                          <Text
                             style={{
-                                position: "absolute",
-                                top: "50%",
-                                left: 0,
-                                right: 0,
-                                height: 1,
-                                backgroundColor: "rgba(148,163,184,0.25)", // faint divider
+                              color: "#e5f3ff",
+                              fontSize: 12,
+                              fontWeight: "700",
+                              textTransform: "uppercase",
+                              letterSpacing: 0.5,
                             }}
-                            />
-                            {/* floating date chip */}
-                            <View
-                            style={{
-                                paddingHorizontal: 14,
-                                paddingVertical: 4,
-                                borderRadius: 999,
-                                backgroundColor: "#0f172a",
-                                borderWidth: 1,
-                                borderColor: "rgba(148,163,184,0.7)",
-                            }}
-                            >
-                            <Text
-                                style={{
-                                color: "#e5f3ff",
-                                fontSize: 12,
-                                fontWeight: "700",
-                                textTransform: "uppercase",
-                                letterSpacing: 0.5,
-                                }}
-                            >
-                                {dateLabel}
-                            </Text>
-                            </View>
+                          >
+                            {dateLabel}
+                          </Text>
                         </View>
+                      </View>
                     ) : null}
-
 
                     <View
                       style={{
@@ -602,6 +675,7 @@ export default function CourtChatScreen({ route, navigation }) {
                       <TouchableOpacity
                         activeOpacity={0.85}
                         onLongPress={() => openReactionPicker(m.id)}
+                        onPress={() => handleMessagePress(m.id)} // 👈 double-tap support lives here
                         style={{
                           paddingHorizontal: 10,
                           paddingVertical: 6,
@@ -664,6 +738,7 @@ export default function CourtChatScreen({ route, navigation }) {
                             <View
                               style={{
                                 flexDirection: "row",
+                                alignItems: "center",
                                 marginRight: 6,
                                 paddingHorizontal: 6,
                                 paddingVertical: 2,
@@ -675,18 +750,37 @@ export default function CourtChatScreen({ route, navigation }) {
                             >
                               {reactionEntries.map(
                                 ([emoji, users], idx) => (
-                                  <Text
+                                  <TouchableOpacity
                                     key={`${m.id}-${emoji}-${idx}`}
-                                    style={{
-                                      fontSize: 12,
-                                      marginRight: 4,
-                                      color: "#e5e7eb",
-                                    }}
+                                    onPress={() => toggleReaction(m.id, emoji)} // 👈 tap existing reaction to add/remove
+                                    style={{ flexDirection: "row", alignItems: "center", marginRight: 4 }}
                                   >
-                                    {emoji} {users.length}
-                                  </Text>
+                                    <Text
+                                      style={{
+                                        fontSize: 12,
+                                        color: "#e5e7eb",
+                                      }}
+                                    >
+                                      {emoji} {users.length}
+                                    </Text>
+                                  </TouchableOpacity>
                                 )
                               )}
+
+                              {/* info button -> opens "who reacted" details */}
+                              <TouchableOpacity
+                                onPress={() => openReactionDetails(m)}
+                                style={{
+                                  marginLeft: 2,
+                                  paddingHorizontal: 2,
+                                }}
+                              >
+                                <Ionicons
+                                  name="information-circle-outline"
+                                  size={14}
+                                  color="#cbd5f5"
+                                />
+                              </TouchableOpacity>
                             </View>
                           )}
 
@@ -924,7 +1018,7 @@ export default function CourtChatScreen({ route, navigation }) {
         onRequestClose={() => setGifPickerVisible(false)}
       >
         <View style={{ flex: 1, backgroundColor: "#020617" }}>
-          {/* GIF picker header */}
+          {/* GIF picker header (swipe down here to close) */}
           <View
             style={{
               flexDirection: "row",
@@ -935,6 +1029,19 @@ export default function CourtChatScreen({ route, navigation }) {
               borderBottomWidth: 1,
               borderBottomColor: "#1f2937",
               backgroundColor: "#020617",
+            }}
+            onStartShouldSetResponder={() => true}
+            onResponderGrant={(e) => {
+              headerSwipeStartY.current = e.nativeEvent.pageY;
+            }}
+            onResponderRelease={(e) => {
+              if (headerSwipeStartY.current != null) {
+                const deltaY = e.nativeEvent.pageY - headerSwipeStartY.current;
+                if (deltaY > 50) {
+                  setGifPickerVisible(false);
+                }
+              }
+              headerSwipeStartY.current = null;
             }}
           >
             <TouchableOpacity
@@ -1074,6 +1181,144 @@ export default function CourtChatScreen({ route, navigation }) {
                   </Text>
                 }
               />
+            )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* 🎭 REACTION DETAILS MODAL (who reacted with what) */}
+      <Modal
+        visible={!!reactionDetail}
+        transparent
+        animationType="fade"
+        onRequestClose={closeReactionDetails}
+      >
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(15,23,42,0.75)",
+            justifyContent: "center",
+            alignItems: "center",
+            paddingHorizontal: 24,
+          }}
+        >
+          <View
+            style={{
+              width: "100%",
+              maxWidth: 360,
+              backgroundColor: "#020617",
+              borderRadius: 16,
+              padding: 16,
+              borderWidth: 1,
+              borderColor: "rgba(148,163,184,0.7)",
+            }}
+          >
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                marginBottom: 10,
+              }}
+            >
+              <Text
+                style={{
+                  flex: 1,
+                  color: "#e5f3ff",
+                  fontSize: 16,
+                  fontWeight: "700",
+                }}
+              >
+                Reactions
+              </Text>
+              <TouchableOpacity onPress={closeReactionDetails}>
+                <Ionicons
+                  name="close-circle-outline"
+                  size={24}
+                  color="#9ca3af"
+                />
+              </TouchableOpacity>
+            </View>
+
+            {reactionDetailLoading ? (
+              <View
+                style={{
+                  alignItems: "center",
+                  justifyContent: "center",
+                  paddingVertical: 12,
+                }}
+              >
+                <ActivityIndicator size="small" color="#60a5fa" />
+                <Text
+                  style={{
+                    marginTop: 8,
+                    color: "#9ca3af",
+                    fontSize: 13,
+                  }}
+                >
+                  Loading reactions...
+                </Text>
+              </View>
+            ) : !reactionDetail || !reactionDetail.entries.length ? (
+              <Text
+                style={{
+                  color: "#9ca3af",
+                  fontSize: 13,
+                }}
+              >
+                No reactions yet.
+              </Text>
+            ) : (
+              <ScrollView
+                style={{ maxHeight: 260 }}
+                contentContainerStyle={{ paddingVertical: 4 }}
+              >
+                {reactionDetail.entries.map((entry) => (
+                  <View
+                    key={entry.emoji}
+                    style={{ marginBottom: 10 }}
+                  >
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        marginBottom: 4,
+                      }}
+                    >
+                      <Text
+                        style={{
+                          fontSize: 18,
+                          marginRight: 6,
+                        }}
+                      >
+                        {entry.emoji}
+                      </Text>
+                      <Text
+                        style={{
+                          color: "#e5e7eb",
+                          fontSize: 13,
+                          fontWeight: "600",
+                        }}
+                      >
+                        {entry.users.length}{" "}
+                        {entry.users.length === 1 ? "person" : "people"}
+                      </Text>
+                    </View>
+                    {entry.users.map((u) => (
+                      <Text
+                        key={u.id}
+                        style={{
+                          marginLeft: 4,
+                          color: "#cbd5f5",
+                          fontSize: 13,
+                          marginBottom: 2,
+                        }}
+                      >
+                        • {u.name}
+                      </Text>
+                    ))}
+                  </View>
+                ))}
+              </ScrollView>
             )}
           </View>
         </View>
