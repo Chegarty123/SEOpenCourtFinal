@@ -1,5 +1,5 @@
 // screens/LoginScreen.js
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -14,6 +14,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { auth } from "../firebaseConfig";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export default function LoginScreen({ navigation }) {
   const [email, setEmail] = useState("");
@@ -22,6 +23,21 @@ export default function LoginScreen({ navigation }) {
   const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  // Load previously saved "remember me" preference (if any)
+  useEffect(() => {
+    const loadRememberMe = async () => {
+      try {
+        const stored = await AsyncStorage.getItem("rememberMe");
+        if (stored === "true") {
+          setRememberMe(true);
+        }
+      } catch (err) {
+        console.log("Failed to read rememberMe from storage:", err);
+      }
+    };
+    loadRememberMe();
+  }, []);
 
   const handleLogin = async () => {
     setError("");
@@ -36,6 +52,14 @@ export default function LoginScreen({ navigation }) {
     setLoading(true);
     try {
       await signInWithEmailAndPassword(auth, trimmedEmail, password);
+
+      // Persist rememberMe flag so Splash/auth logic can decide what to do on app launch
+      try {
+        await AsyncStorage.setItem("rememberMe", rememberMe ? "true" : "false");
+      } catch (storageErr) {
+        console.log("Failed to save rememberMe:", storageErr);
+      }
+
       navigation.replace("MainTabs");
     } catch (err) {
       console.log("Login error:", err);
@@ -376,23 +400,24 @@ export default function LoginScreen({ navigation }) {
                 onPress={handleLogin}
                 disabled={loading}
                 style={{
-                  backgroundColor: loading ? "#1d4ed8aa" : "#2563eb",
+                  backgroundColor: loading ? "#1d4ed8aa" : "#1d4ed8",
+                  paddingVertical: 12,
                   borderRadius: 999,
-                  paddingVertical: 13,
                   alignItems: "center",
-                  marginBottom: 16,
-                  shadowColor: "#1d4ed8",
-                  shadowOpacity: 0.5,
-                  shadowRadius: 16,
-                  shadowOffset: { width: 0, height: 10 },
-                  elevation: 4,
+                  shadowColor: "#000",
+                  shadowOpacity: 0.4,
+                  shadowRadius: 10,
+                  shadowOffset: { width: 0, height: 6 },
+                  elevation: 5,
+                  marginBottom: 12,
                 }}
               >
                 <Text
                   style={{
-                    color: "#eff6ff",
-                    fontSize: 16,
+                    color: "#e5f3ff",
+                    fontSize: 15,
                     fontWeight: "700",
+                    letterSpacing: 0.5,
                   }}
                 >
                   {loading ? "Signing in..." : "Sign in"}

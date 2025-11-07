@@ -7,16 +7,16 @@ import {
   Animated,
   Easing,
   StatusBar,
-  Platform,
 } from "react-native";
 import { auth } from "../firebaseConfig";
-import { onAuthStateChanged } from "firebase/auth";
+import { onAuthStateChanged, signOut } from "firebase/auth";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const SplashScreen = ({ navigation }) => {
   const progress = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    // Animate loading bar from 0 → 100%
+    // Animate loading bar
     Animated.timing(progress, {
       toValue: 1,
       duration: 1500,
@@ -24,24 +24,47 @@ const SplashScreen = ({ navigation }) => {
       useNativeDriver: false,
     }).start();
 
-    // Listen for auth state to decide where to go
     const unsub = onAuthStateChanged(auth, (user) => {
-      // small delay so the animation can play
-      const timeout = setTimeout(() => {
-        if (user) {
-          navigation.reset({
-            index: 0,
-            routes: [{ name: "MainTabs" }],
-          });
-        } else {
-          navigation.reset({
-            index: 0,
-            routes: [{ name: "Login" }],
-          });
-        }
-      }, 1600);
+      const decideWhereToGo = async () => {
+        try {
+          const stored = await AsyncStorage.getItem("rememberMe");
+          const wantsRemember = stored === "true";
 
-      return () => clearTimeout(timeout);
+          setTimeout(async () => {
+            if (user && wantsRemember) {
+              // User signed in AND wants to stay signed in
+              navigation.reset({
+                index: 0,
+                routes: [{ name: "MainTabs" }],
+              });
+            } else {
+              // Either no user, or user but "remember me" was off
+              if (user && !wantsRemember) {
+                try {
+                  await signOut(auth);
+                } catch (e) {
+                  console.log("Error signing out for non-remembered user:", e);
+                }
+              }
+              navigation.reset({
+                index: 0,
+                routes: [{ name: "Login" }],
+              });
+            }
+          }, 1600); // match loading bar animation
+        } catch (e) {
+          console.log("Error reading rememberMe flag:", e);
+          // Fallback: just route based on auth status
+          setTimeout(() => {
+            navigation.reset({
+              index: 0,
+              routes: [{ name: user ? "MainTabs" : "Login" }],
+            });
+          }, 1600);
+        }
+      };
+
+      decideWhereToGo();
     });
 
     return () => unsub();
@@ -64,7 +87,7 @@ const SplashScreen = ({ navigation }) => {
     >
       <StatusBar barStyle="light-content" />
 
-      {/* subtle background blobs like other screens */}
+      {/* background blobs */}
       <View
         pointerEvents="none"
         style={{
@@ -90,13 +113,8 @@ const SplashScreen = ({ navigation }) => {
         }}
       />
 
-      {/* Logo */}
-      <View
-        style={{
-          alignItems: "center",
-          marginBottom: 32,
-        }}
-      >
+      {/* Logo + title */}
+      <View style={{ alignItems: "center", marginBottom: 32 }}>
         <View
           style={{
             width: 96,
