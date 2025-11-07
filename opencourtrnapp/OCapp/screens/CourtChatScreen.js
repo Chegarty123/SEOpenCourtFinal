@@ -8,7 +8,11 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
-  Keyboard,              // 👈 NEW
+  Keyboard,
+  Image,
+  Modal,
+  FlatList,
+  ActivityIndicator,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { auth, db } from "../firebaseConfig";
@@ -23,6 +27,8 @@ import {
 } from "firebase/firestore";
 import { styles } from "../styles/globalStyles";
 
+const TENOR_API_KEY = "AIzaSyDYgE5Z7qvK2PDPY8sg1GiqGcC_AVxFdho"; // 👈 put your key
+
 export default function CourtChatScreen({ route, navigation }) {
   const { courtId, marker } = route.params || {};
   const user = auth.currentUser;
@@ -36,19 +42,22 @@ export default function CourtChatScreen({ route, navigation }) {
   const [draftMessage, setDraftMessage] = useState("");
   const chatScrollRef = useRef(null);
 
+  const [gifPickerVisible, setGifPickerVisible] = useState(false);
+  const [gifSearch, setGifSearch] = useState("");
+  const [gifResults, setGifResults] = useState([]);
+  const [gifLoading, setGifLoading] = useState(false);
+
   const scrollToBottom = () => {
     setTimeout(() => {
       chatScrollRef.current?.scrollToEnd({ animated: true });
     }, 50);
   };
 
-  // 👇 Scroll again when the keyboard is fully open
   useEffect(() => {
     const sub = Keyboard.addListener("keyboardDidShow", scrollToBottom);
     return () => sub.remove();
   }, []);
 
-  // Format Firestore timestamp -> "4:33 PM"
   const renderTime = (ts) => {
     if (!ts) return "now";
     const dateObj = ts.toDate();
@@ -60,7 +69,6 @@ export default function CourtChatScreen({ route, navigation }) {
     return `${hh}:${mm} ${ampm}`;
   };
 
-  // Load my profile name
   useEffect(() => {
     if (!user) return;
     const userDocRef = doc(db, "users", user.uid);
@@ -76,7 +84,6 @@ export default function CourtChatScreen({ route, navigation }) {
     return () => unsub();
   }, [user]);
 
-  // Live chat messages
   useEffect(() => {
     if (!courtId || !user) return;
 
@@ -91,13 +98,14 @@ export default function CourtChatScreen({ route, navigation }) {
           id: d.id,
           userId: data.userId,
           user: data.username || "player",
-          text: data.text,
+          text: data.text || "",
+          type: data.type || (data.gifUrl ? "gif" : "text"),
+          gifUrl: data.gifUrl || null,
           ts: data.ts,
           mine: data.userId === user.uid,
         });
       });
       setMessages(chatArr);
-      // keep us at the bottom whenever new messages land
       scrollToBottom();
     });
 
@@ -112,13 +120,64 @@ export default function CourtChatScreen({ route, navigation }) {
       await addDoc(msgsRef, {
         userId: user.uid,
         username: myProfile.name,
+        type: "text",
         text: draftMessage.trim(),
+        gifUrl: null,
         ts: serverTimestamp(),
       });
       setDraftMessage("");
-      // keyboardDidShow + contentSizeChange will keep scroll correct
     } catch (err) {
       console.warn("send message failed", err);
+    }
+  };
+
+  const sendGif = async (gifUrl) => {
+    if (!gifUrl || !user || !courtId) return;
+    const msgsRef = collection(db, "courts", courtId, "messages");
+
+    try {
+      await addDoc(msgsRef, {
+        userId: user.uid,
+        username: myProfile.name,
+        type: "gif",
+        text: null,
+        gifUrl,
+        ts: serverTimestamp(),
+      });
+      setGifPickerVisible(false);
+      scrollToBottom();
+    } catch (err) {
+      console.warn("send gif failed", err);
+    }
+  };
+
+  const fetchGifs = async (query) => {
+    if (!query) return;
+    try {
+      setGifLoading(true);
+      setGifResults([]);
+
+      const url = `https://tenor.googleapis.com/v2/search?q=${encodeURIComponent(
+        query
+      )}&key=${TENOR_API_KEY}&limit=24&media_filter=gif,tinygif`;
+
+      const res = await fetch(url);
+      const json = await res.json();
+      const results = (json.results || [])
+        .map((item) => {
+          const tiny =
+            item.media_formats?.tinygif?.url ||
+            item.media_formats?.gif?.url ||
+            null;
+          return { id: item.id, url: tiny };
+        })
+        .filter((g) => g.url);
+
+      setGifResults(results);
+    } catch (err) {
+      console.warn("GIF search failed", err);
+    } finally {
+      setGifLoading(false);
     }
   };
 
@@ -141,7 +200,7 @@ export default function CourtChatScreen({ route, navigation }) {
 
   return (
     <View style={{ flex: 1, backgroundColor: "#eef2f7" }}>
-      {/* HEADER (back chip + title) */}
+      {/* HEADER */}
       <View
         style={{
           paddingTop: Platform.OS === "ios" ? 52 : 20,
@@ -205,15 +264,14 @@ export default function CourtChatScreen({ route, navigation }) {
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
-        // 👇 this tells iOS how far down your custom header is
-        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
       >
         <View style={{ flex: 1 }}>
           <ScrollView
             ref={chatScrollRef}
             style={{ flex: 1, paddingHorizontal: 12, paddingTop: 12 }}
             contentContainerStyle={{
-              paddingBottom: 16, // space above input
+              paddingBottom: 16,
             }}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
@@ -246,7 +304,17 @@ export default function CourtChatScreen({ route, navigation }) {
                 >
                   {m.mine ? "You" : m.user}
                 </Text>
-                <Text style={styles.chatText}>{m.text}</Text>
+
+                {m.type === "gif" && m.gifUrl ? (
+                  <Image
+                    source={{ uri: m.gifUrl }}
+                    style={{ width: 200, height: 200, borderRadius: 12 }}
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <Text style={styles.chatText}>{m.text}</Text>
+                )}
+
                 <Text style={styles.chatTime}>{renderTime(m.ts)}</Text>
               </View>
             ))}
@@ -264,6 +332,14 @@ export default function CourtChatScreen({ route, navigation }) {
               borderTopColor: "#d6e2ee",
             }}
           >
+            <TouchableOpacity
+              onPress={() => setGifPickerVisible(true)}
+              style={{ marginRight: 8 }}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="images-outline" size={22} color="#1f6fb2" />
+            </TouchableOpacity>
+
             <TextInput
               style={[styles.chatInput, { marginRight: 10 }]}
               placeholder="Message this court."
@@ -271,7 +347,7 @@ export default function CourtChatScreen({ route, navigation }) {
               value={draftMessage}
               onChangeText={setDraftMessage}
               returnKeyType="send"
-              onFocus={scrollToBottom}  // when you tap, jump to latest
+              onFocus={scrollToBottom}
               onSubmitEditing={handleSend}
             />
             <TouchableOpacity
@@ -284,6 +360,131 @@ export default function CourtChatScreen({ route, navigation }) {
           </View>
         </View>
       </KeyboardAvoidingView>
+
+      {/* GIF PICKER MODAL */}
+      <Modal
+        visible={gifPickerVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setGifPickerVisible(false)}
+      >
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.6)",
+            justifyContent: "center",
+            paddingHorizontal: 16,
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: "#fff",
+              borderRadius: 16,
+              padding: 12,
+              maxHeight: "70%",
+            }}
+          >
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+                marginBottom: 8,
+              }}
+            >
+              <Text
+                style={{ fontSize: 16, fontWeight: "700", color: "#0b2239" }}
+              >
+                Search GIFs
+              </Text>
+              <TouchableOpacity
+                onPress={() => setGifPickerVisible(false)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Ionicons name="close" size={22} color="#0f172a" />
+              </TouchableOpacity>
+            </View>
+
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                borderWidth: 1,
+                borderColor: "#d6e2ee",
+                borderRadius: 10,
+                paddingHorizontal: 10,
+                marginBottom: 10,
+              }}
+            >
+              <Ionicons name="search" size={18} color="#64748b" />
+              <TextInput
+                style={{ flex: 1, marginLeft: 6, paddingVertical: 8 }}
+                placeholder="Search GIFs (e.g. dunk, hype)"
+                placeholderTextColor="#9ca3af"
+                value={gifSearch}
+                onChangeText={setGifSearch}
+                onSubmitEditing={() => fetchGifs(gifSearch)}
+                returnKeyType="search"
+              />
+              <TouchableOpacity onPress={() => fetchGifs(gifSearch)}>
+                <Text
+                  style={{ color: "#1f6fb2", fontWeight: "600", marginLeft: 6 }}
+                >
+                  Go
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {gifLoading ? (
+              <View
+                style={{
+                  paddingVertical: 20,
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <ActivityIndicator />
+              </View>
+            ) : (
+              <FlatList
+                data={gifResults}
+                keyExtractor={(item) => item.id}
+                numColumns={3}
+                columnWrapperStyle={{ gap: 6 }}
+                contentContainerStyle={{ paddingBottom: 8, gap: 6 }}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    onPress={() => sendGif(item.url)}
+                    style={{ flex: 1, aspectRatio: 1 }}
+                    activeOpacity={0.8}
+                  >
+                    <Image
+                      source={{ uri: item.url }}
+                      style={{
+                        width: "100%",
+                        height: "100%",
+                        borderRadius: 8,
+                      }}
+                      resizeMode="cover"
+                    />
+                  </TouchableOpacity>
+                )}
+                ListEmptyComponent={
+                  <Text
+                    style={{
+                      textAlign: "center",
+                      color: "#6b7280",
+                      marginTop: 8,
+                    }}
+                  >
+                    Search for a GIF to get started
+                  </Text>
+                }
+              />
+            )}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
