@@ -13,6 +13,8 @@ import {
   Modal,
   FlatList,
   ActivityIndicator,
+  LayoutAnimation, // 👈 NEW
+  UIManager,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { auth, db } from "../firebaseConfig";
@@ -27,7 +29,11 @@ import {
 } from "firebase/firestore";
 import { styles } from "../styles/globalStyles";
 
-const TENOR_API_KEY = "AIzaSyDYgE5Z7qvK2PDPY8sg1GiqGcC_AVxFdho"; // 👈 put your key
+const TENOR_API_KEY = "AIzaSyDYgE5Z7qvK2PDPY8sg1GiqGcC_AVxFdho";
+
+if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 export default function CourtChatScreen({ route, navigation }) {
   const { courtId, marker } = route.params || {};
@@ -58,23 +64,29 @@ export default function CourtChatScreen({ route, navigation }) {
     return () => sub.remove();
   }, []);
 
+  const smoothDismissKeyboard = () => {
+    // Animate layout change for smoother transition
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    Keyboard.dismiss();
+  };
+
   const renderTime = (ts) => {
     if (!ts) return "now";
-    const dateObj = ts.toDate();
-    const hours = dateObj.getHours();
-    const mins = dateObj.getMinutes();
-    const ampm = hours >= 12 ? "PM" : "AM";
-    const hh = hours % 12 === 0 ? 12 : hours % 12;
-    const mm = mins < 10 ? `0${mins}` : mins;
+    const d = ts.toDate();
+    const h = d.getHours();
+    const m = d.getMinutes();
+    const ampm = h >= 12 ? "PM" : "AM";
+    const hh = h % 12 === 0 ? 12 : h % 12;
+    const mm = m < 10 ? `0${m}` : m;
     return `${hh}:${mm} ${ampm}`;
   };
 
   useEffect(() => {
     if (!user) return;
-    const userDocRef = doc(db, "users", user.uid);
-    const unsub = onSnapshot(userDocRef, (snapshot) => {
-      if (snapshot.exists()) {
-        const data = snapshot.data();
+    const ref = doc(db, "users", user.uid);
+    const unsub = onSnapshot(ref, (snap) => {
+      if (snap.exists()) {
+        const data = snap.data();
         setMyProfile({
           uid: user.uid,
           name: data.username || user.email.split("@")[0],
@@ -86,15 +98,14 @@ export default function CourtChatScreen({ route, navigation }) {
 
   useEffect(() => {
     if (!courtId || !user) return;
-
     const msgsRef = collection(db, "courts", courtId, "messages");
-    const qMsgs = query(msgsRef, orderBy("ts", "asc"));
+    const q = query(msgsRef, orderBy("ts", "asc"));
 
-    const unsub = onSnapshot(qMsgs, (snap) => {
-      const chatArr = [];
+    const unsub = onSnapshot(q, (snap) => {
+      const arr = [];
       snap.forEach((d) => {
         const data = d.data();
-        chatArr.push({
+        arr.push({
           id: d.id,
           userId: data.userId,
           user: data.username || "player",
@@ -105,7 +116,7 @@ export default function CourtChatScreen({ route, navigation }) {
           mine: data.userId === user.uid,
         });
       });
-      setMessages(chatArr);
+      setMessages(arr);
       scrollToBottom();
     });
 
@@ -114,65 +125,49 @@ export default function CourtChatScreen({ route, navigation }) {
 
   const handleSend = async () => {
     if (!draftMessage.trim() || !user || !courtId) return;
-
     const msgsRef = collection(db, "courts", courtId, "messages");
-    try {
-      await addDoc(msgsRef, {
-        userId: user.uid,
-        username: myProfile.name,
-        type: "text",
-        text: draftMessage.trim(),
-        gifUrl: null,
-        ts: serverTimestamp(),
-      });
-      setDraftMessage("");
-    } catch (err) {
-      console.warn("send message failed", err);
-    }
+    await addDoc(msgsRef, {
+      userId: user.uid,
+      username: myProfile.name,
+      type: "text",
+      text: draftMessage.trim(),
+      gifUrl: null,
+      ts: serverTimestamp(),
+    });
+    setDraftMessage("");
   };
 
   const sendGif = async (gifUrl) => {
     if (!gifUrl || !user || !courtId) return;
     const msgsRef = collection(db, "courts", courtId, "messages");
-
-    try {
-      await addDoc(msgsRef, {
-        userId: user.uid,
-        username: myProfile.name,
-        type: "gif",
-        text: null,
-        gifUrl,
-        ts: serverTimestamp(),
-      });
-      setGifPickerVisible(false);
-      scrollToBottom();
-    } catch (err) {
-      console.warn("send gif failed", err);
-    }
+    await addDoc(msgsRef, {
+      userId: user.uid,
+      username: myProfile.name,
+      type: "gif",
+      text: null,
+      gifUrl,
+      ts: serverTimestamp(),
+    });
+    setGifPickerVisible(false);
+    scrollToBottom();
   };
 
   const fetchGifs = async (query) => {
     if (!query) return;
     try {
       setGifLoading(true);
-      setGifResults([]);
-
       const url = `https://tenor.googleapis.com/v2/search?q=${encodeURIComponent(
         query
       )}&key=${TENOR_API_KEY}&limit=24&media_filter=gif,tinygif`;
-
       const res = await fetch(url);
       const json = await res.json();
       const results = (json.results || [])
-        .map((item) => {
-          const tiny =
-            item.media_formats?.tinygif?.url ||
-            item.media_formats?.gif?.url ||
-            null;
-          return { id: item.id, url: tiny };
-        })
+        .map((i) => ({
+          id: i.id,
+          url:
+            i.media_formats?.tinygif?.url || i.media_formats?.gif?.url || null,
+        }))
         .filter((g) => g.url);
-
       setGifResults(results);
     } catch (err) {
       console.warn("GIF search failed", err);
@@ -211,38 +206,31 @@ export default function CourtChatScreen({ route, navigation }) {
           borderBottomRightRadius: 24,
         }}
       >
-        <View
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          activeOpacity={0.8}
           style={{
             flexDirection: "row",
             alignItems: "center",
-            justifyContent: "space-between",
+            backgroundColor: "rgba(255,255,255,0.9)",
+            paddingVertical: 6,
+            paddingHorizontal: 10,
+            borderRadius: 12,
+            width: 70,
           }}
         >
-          <TouchableOpacity
-            onPress={() => navigation.goBack()}
-            activeOpacity={0.8}
+          <Ionicons name="chevron-back" size={20} color="#0b2239" />
+          <Text
             style={{
-              flexDirection: "row",
-              alignItems: "center",
-              backgroundColor: "rgba(255,255,255,0.9)",
-              paddingVertical: 6,
-              paddingHorizontal: 10,
-              borderRadius: 12,
+              marginLeft: 4,
+              fontSize: 14,
+              fontWeight: "600",
+              color: "#0b2239",
             }}
           >
-            <Ionicons name="chevron-back" size={20} color="#0b2239" />
-            <Text
-              style={{
-                marginLeft: 4,
-                fontSize: 14,
-                fontWeight: "600",
-                color: "#0b2239",
-              }}
-            >
-              Back
-            </Text>
-          </TouchableOpacity>
-        </View>
+            Back
+          </Text>
+        </TouchableOpacity>
 
         <View style={{ marginTop: 14 }}>
           <Text style={{ color: "#e0f2fe", fontSize: 13 }}>Court chat</Text>
@@ -270,20 +258,14 @@ export default function CourtChatScreen({ route, navigation }) {
           <ScrollView
             ref={chatScrollRef}
             style={{ flex: 1, paddingHorizontal: 12, paddingTop: 12 }}
-            contentContainerStyle={{
-              paddingBottom: 16,
-            }}
+            contentContainerStyle={{ paddingBottom: 16 }}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
             onContentSizeChange={scrollToBottom}
+            onScrollBeginDrag={smoothDismissKeyboard} // 👈 now uses animated slide-down
           >
             {messages.length === 0 ? (
-              <View
-                style={{
-                  alignItems: "center",
-                  marginTop: 40,
-                }}
-              >
+              <View style={{ alignItems: "center", marginTop: 40 }}>
                 <Text style={{ color: "#64748b" }}>
                   No messages yet. Start the conversation!
                 </Text>
@@ -330,6 +312,7 @@ export default function CourtChatScreen({ route, navigation }) {
               paddingVertical: 10,
               borderTopWidth: 1,
               borderTopColor: "#d6e2ee",
+              marginBottom: Platform.OS === "ios" ? 10 : 6,
             }}
           >
             <TouchableOpacity
