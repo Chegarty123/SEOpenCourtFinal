@@ -13,6 +13,8 @@ import MapScreen from "./screens/MapScreen";
 import CourtDetailScreen from "./screens/CourtDetailScreen";
 import UserProfileScreen from "./screens/UserProfileScreen";
 import CourtChatScreen from "./screens/CourtChatScreen";
+import DmChatScreen from "./screens/DmChatScreen";
+
 
 const Stack = createNativeStackNavigator();
 
@@ -58,6 +60,7 @@ export default function App() {
         <Stack.Screen name="CourtDetail" component={CourtDetailScreen} />
         <Stack.Screen name="UserProfile" component={UserProfileScreen} />
         <Stack.Screen name="CourtChat" component={CourtChatScreen} />
+        <Stack.Screen name="DirectMessage" component={DmChatScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );

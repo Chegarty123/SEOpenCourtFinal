@@ -8,6 +8,8 @@ import HomeScreen from "./HomeScreen";
 import MapScreen from "./MapScreen";
 import ProfileScreen from "./ProfileScreen";
 import SettingsScreen from "./SettingsScreen"; // Friends
+import MessagesScreen from "./MessagesScreen";
+
 
 const Tab = createBottomTabNavigator();
 
@@ -28,7 +30,7 @@ export default function MainTabs() {
           backgroundColor: "#020617",
           borderTopColor: "rgba(148,163,184,0.6)",
           borderTopWidth: 0.5,
-          height: Platform.OS === "ios" ? 70 : 60,
+          height: Platform.OS === "ios" ? 80 : 60,
           paddingBottom: Platform.OS === "ios" ? 10 : 6,
           paddingTop: 6,
         },
@@ -58,6 +60,16 @@ export default function MainTabs() {
         name="Friends"
         component={SettingsScreen}
         options={{ tabBarLabel: "Friends" }}
+      />
+      <Tab.Screen
+        name="Messages"
+        component={MessagesScreen}
+        options={{
+          tabBarLabel: "Messages",
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="chatbubbles-outline" size={size} color={color} />
+          ),
+        }}
       />
     </Tab.Navigator>
   );

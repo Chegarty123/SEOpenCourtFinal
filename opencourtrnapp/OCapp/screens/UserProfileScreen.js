@@ -26,6 +26,40 @@ import { Ionicons } from "@expo/vector-icons";
 import { db, auth } from "../firebaseConfig";
 import { styles as globalStyles } from "../styles/globalStyles";
 
+// 🏀 team logos for favorite team display
+const teamLogos = {
+  Hawks: require("../images/hawks.png"),
+  Raptors: require("../images/raptors.png"),
+  Nets: require("../images/nets.png"),
+  Heat: require("../images/heat.png"),
+  Sixers: require("../images/sixers.png"),
+  Knicks: require("../images/knicks.png"),
+  Magic: require("../images/magic.webp"),
+  Celtics: require("../images/celtics.png"),
+  Bulls: require("../images/bulls.png"),
+  Cavaliers: require("../images/cavs.png"),
+  Pistons: require("../images/pistons.png"),
+  Bucks: require("../images/bucks.png"),
+  Wizards: require("../images/wizards.webp"),
+  Hornets: require("../images/hornets.png"),
+  Pacers: require("../images/pacers.png"),
+  Nuggets: require("../images/nuggets.png"),
+  Suns: require("../images/suns.png"),
+  Clippers: require("../images/clippers.png"),
+  Lakers: require("../images/lakers.png"),
+  Trailblazers: require("../images/trailblazers.png"),
+  Thunder: require("../images/thunder.png"),
+  Timberwolves: require("../images/timberwolves.png"),
+  Rockets: require("../images/rockets.png"),
+  Pelicans: require("../images/pelicans.png"),
+  Grizzlies: require("../images/grizzlies.png"),
+  Mavericks: require("../images/mavericks.png"),
+  Spurs: require("../images/spurs.png"),
+  Warriors: require("../images/warriors.png"),
+  Jazz: require("../images/jazz.png"),
+  Kings: require("../images/kings.png"),
+};
+
 export default function UserProfileScreen({ route, navigation }) {
   const { userId } = route.params || {};
   const currentUser = auth.currentUser;
@@ -238,6 +272,10 @@ export default function UserProfileScreen({ route, navigation }) {
       </View>
     );
 
+  const favoriteTeam = profile.favoriteTeam || "None";
+  const hasTeamLogo =
+    favoriteTeam && favoriteTeam !== "None" && teamLogos[favoriteTeam];
+
   return (
     <View style={ui.screen}>
       <StatusBar barStyle="light-content" />
@@ -287,10 +325,28 @@ export default function UserProfileScreen({ route, navigation }) {
         <View style={ui.infoCard}>
           <Text style={ui.sectionLabel}>Natural Position</Text>
           <Text style={ui.sectionValue}>{profile.position}</Text>
+
           <Text style={[ui.sectionLabel, { marginTop: 14 }]}>Grade Level</Text>
           <Text style={ui.sectionValue}>{profile.gradeLevel}</Text>
-          <Text style={[ui.sectionLabel, { marginTop: 14 }]}>Favorite NBA Team</Text>
-          <Text style={ui.sectionValue}>{profile.favoriteTeam}</Text>
+
+          <Text style={[ui.sectionLabel, { marginTop: 14 }]}>
+            Favorite NBA Team
+          </Text>
+          {/* team row with logo + name */}
+          <View style={ui.teamRow}>
+            {hasTeamLogo ? (
+              <View style={ui.teamDisplay}>
+                <Image
+                  source={teamLogos[favoriteTeam]}
+                  style={ui.teamLogo}
+                  resizeMode="contain"
+                />
+                <Text style={ui.teamName}>{favoriteTeam}</Text>
+              </View>
+            ) : (
+              <Text style={ui.sectionValue}>None</Text>
+            )}
+          </View>
         </View>
       </ScrollView>
 
@@ -315,7 +371,14 @@ export default function UserProfileScreen({ route, navigation }) {
                 data={friendsList}
                 keyExtractor={(item) => item.id}
                 renderItem={({ item }) => (
-                  <View style={ui.friendItem}>
+                  <TouchableOpacity
+                    style={ui.friendItem}
+                    onPress={() => {
+                      setFriendsModalVisible(false);
+                      // push a new UserProfile screen for that friend
+                      navigation.push("UserProfile", { userId: item.id });
+                    }}
+                  >
                     <Image
                       source={
                         item.profilePic
@@ -325,12 +388,13 @@ export default function UserProfileScreen({ route, navigation }) {
                       style={ui.friendImage}
                     />
                     <Text style={ui.friendName}>{item.username}</Text>
-                  </View>
+                  </TouchableOpacity>
                 )}
               />
             ) : (
               <Text style={ui.emptyText}>No friends yet.</Text>
             )}
+
           </View>
         </View>
       </Modal>
@@ -475,6 +539,35 @@ const ui = StyleSheet.create({
   },
   sectionLabel: { fontSize: 14, fontWeight: "600", color: "#cbd5f5" },
   sectionValue: { marginTop: 2, fontSize: 13, color: "#e5f3ff" },
+
+  // 🏀 favorite team row
+  teamRow: {
+    marginTop: 4,
+  },
+  teamDisplay: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 4,
+    alignSelf: "flex-start",
+    backgroundColor: "rgba(15,23,42,0.9)",
+    borderRadius: 999,
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderWidth: 1,
+    borderColor: "rgba(148,163,184,0.7)",
+  },
+  teamLogo: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    marginRight: 6,
+  },
+  teamName: {
+    fontSize: 13,
+    color: "#e5f3ff",
+    fontWeight: "600",
+  },
+
   modalBackdrop: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.85)",
@@ -525,5 +618,3 @@ const ui = StyleSheet.create({
   },
   modalClose: { position: "absolute", top: 50, right: 30 },
 });
-
-
