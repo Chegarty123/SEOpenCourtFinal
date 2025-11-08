@@ -1,5 +1,5 @@
 // screens/HomeScreen.js
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import {
   View,
   Text,
@@ -7,6 +7,9 @@ import {
   Image,
   ScrollView,
   ActivityIndicator,
+  RefreshControl,
+  Animated,
+  Easing,
 } from "react-native";
 import * as Location from "expo-location";
 import { Ionicons } from "@expo/vector-icons";
@@ -21,6 +24,7 @@ import {
 } from "firebase/firestore";
 import markers from "../assets/markers";
 import { styles } from "../styles/globalStyles";
+import { useSafeAreaInsets } from "react-native-safe-area-context"; // 👈 NEW
 
 // 🔵 OC logo (adjust path if needed)
 const OCLogo = require("../images/OCLogo.png");
@@ -69,6 +73,7 @@ const OPEN_WEATHER_API_KEY = "7c7c1ba29a0c5fb4593205a3b1e1e6a4";
 
 export default function HomeScreen({ navigation }) {
   const user = auth.currentUser;
+  const insets = useSafeAreaInsets(); // 👈 NEW
 
   const [userDoc, setUserDoc] = useState(null);
   const [friends, setFriends] = useState([]);
@@ -88,6 +93,11 @@ export default function HomeScreen({ navigation }) {
   const [weather, setWeather] = useState(null);
   const [weatherLoading, setWeatherLoading] = useState(false);
   const [weatherError, setWeatherError] = useState(null);
+
+  // pull-to-refresh state
+  const [refreshing, setRefreshing] = useState(false);
+  const [pullProgress, setPullProgress] = useState(0);
+  const spinAnim = useRef(new Animated.Value(0)).current;
 
   /* ========== Load current user (name, friends, stats) ========== */
   useEffect(() => {
@@ -375,6 +385,7 @@ export default function HomeScreen({ navigation }) {
           map.set(p.id, {
             friendId: p.id,
             friendName: p.name,
+            avatar: p.avatar || null,
             court: c,
             ts: p.ts || null,
           });
@@ -418,6 +429,55 @@ export default function HomeScreen({ navigation }) {
   } else {
     weeklySummary = `${weeklyCheckIns} runs this week. Nice work.`;
   }
+
+  /* ========== Pull-to-refresh behaviour ========== */
+
+  const handleRefresh = async () => {
+    if (!user) return;
+    setRefreshing(true);
+
+    try {
+      const { status } =
+        await Location.requestForegroundPermissionsAsync();
+      if (status === "granted") {
+        const loc = await Location.getCurrentPositionAsync({});
+        setLocation({
+          latitude: loc.coords.latitude,
+          longitude: loc.coords.longitude,
+        });
+        setLocationError(null);
+      } else {
+        setLocationError("Location permission not granted");
+      }
+    } catch (err) {
+      console.log("Refresh error:", err);
+      setLocationError("Could not refresh location");
+    } finally {
+      setRefreshing(false);
+      setPullProgress(0);
+    }
+  };
+
+  useEffect(() => {
+    if (refreshing) {
+      spinAnim.setValue(0);
+      Animated.loop(
+        Animated.timing(spinAnim, {
+          toValue: 1,
+          duration: 700,
+          easing: Easing.linear,
+          useNativeDriver: true,
+        })
+      ).start();
+    } else {
+      spinAnim.stopAnimation();
+    }
+  }, [refreshing, spinAnim]);
+
+  const spin = spinAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ["0deg", "360deg"],
+  });
 
   /* ========== Render helpers (compact versions) ========== */
 
@@ -529,7 +589,7 @@ export default function HomeScreen({ navigation }) {
   };
 
   const renderFriendsActivityRow = (item) => {
-    const { friendId, friendName, court, ts } = item;
+    const { friendId, friendName, avatar, court, ts } = item;
     const marker = court.marker;
     if (!marker) return null;
 
@@ -549,13 +609,31 @@ export default function HomeScreen({ navigation }) {
             width: 28,
             height: 28,
             borderRadius: 14,
-            backgroundColor: "rgba(56,189,248,0.2)",
+            backgroundColor: "#020617",
             alignItems: "center",
             justifyContent: "center",
             marginRight: 8,
+            overflow: "hidden",
+            borderWidth: 1,
+            borderColor: "rgba(148,163,184,0.7)",
           }}
         >
-          <Ionicons name="person-outline" size={15} color="#e0f2fe" />
+          {avatar ? (
+            <Image
+              source={{ uri: avatar }}
+              style={{ width: 28, height: 28 }}
+            />
+          ) : (
+            <Text
+              style={{
+                fontSize: 13,
+                color: "#e5f3ff",
+                fontWeight: "700",
+              }}
+            >
+              {friendName?.[0]?.toUpperCase() || "F"}
+            </Text>
+          )}
         </View>
 
         <View style={{ flex: 1 }}>
@@ -659,6 +737,9 @@ export default function HomeScreen({ navigation }) {
 
   const greeting = getGreeting();
 
+  const showPullBall =
+    (!refreshing && pullProgress > 0.1) || refreshing;
+
   return (
     <View style={{ flex: 1, backgroundColor: "#020617" }}>
       {/* subtle background "basketball / court" shapes */}
@@ -701,7 +782,25 @@ export default function HomeScreen({ navigation }) {
 
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 24 }}
+        contentContainerStyle={{ paddingTop: 12, paddingBottom: 24 }}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor="#f97316"
+            colors={["#f97316"]}
+          />
+        }
+        onScroll={(e) => {
+          const y = e.nativeEvent.contentOffset.y;
+          if (y < 0 && !refreshing) {
+            const progress = Math.min(Math.abs(y) / 100, 1);
+            setPullProgress(progress);
+          } else if (!refreshing && pullProgress !== 0) {
+            setPullProgress(0);
+          }
+        }}
+        scrollEventThrottle={16}
       >
         {/* main content wrapper (re-using your homeWrap for spacing) */}
         <View
@@ -1257,6 +1356,47 @@ export default function HomeScreen({ navigation }) {
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      {/* Overlay basketball indicator AFTER ScrollView so it's always on top */}
+      {showPullBall && (
+        <Animated.View
+          pointerEvents="none"
+          style={{
+            position: "absolute",
+            top: insets.top + 6, // 👈 now below the notch/status bar
+            alignSelf: "center",
+            zIndex: 50,
+            width: 36,
+            height: 36,
+            borderRadius: 18,
+            borderWidth: 2,
+            borderColor: "#f97316",
+            justifyContent: "center",
+            alignItems: "center",
+            backgroundColor: "rgba(15,23,42,0.95)",
+            transform: refreshing ? [{ rotate: spin }] : [],
+            opacity: refreshing ? 1 : pullProgress,
+          }}
+        >
+          <View
+            style={{
+              width: 24,
+              height: 24,
+              borderRadius: 12,
+              overflow: "hidden",
+              backgroundColor: "transparent",
+              justifyContent: "flex-end",
+            }}
+          >
+            <View
+              style={{
+                height: 24 * (refreshing ? 1 : pullProgress),
+                backgroundColor: "#f97316",
+              }}
+            />
+          </View>
+        </Animated.View>
+      )}
     </View>
   );
 }
