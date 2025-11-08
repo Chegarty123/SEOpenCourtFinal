@@ -9,10 +9,10 @@ import {
   TextInput,
   ActivityIndicator,
   Alert,
-  SafeAreaView,
   StatusBar,
   Platform,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { db, auth } from "../firebaseConfig";
 import {
   collection,

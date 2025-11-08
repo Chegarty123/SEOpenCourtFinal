@@ -7,11 +7,11 @@ import {
   Image,
   ScrollView,
   Alert,
-  SafeAreaView,
   StatusBar,
   Platform,
   StyleSheet,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import * as ImagePicker from "expo-image-picker";
 import { auth, db, storage } from "../firebaseConfig";
 import { doc, getDoc, setDoc } from "firebase/firestore";
@@ -156,11 +156,12 @@ export default function ProfileScreen({ navigation }) {
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ["images"], // ← new way
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.5,
       });
+      
 
       if (result.canceled) return;
 
