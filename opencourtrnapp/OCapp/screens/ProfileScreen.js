@@ -13,10 +13,11 @@ import {
   StyleSheet,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
-import { auth, db } from "../firebaseConfig";
+import { auth, db, storage } from "../firebaseConfig";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { signOut } from "firebase/auth";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
 export default function ProfileScreen({ navigation }) {
   const user = auth.currentUser;
@@ -140,7 +141,7 @@ export default function ProfileScreen({ navigation }) {
     return () => clearTimeout(timeout);
   }, [username, profilePic, position, gradeLevel, favoriteTeam, memberSince, user]);
 
-  // 🔧 Faster image picker: no base64, just URI, and no extra badge
+  // Pick image, upload to Firebase Storage, save URL in profilePic
   const pickImage = async () => {
     if (!user) return;
 
@@ -158,20 +159,31 @@ export default function ProfileScreen({ navigation }) {
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
         aspect: [1, 1],
-        quality: 0.7,
-        base64: false, // ✅ no base64 = much faster
+        quality: 0.5,
       });
 
       if (result.canceled) return;
 
       const asset = result.assets && result.assets[0];
-      if (!asset) return;
+      if (!asset?.uri) return;
 
-      // just store the URI (like your previous setup)
-      setProfilePic(asset.uri);
+      setSaveStatus("Uploading photo…");
+
+      // Convert local file to blob
+      const response = await fetch(asset.uri);
+      const blob = await response.blob();
+
+      // Upload to Storage: profilePictures/<uid>.jpg
+      const imageRef = ref(storage, `profilePictures/${user.uid}.jpg`);
+      await uploadBytes(imageRef, blob);
+      const downloadURL = await getDownloadURL(imageRef);
+
+      setProfilePic(downloadURL); // auto-saved by useEffect
+      setSaveStatus("Saving…");
     } catch (err) {
       console.log("Error picking image:", err);
       Alert.alert("Upload failed", "Could not update your picture.");
+      setSaveStatus("Could not save");
     }
   };
 
