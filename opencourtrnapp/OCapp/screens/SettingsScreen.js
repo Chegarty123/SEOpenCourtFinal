@@ -123,6 +123,7 @@ export default function FriendScreen({ navigation }) {
     }
   };
 
+  // Accept incoming request
   const acceptRequest = async (uid) => {
     try {
       const requesterRef = doc(db, "users", uid);
@@ -143,6 +144,7 @@ export default function FriendScreen({ navigation }) {
     }
   };
 
+  // Decline incoming request
   const declineRequest = async (uid) => {
     try {
       const requesterRef = doc(db, "users", uid);
@@ -150,13 +152,35 @@ export default function FriendScreen({ navigation }) {
 
       await Promise.all([
         updateDoc(currentRef, { incomingRequests: arrayRemove(uid) }),
-        updateDoc(requesterRef, { outgoingRequests: arrayRemove(currentUser.uid) }),
+        updateDoc(requesterRef, {
+          outgoingRequests: arrayRemove(currentUser.uid),
+        }),
       ]);
     } catch (err) {
       console.error("Error declining request:", err);
     }
   };
 
+  // Cancel outgoing (pending) request
+  const cancelOutgoingRequest = async (uid) => {
+    if (!currentUser) return;
+    try {
+      const currentRef = doc(db, "users", currentUser.uid);
+      const otherRef = doc(db, "users", uid);
+
+      await Promise.all([
+        updateDoc(currentRef, { outgoingRequests: arrayRemove(uid) }),
+        updateDoc(otherRef, {
+          incomingRequests: arrayRemove(currentUser.uid),
+        }),
+      ]);
+    } catch (err) {
+      console.error("Error cancelling request:", err);
+      Alert.alert("Error", "Failed to cancel friend request. Please try again.");
+    }
+  };
+
+  // Remove existing friend
   const removeFriend = async (uid) => {
     try {
       const currentRef = doc(db, "users", currentUser.uid);
@@ -238,13 +262,20 @@ export default function FriendScreen({ navigation }) {
       >
         <Image
           source={user.avatar}
-          style={{ width: 36, height: 36, borderRadius: 18, marginRight: 12 }}
+          style={{
+            width: 36,
+            height: 36,
+            borderRadius: 18,
+            marginRight: 10,
+            borderWidth: 1,
+            borderColor: "rgba(148,163,184,0.7)",
+          }}
         />
         <Text
           style={{
-            fontSize: 14,
-            fontWeight: "600",
+            fontSize: 15,
             color: "#e5e7eb",
+            fontWeight: "500",
           }}
         >
           {user.username}
@@ -265,6 +296,26 @@ export default function FriendScreen({ navigation }) {
             <Ionicons name="person-add-outline" size={22} color="#38bdf8" />
           </TouchableOpacity>
         )
+      )}
+
+      {actionType === "pending" && (
+        <View style={{ flexDirection: "row", alignItems: "center" }}>
+          <Ionicons name="hourglass-outline" size={20} color="#9ca3af" />
+          <TouchableOpacity
+            onPress={() => cancelOutgoingRequest(user.uid)}
+            style={{ marginLeft: 8 }}
+          >
+            <Text
+              style={{
+                fontSize: 12,
+                color: "#f97316",
+                fontWeight: "600",
+              }}
+            >
+              Cancel
+            </Text>
+          </TouchableOpacity>
+        </View>
       )}
 
       {actionType === "accept" && (
@@ -388,6 +439,18 @@ export default function FriendScreen({ navigation }) {
             allUsers
               .filter((u) => incomingRequests.includes(u.uid))
               .map((u) => renderUserRow(u, "accept"))
+          )}
+        </View>
+
+        {/* Pending (outgoing) requests */}
+        <View style={cardStyle}>
+          <Text style={titleStyle}>Pending Friend Requests</Text>
+          {outgoingRequests.length === 0 ? (
+            <Text style={mutedText}>No pending requests.</Text>
+          ) : (
+            allUsers
+              .filter((u) => outgoingRequests.includes(u.uid))
+              .map((u) => renderUserRow(u, "pending"))
           )}
         </View>
 
