@@ -99,7 +99,8 @@ export default function MessagesScreen({ navigation }) {
           if (!participants.includes(currentUser.uid)) return;
 
           const otherId =
-            participants.find((p) => p !== currentUser.uid) || currentUser.uid;
+            participants.find((p) => p !== currentUser.uid) ||
+            currentUser.uid;
           const pInfo = data.participantInfo || {};
           const otherInfo = pInfo[otherId] || {};
 
@@ -115,7 +116,9 @@ export default function MessagesScreen({ navigation }) {
             otherProfilePic: otherInfo.profilePic || null,
             lastMessage: data.lastMessage || "",
             lastMessageType: data.lastMessageType || "text",
+            lastMessageSenderId: data.lastMessageSenderId || null,
             updatedAt: data.updatedAt || data.createdAt || null,
+            readBy: data.readBy || {},
           });
         });
 
@@ -168,10 +171,65 @@ export default function MessagesScreen({ navigation }) {
     });
   };
 
+  // base preview (with sent/read if last msg from me)
   const previewText = (conv) => {
-    if (!conv.lastMessage) return "Start the conversation";
-    if (conv.lastMessageType === "gif") return "GIF";
-    return conv.lastMessage;
+    const base =
+      !conv.lastMessage
+        ? "Start the conversation"
+        : conv.lastMessageType === "gif"
+        ? "GIF"
+        : conv.lastMessage;
+
+    if (!currentUser) return base;
+
+    const sentByMe = conv.lastMessageSenderId === currentUser.uid;
+    if (!sentByMe) return base;
+
+    const readBy = conv.readBy || {};
+    const otherRead = readBy[conv.otherId];
+    let prefix = "Sent · ";
+
+    if (
+      otherRead &&
+      typeof otherRead.toMillis === "function" &&
+      conv.updatedAt &&
+      typeof conv.updatedAt.toMillis === "function"
+    ) {
+      const isRead = otherRead.toMillis() >= conv.updatedAt.toMillis();
+      prefix = isRead ? "Read · " : "Sent · ";
+    }
+
+    return `${prefix}${base}`;
+  };
+
+  // unread logic per conversation
+  const hasUnread = (conv) => {
+    if (!currentUser) return false;
+
+    // if last message is from YOU, consider it read from your perspective
+    if (
+      !conv.lastMessageSenderId ||
+      conv.lastMessageSenderId === currentUser.uid
+    ) {
+      return false;
+    }
+
+    const readBy = conv.readBy || {};
+    const myRead = readBy[currentUser.uid];
+
+    // never recorded a read time for this convo yet
+    if (!myRead) return true;
+
+    if (
+      !conv.updatedAt ||
+      typeof conv.updatedAt.toMillis !== "function" ||
+      typeof myRead.toMillis !== "function"
+    ) {
+      return false;
+    }
+
+    // if convo updated after your last read, and last msg is from other → unread
+    return conv.updatedAt.toMillis() > myRead.toMillis();
   };
 
   const openConversation = (conv) => {
@@ -183,7 +241,7 @@ export default function MessagesScreen({ navigation }) {
     });
   };
 
-  // 🔒 no duplicate conversations per friend
+  // no duplicate conversations per friend
   const startConversation = async (friend) => {
     if (!currentUser || !me || !friend) return;
 
@@ -279,7 +337,7 @@ export default function MessagesScreen({ navigation }) {
     }
   };
 
-  // 🗑 delete a conversation
+  // delete a conversation
   const handleDeleteConversation = (conv) => {
     Alert.alert(
       "Delete conversation?",
@@ -301,43 +359,53 @@ export default function MessagesScreen({ navigation }) {
     );
   };
 
-  const renderConversationRow = ({ item }) => (
-    <TouchableOpacity
-      style={ui.convRow}
-      onPress={() => openConversation(item)}
-      onLongPress={() => handleDeleteConversation(item)}
-      delayLongPress={300}
-      activeOpacity={0.9}
-    >
-      <View style={ui.avatarWrap}>
-        {item.otherProfilePic ? (
-          <Image source={{ uri: item.otherProfilePic }} style={ui.avatar} />
-        ) : (
-          <View style={ui.avatarPlaceholder}>
-            <Text style={ui.avatarInitial}>
-              {item.otherName?.[0]?.toUpperCase() || "U"}
+  const renderConversationRow = ({ item }) => {
+    const unread = hasUnread(item);
+
+    return (
+      <TouchableOpacity
+        style={ui.convRow}
+        onPress={() => openConversation(item)}
+        onLongPress={() => handleDeleteConversation(item)}
+        delayLongPress={300}
+        activeOpacity={0.9}
+      >
+        <View style={ui.avatarWrap}>
+          {item.otherProfilePic ? (
+            <Image source={{ uri: item.otherProfilePic }} style={ui.avatar} />
+          ) : (
+            <View style={ui.avatarPlaceholder}>
+              <Text style={ui.avatarInitial}>
+                {item.otherName?.[0]?.toUpperCase() || "U"}
+              </Text>
+            </View>
+          )}
+        </View>
+
+        <View style={ui.convTextWrap}>
+          <View style={{ flexDirection: "row", alignItems: "center" }}>
+            <Text
+              style={[ui.convName, unread && ui.convNameUnread]}
+              numberOfLines={1}
+            >
+              {item.otherName}
             </Text>
           </View>
-        )}
-      </View>
-
-      <View style={ui.convTextWrap}>
-        <View style={{ flexDirection: "row", alignItems: "center" }}>
-          <Text style={ui.convName} numberOfLines={1}>
-            {item.otherName}
+          <Text
+            style={[ui.convPreview, unread && ui.convPreviewUnread]}
+            numberOfLines={1}
+          >
+            {previewText(item)}
           </Text>
         </View>
-        <Text style={ui.convPreview} numberOfLines={1}>
-          {previewText(item)}
-        </Text>
-      </View>
 
-      <View style={ui.timeWrap}>
-        <Text style={ui.convTime}>{formatTime(item.updatedAt)}</Text>
-        <Ionicons name="chevron-forward" size={16} color="#6b7280" />
-      </View>
-    </TouchableOpacity>
-  );
+        <View style={ui.timeWrap}>
+          <Text style={ui.convTime}>{formatTime(item.updatedAt)}</Text>
+          <Ionicons name="chevron-forward" size={16} color="#6b7280" />
+        </View>
+      </TouchableOpacity>
+    );
+  };
 
   const renderFriendRow = (friend) => (
     <TouchableOpacity
@@ -527,10 +595,18 @@ const ui = StyleSheet.create({
     fontWeight: "600",
     color: "#e5f3ff",
   },
+  convNameUnread: {
+    fontWeight: "700",
+    color: "#e5f3ff",
+  },
   convPreview: {
     fontSize: 13,
     color: "#9ca3af",
     marginTop: 2,
+  },
+  convPreviewUnread: {
+    fontWeight: "600",
+    color: "#e5f3ff",
   },
   timeWrap: {
     marginLeft: 8,

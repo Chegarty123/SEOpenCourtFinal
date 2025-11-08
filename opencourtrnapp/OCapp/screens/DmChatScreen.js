@@ -69,6 +69,9 @@ export default function DmChatScreen({ route, navigation }) {
   const [reactionDetail, setReactionDetail] = useState(null);
   const [reactionDetailLoading, setReactionDetailLoading] = useState(false);
 
+  // 👇 read receipts state
+  const [readBy, setReadBy] = useState({});
+
   const scrollToBottom = () => {
     setTimeout(() => {
       chatScrollRef.current?.scrollToEnd({ animated: true });
@@ -486,6 +489,41 @@ export default function DmChatScreen({ route, navigation }) {
     setReactionDetailLoading(false);
   };
 
+  // 👇 subscribe to dmConversations doc for readBy
+  useEffect(() => {
+    if (!conversationId) return;
+
+    const convRef = doc(db, "dmConversations", conversationId);
+    const unsub = onSnapshot(convRef, (snap) => {
+      if (!snap.exists()) return;
+      const data = snap.data();
+      setReadBy(data.readBy || {});
+    });
+
+    return () => unsub();
+  }, [conversationId]);
+
+  // 👇 mark conversation read for me
+  const markConversationRead = async () => {
+    if (!conversationId || !user) return;
+    try {
+      const convRef = doc(db, "dmConversations", conversationId);
+      const field = `readBy.${user.uid}`;
+      await updateDoc(convRef, { [field]: serverTimestamp() });
+    } catch (err) {
+      console.log("Error marking conversation read:", err);
+    }
+  };
+
+  useEffect(() => {
+    markConversationRead();
+  }, [conversationId]);
+
+  useEffect(() => {
+    if (!messages.length) return;
+    markConversationRead();
+  }, [messages.length]);
+
   return (
     <View style={{ flex: 1, backgroundColor: "#020617" }}>
       <StatusBar barStyle="light-content" />
@@ -518,7 +556,14 @@ export default function DmChatScreen({ route, navigation }) {
           <Ionicons name="chevron-back" size={22} color="#e5e7eb" />
         </TouchableOpacity>
 
-        <View style={{ marginLeft: 12, flexDirection: "row", alignItems: "center", flex: 1 }}>
+        <View
+          style={{
+            marginLeft: 12,
+            flexDirection: "row",
+            alignItems: "center",
+            flex: 1,
+          }}
+        >
           <View
             style={{
               width: 32,
@@ -592,7 +637,11 @@ export default function DmChatScreen({ route, navigation }) {
             alignItems: "center",
           }}
         >
-          <Ionicons name="chatbubble-ellipses-outline" size={14} color="#e5f3ff" />
+          <Ionicons
+            name="chatbubble-ellipses-outline"
+            size={14}
+            color="#e5f3ff"
+          />
           <Text
             style={{
               color: "#e5f3ff",
@@ -682,6 +731,23 @@ export default function DmChatScreen({ route, navigation }) {
                 const borderColor = isMine
                   ? "rgba(96,165,250,0.7)"
                   : "rgba(148,163,184,0.6)";
+
+                // sent/read receipt per message
+                let receiptLabel = "";
+                let isReadByOther = false;
+                if (isMine && m.ts && typeof m.ts.toMillis === "function") {
+                  const otherReadTs = readBy?.[otherUserId];
+                  if (
+                    otherReadTs &&
+                    typeof otherReadTs.toMillis === "function"
+                  ) {
+                    isReadByOther =
+                      otherReadTs.toMillis() >= m.ts.toMillis();
+                    receiptLabel = isReadByOther ? "Read" : "Sent";
+                  } else {
+                    receiptLabel = "Sent";
+                  }
+                }
 
                 let dateLabel = "";
                 if (m.ts && typeof m.ts.toDate === "function") {
@@ -853,6 +919,20 @@ export default function DmChatScreen({ route, navigation }) {
                               </TouchableOpacity>
                             </View>
                           )}
+
+                          {receiptLabel ? (
+                            <Text
+                              style={{
+                                fontSize: 11,
+                                color: isReadByOther
+                                  ? "#a5b4fc"
+                                  : "#9ca3af",
+                                marginRight: 6,
+                              }}
+                            >
+                              {receiptLabel}
+                            </Text>
+                          ) : null}
 
                           <Text
                             style={{
