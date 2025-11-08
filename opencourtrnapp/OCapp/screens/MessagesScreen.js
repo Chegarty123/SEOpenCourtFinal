@@ -214,7 +214,7 @@ export default function MessagesScreen({ navigation }) {
       const convRef = collection(db, "dmConversations");
       const q = query(
         convRef,
-        where("participants", "array_contains", currentUser.uid)
+        where("participants", "array-contains", currentUser.uid)
       );
       const snap = await getDocs(q);
 
