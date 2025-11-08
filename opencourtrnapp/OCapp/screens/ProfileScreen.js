@@ -32,6 +32,9 @@ export default function ProfileScreen({ navigation }) {
   const [favoriteTeam, setFavoriteTeam] = useState("None");
   const [saveStatus, setSaveStatus] = useState("All changes saved");
 
+  // 🔑 preload media permission so tapping avatar is faster
+  const [hasMediaPermission, setHasMediaPermission] = useState(null);
+
   const POSITION_OPTIONS = [
     "Point Guard",
     "Shooting Guard",
@@ -74,6 +77,40 @@ export default function ProfileScreen({ navigation }) {
     Jazz: require("../images/jazz.png"),
     Kings: require("../images/kings.png"),
   };
+
+  // 🔁 On mount: check/request media library permission once
+  useEffect(() => {
+    let isMounted = true;
+
+    const preparePermissions = async () => {
+      try {
+        const existing = await ImagePicker.getMediaLibraryPermissionsAsync();
+        if (!isMounted) return;
+
+        if (existing.status === "granted") {
+          setHasMediaPermission(true);
+          return;
+        }
+
+        if (existing.canAskAgain) {
+          const req = await ImagePicker.requestMediaLibraryPermissionsAsync();
+          if (!isMounted) return;
+          setHasMediaPermission(req.status === "granted");
+        } else {
+          setHasMediaPermission(false);
+        }
+      } catch (err) {
+        console.log("Error checking media permission:", err);
+        if (isMounted) setHasMediaPermission(false);
+      }
+    };
+
+    preparePermissions();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   // Load saved profile
   useEffect(() => {
@@ -145,28 +182,59 @@ export default function ProfileScreen({ navigation }) {
   const pickImage = async () => {
     if (!user) return;
 
-    try {
-      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (perm.status !== "granted") {
+    // If permission definitely denied, bail early
+    if (hasMediaPermission === false) {
+      Alert.alert(
+        "Permission needed",
+        "OpenCourt needs access to your photos to set a profile picture."
+      );
+      return;
+    }
+
+    // If we don't know yet (first tap very soon after mount), try requesting once
+    if (hasMediaPermission === null) {
+      try {
+        const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (perm.status !== "granted") {
+          Alert.alert(
+            "Permission needed",
+            "OpenCourt needs access to your photos to set a profile picture."
+          );
+          setHasMediaPermission(false);
+          return;
+        }
+        setHasMediaPermission(true);
+      } catch (err) {
+        console.log("Error requesting media permission:", err);
         Alert.alert(
-          "Permission needed",
-          "OpenCourt needs access to your photos to set a profile picture."
+          "Permission error",
+          "Could not access your photos. Please try again."
         );
         return;
       }
+    }
+
+    try {
+      // tiny UX touch: show instant feedback
+      setSaveStatus("Opening photos…");
 
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ["images"], // ← new way
+        mediaTypes: ["images"], // new API style
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.5,
       });
-      
 
-      if (result.canceled) return;
+      if (result.canceled) {
+        setSaveStatus("All changes saved");
+        return;
+      }
 
       const asset = result.assets && result.assets[0];
-      if (!asset?.uri) return;
+      if (!asset?.uri) {
+        setSaveStatus("All changes saved");
+        return;
+      }
 
       setSaveStatus("Uploading photo…");
 
