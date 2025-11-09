@@ -105,7 +105,9 @@ export default function UserProfileScreen({ route, navigation }) {
         } else {
           setFriendsList([]);
         }
-      } else setProfile(null);
+      } else {
+        setProfile(null);
+      }
 
       setLoading(false);
     });
@@ -242,7 +244,9 @@ export default function UserProfileScreen({ route, navigation }) {
       const receiverRef = doc(db, "users", userId);
       await Promise.all([
         updateDoc(senderRef, { outgoingRequests: arrayUnion(userId) }),
-        updateDoc(receiverRef, { incomingRequests: arrayUnion(currentUser.uid) }),
+        updateDoc(receiverRef, {
+          incomingRequests: arrayUnion(currentUser.uid),
+        }),
       ]);
     } catch (err) {
       console.error("Error sending friend request:", err);
@@ -257,7 +261,9 @@ export default function UserProfileScreen({ route, navigation }) {
       const receiverRef = doc(db, "users", userId);
       await Promise.all([
         updateDoc(senderRef, { outgoingRequests: arrayRemove(userId) }),
-        updateDoc(receiverRef, { incomingRequests: arrayRemove(currentUser.uid) }),
+        updateDoc(receiverRef, {
+          incomingRequests: arrayRemove(currentUser.uid),
+        }),
       ]);
     } catch (err) {
       console.error("Error canceling friend request:", err);
@@ -290,8 +296,12 @@ export default function UserProfileScreen({ route, navigation }) {
       const currentRef = doc(db, "users", currentUser.uid);
       const otherRef = doc(db, "users", userId);
       await Promise.all([
-        updateDoc(currentRef, { incomingRequests: arrayRemove(userId) }),
-        updateDoc(otherRef, { outgoingRequests: arrayRemove(currentUser.uid) }),
+        updateDoc(currentRef, {
+          incomingRequests: arrayRemove(userId),
+        }),
+        updateDoc(otherRef, {
+          outgoingRequests: arrayRemove(currentUser.uid),
+        }),
       ]);
     } catch (err) {
       console.error("Error declining friend request:", err);
@@ -304,8 +314,12 @@ export default function UserProfileScreen({ route, navigation }) {
       const currentRef = doc(db, "users", currentUser.uid);
       const otherRef = doc(db, "users", userId);
       await Promise.all([
-        updateDoc(currentRef, { friends: arrayRemove(userId) }),
-        updateDoc(otherRef, { friends: arrayRemove(currentUser.uid) }),
+        updateDoc(currentRef, {
+          friends: arrayRemove(userId),
+        }),
+        updateDoc(otherRef, {
+          friends: arrayRemove(currentUser.uid),
+        }),
       ]);
     } catch (err) {
       console.error("Error removing friend:", err);
@@ -313,7 +327,6 @@ export default function UserProfileScreen({ route, navigation }) {
     }
   };
 
-  // Friend status chip
   const renderFriendStatusChip = () => {
     const status = relationshipStatus();
 
@@ -337,21 +350,30 @@ export default function UserProfileScreen({ route, navigation }) {
           </TouchableOpacity>
         </View>
       );
+
     if (status === "outgoing")
       return (
         <View style={ui.statusChipBase}>
           <Ionicons name="hourglass-outline" size={18} color="#9ca3af" />
           <Text style={ui.statusChipText}>Friend request pending</Text>
-          <TouchableOpacity onPress={cancelFriendRequest} style={{ marginLeft: 8 }}>
+          <TouchableOpacity
+            onPress={cancelFriendRequest}
+            style={{ marginLeft: 8 }}
+          >
             <Text style={ui.statusChipAction}>Cancel</Text>
           </TouchableOpacity>
         </View>
       );
+
     if (status === "incoming")
       return (
         <View style={ui.statusIncomingRow}>
           <View style={ui.statusIncomingBanner}>
-            <Ionicons name="person-add-outline" size={18} color="#60a5fa" />
+            <Ionicons
+              name="person-add-outline"
+              size={18}
+              color="#60a5fa"
+            />
             <Text style={ui.statusIncomingText}>
               {profile?.username} sent you a request
             </Text>
@@ -359,7 +381,10 @@ export default function UserProfileScreen({ route, navigation }) {
           <View style={{ flexDirection: "row" }}>
             <TouchableOpacity
               onPress={acceptFriendRequest}
-              style={[ui.actionButton, { backgroundColor: "#16a34a", marginRight: 8 }]}
+              style={[
+                ui.actionButton,
+                { backgroundColor: "#16a34a", marginRight: 8 },
+              ]}
             >
               <Text style={ui.actionButtonText}>Accept</Text>
             </TouchableOpacity>
@@ -374,7 +399,10 @@ export default function UserProfileScreen({ route, navigation }) {
       );
 
     return (
-      <TouchableOpacity style={ui.addFriendButton} onPress={sendFriendRequest}>
+      <TouchableOpacity
+        style={ui.addFriendButton}
+        onPress={sendFriendRequest}
+      >
         <Ionicons name="person-add-outline" size={18} color="#fff" />
         <Text style={ui.addFriendText}>Add friend</Text>
       </TouchableOpacity>
@@ -383,14 +411,24 @@ export default function UserProfileScreen({ route, navigation }) {
 
   if (loading)
     return (
-      <View style={[ui.screen, { justifyContent: "center", alignItems: "center" }]}>
+      <View
+        style={[
+          ui.screen,
+          { justifyContent: "center", alignItems: "center" },
+        ]}
+      >
         <ActivityIndicator />
       </View>
     );
 
   if (!profile)
     return (
-      <View style={[ui.screen, { justifyContent: "center", alignItems: "center" }]}>
+      <View
+        style={[
+          ui.screen,
+          { justifyContent: "center", alignItems: "center" },
+        ]}
+      >
         <Text style={ui.username}>Player not found.</Text>
       </View>
     );
@@ -403,6 +441,7 @@ export default function UserProfileScreen({ route, navigation }) {
     <View style={ui.screen}>
       <StatusBar barStyle="light-content" />
 
+      {/* HEADER */}
       <View style={ui.header}>
         <TouchableOpacity
           onPress={() => navigation.goBack()}
@@ -446,11 +485,25 @@ export default function UserProfileScreen({ route, navigation }) {
                 ? { uri: profile.profilePic }
                 : require("../images/defaultProfile.png")
             }
-            style={{ width: 120, height: 120, borderRadius: 60, borderWidth: 2, borderColor: "#38bdf8" }}
+            style={{
+              width: 120,
+              height: 120,
+              borderRadius: 60,
+              borderWidth: 2,
+              borderColor: "#38bdf8",
+            }}
           />
         </TouchableOpacity>
 
         <Text style={ui.username}>{profile.username || "Hooper"}</Text>
+
+        {/* BIO */}
+        <Text style={ui.bioText}>
+          {profile.bio && profile.bio.trim() !== ""
+            ? profile.bio
+            : "No bio provided."}
+        </Text>
+
         <Text style={ui.metaText}>
           Member since{" "}
           {profile.memberSince
@@ -460,27 +513,26 @@ export default function UserProfileScreen({ route, navigation }) {
             : ""}
         </Text>
 
-        {/* BIO */}
-        <Text style={ui.bioText}>
-          {profile.bio && profile.bio.trim() !== "" 
-            ? profile.bio 
-            : "No bio provided."}
-        </Text>
-
         {/* Stats row */}
         <View style={ui.statsRow}>
           <View style={ui.statItem}>
             <Text style={ui.statNumber}>
-              {Array.isArray(profile.friends) ? profile.friends.length : 0}
+              {Array.isArray(profile.friends)
+                ? profile.friends.length
+                : 0}
             </Text>
             <Text style={ui.statLabel}>Friends</Text>
           </View>
           <View style={[ui.statItem, { marginHorizontal: 40 }]}>
-            <Text style={ui.statNumber}>{profile.gamesPlayed || 0}</Text>
+            <Text style={ui.statNumber}>
+              {profile.gamesPlayed || 0}
+            </Text>
             <Text style={ui.statLabel}>Runs Logged</Text>
           </View>
           <View style={ui.statItem}>
-            <Text style={ui.statNumber}>{profile.checkIns || 0}</Text>
+            <Text style={ui.statNumber}>
+              {profile.checkIns || 0}
+            </Text>
             <Text style={ui.statLabel}>Check-ins</Text>
           </View>
         </View>
@@ -489,50 +541,561 @@ export default function UserProfileScreen({ route, navigation }) {
         {currentUser && currentUser.uid !== userId && (
           <View style={ui.connectionCard}>
             <View style={ui.connectionHeaderRow}>
-              <Ionicons name="people-outline" size={18} color="#38bdf8" />
+              <Ionicons
+                name="people-outline"
+                size={18}
+                color="#38bdf8"
+              />
               <Text style={ui.connectionHeaderText}>Connection</Text>
             </View>
             {renderFriendStatusChip()}
           </View>
         )}
 
-        {/* Info card + team + friends list remains unchanged... */}
+        {/* Info card */}
+        <View style={ui.infoCard}>
+          <View style={ui.infoHeaderRow}>
+            <Ionicons
+              name="basketball-outline"
+              size={18}
+              color="#f97316"
+            />
+            <Text style={ui.infoHeaderText}>Hooper profile</Text>
+          </View>
 
-        {/* You can keep the rest of your code for friends modal, profile image modal, etc. */}
+          <View style={ui.infoRow}>
+            <Text style={ui.infoLabel}>Position</Text>
+            <Text style={ui.infoValue}>
+              {profile.position || "Not set"}
+            </Text>
+          </View>
+
+          <View style={ui.infoRow}>
+            <Text style={ui.infoLabel}>Grade</Text>
+            <Text style={ui.infoValue}>
+              {profile.gradeLevel || "Not set"}
+            </Text>
+          </View>
+
+          <View style={[ui.infoRow, { alignItems: "flex-start" }]}>
+            <Text style={ui.infoLabel}>Favorite team</Text>
+            <View style={{ flexDirection: "row", alignItems: "center" }}>
+              {hasTeamLogo && (
+                <Image
+                  source={teamLogos[favoriteTeam]}
+                  style={ui.infoTeamLogo}
+                />
+              )}
+              <Text style={ui.infoValue}>
+                {favoriteTeam && favoriteTeam !== "None"
+                  ? favoriteTeam
+                  : "Not set"}
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Friends card */}
+        <View style={ui.friendsCard}>
+          <View style={ui.friendsHeaderRow}>
+            <View style={{ flexDirection: "row", alignItems: "center" }}>
+              <Ionicons
+                name="people-circle-outline"
+                size={18}
+                color="#38bdf8"
+              />
+              <Text style={ui.friendsHeaderText}>Friends</Text>
+            </View>
+            {friendsList.length > 0 && (
+              <TouchableOpacity onPress={() => setFriendsModalVisible(true)}>
+                <Text style={ui.viewAllButtonText}>View all</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {friendsList.length === 0 ? (
+            <Text style={ui.emptyText}>
+              {profile.username || "This hooper"} hasn&apos;t added any
+              friends yet.
+            </Text>
+          ) : (
+            <FlatList
+              data={friendsList.slice(0, 8)}
+              keyExtractor={(item) => item.id}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ paddingVertical: 4 }}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={ui.friendAvatarContainer}
+                  onPress={() =>
+                    navigation.push("UserProfile", { userId: item.id })
+                  }
+                >
+                  <Image
+                    source={
+                      item.profilePic
+                        ? { uri: item.profilePic }
+                        : require("../images/defaultProfile.png")
+                    }
+                    style={ui.friendAvatar}
+                  />
+                </TouchableOpacity>
+              )}
+            />
+          )}
+        </View>
       </ScrollView>
+
+      {/* Profile image modal */}
+      <Modal
+        visible={imageModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setImageModalVisible(false)}
+      >
+        <Pressable
+          style={ui.modalBackdrop}
+          onPress={() => setImageModalVisible(false)}
+        >
+          <View style={ui.modalImageWrapper}>
+            <Image
+              source={
+                profile.profilePic
+                  ? { uri: profile.profilePic }
+                  : require("../images/defaultProfile.png")
+              }
+              style={ui.modalImage}
+            />
+          </View>
+          <TouchableOpacity
+            onPress={() => setImageModalVisible(false)}
+            style={ui.modalClose}
+          >
+            <Ionicons
+              name="close-circle-outline"
+              size={32}
+              color="#e5e7eb"
+            />
+          </TouchableOpacity>
+        </Pressable>
+      </Modal>
+
+      {/* Friends modal */}
+      <Modal
+        visible={friendsModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setFriendsModalVisible(false)}
+      >
+        <View style={ui.modalBackdrop}>
+          <View style={ui.modalContent}>
+            <View style={ui.modalHeaderRow}>
+              <Text style={ui.modalTitle}>Friends</Text>
+              <TouchableOpacity onPress={() => setFriendsModalVisible(false)}>
+                <Ionicons
+                  name="close"
+                  size={24}
+                  color="#e5e7eb"
+                />
+              </TouchableOpacity>
+            </View>
+            {friendsList.length === 0 ? (
+              <Text style={ui.emptyText}>
+                {profile.username || "This hooper"} has no friends
+                listed.
+              </Text>
+            ) : (
+              <FlatList
+                data={friendsList}
+                keyExtractor={(item) => item.id}
+                ItemSeparatorComponent={() => (
+                  <View style={ui.modalSeparator} />
+                )}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={ui.modalFriendRow}
+                    onPress={() => {
+                      setFriendsModalVisible(false);
+                      navigation.push("UserProfile", { userId: item.id });
+                    }}
+                  >
+                    <Image
+                      source={
+                        item.profilePic
+                          ? { uri: item.profilePic }
+                          : require("../images/defaultProfile.png")
+                      }
+                      style={ui.modalFriendAvatar}
+                    />
+                    <View>
+                      <Text style={ui.modalFriendName}>
+                        {item.username || "Hooper"}
+                      </Text>
+                      <Text style={ui.modalFriendMeta}>
+                        {item.position || "Position not set"}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                )}
+              />
+            )}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
 
 const ui = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: "#020617" },
-  header: { position: "absolute", top: 55, left: 0, right: 0, zIndex: 10, paddingHorizontal: 20, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  headerBackBtn: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(15,23,42,0.9)", borderWidth: 1, borderColor: "rgba(148,163,184,0.6)" },
-  headerMessageBtn: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(15,23,42,0.9)", borderWidth: 1, borderColor: "rgba(148,163,184,0.6)" },
-  blobTop: { position: "absolute", top: -80, right: -80, width: 260, height: 260, borderRadius: 130, backgroundColor: "#1e3a8a" },
-  blobBottom: { position: "absolute", bottom: -80, left: -80, width: 260, height: 260, borderRadius: 130, backgroundColor: "#0ea5e9" },
-  scrollContent: { alignItems: "center", paddingTop: 160, paddingBottom: 50, paddingHorizontal: 20 },
-  username: { fontSize: 24, fontWeight: "700", color: "#e5f3ff", marginTop: 10 },
-  metaText: { fontSize: 12, color: "#9ca3af", marginBottom: 8 },
-  bioText: { fontSize: 13, color: "#e5f3ff", marginTop: 6, textAlign: "center" },
-  statsRow: { flexDirection: "row", marginTop: 20 },
+  screen: {
+    flex: 1,
+    backgroundColor: "#020617",
+  },
+  header: {
+    position: "absolute",
+    top: 55,
+    left: 0,
+    right: 0,
+    zIndex: 10,
+    paddingHorizontal: 20,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  headerBackBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(15,23,42,0.9)",
+    borderWidth: 1,
+    borderColor: "rgba(148,163,184,0.6)",
+  },
+  headerMessageBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(15,23,42,0.9)",
+    borderWidth: 1,
+    borderColor: "rgba(148,163,184,0.6)",
+  },
+  blobTop: {
+    position: "absolute",
+    top: -80,
+    right: -80,
+    width: 260,
+    height: 260,
+    borderRadius: 130,
+    backgroundColor: "#1e3a8a",
+  },
+  blobBottom: {
+    position: "absolute",
+    bottom: -80,
+    left: -80,
+    width: 260,
+    height: 260,
+    borderRadius: 130,
+    backgroundColor: "#0ea5e9",
+  },
+  scrollContent: {
+    alignItems: "center",
+    paddingTop: 160,
+    paddingBottom: 50,
+    paddingHorizontal: 20,
+  },
+  username: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: "#e5f3ff",
+    marginTop: 10,
+  },
+  bioText: {
+    fontSize: 13,
+    color: "#e5f3ff",
+    marginTop: 6,
+    textAlign: "center",
+  },
+  metaText: {
+    fontSize: 13,
+    color: "#9ca3af",
+    marginTop: 2,
+  },
+  statsRow: {
+    flexDirection: "row",
+    justifyContent: "center",
+    marginTop: 14,
+    marginBottom: 10,
+    width: "80%",
+  },
   statItem: { alignItems: "center" },
-  statNumber: { fontSize: 16, fontWeight: "700", color: "#e5f3ff" },
-  statLabel: { fontSize: 12, color: "#9ca3af", marginTop: 4 },
-  connectionCard: { marginTop: 25, padding: 15, width: "100%", borderRadius: 12, backgroundColor: "#111827" },
-  connectionHeaderRow: { flexDirection: "row", alignItems: "center", marginBottom: 10 },
-  connectionHeaderText: { marginLeft: 5, fontSize: 14, color: "#38bdf8", fontWeight: "600" },
-  statusChipBase: { flexDirection: "row", alignItems: "center", padding: 8, borderRadius: 8, backgroundColor: "#1e293b" },
-  statusChipText: { color: "#e5e7eb", marginLeft: 4, fontSize: 12 },
-  statusChipFriends: { flexDirection: "row", alignItems: "center", padding: 8, borderRadius: 8, backgroundColor: "#111827" },
-  statusChipFriendsText: { color: "#4ade80", marginLeft: 4, fontSize: 12 },
-  statusChipFriendsRemove: { color: "#ef4444", fontSize: 12 },
-  statusIncomingRow: { marginTop: 10 },
-  statusIncomingBanner: { flexDirection: "row", alignItems: "center", marginBottom: 6 },
-  statusIncomingText: { color: "#60a5fa", marginLeft: 4, fontSize: 12 },
-  actionButton: { paddingVertical: 6, paddingHorizontal: 12, borderRadius: 6 },
-  actionButtonText: { color: "#fff", fontSize: 12, fontWeight: "600" },
-  addFriendButton: { flexDirection: "row", alignItems: "center", backgroundColor: "#3b82f6", padding: 8, borderRadius: 8 },
-  addFriendText: { color: "#fff", marginLeft: 6, fontSize: 12 },
+  statNumber: { fontSize: 16, fontWeight: "700", color: "#f9fafb" },
+  statLabel: { fontSize: 11, color: "#9ca3af", marginTop: 2 },
+  connectionCard: {
+    width: "100%",
+    maxWidth: 420,
+    marginTop: 4,
+    padding: 14,
+    borderRadius: 18,
+    backgroundColor: "rgba(15,23,42,0.98)",
+    borderWidth: 1,
+    borderColor: "rgba(148,163,184,0.55)",
+  },
+  connectionHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  connectionHeaderText: {
+    marginLeft: 6,
+    fontSize: 13,
+    color: "#38bdf8",
+    fontWeight: "600",
+  },
+  statusChipBase: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: "#020617",
+    borderWidth: 1,
+    borderColor: "rgba(148,163,184,0.7)",
+  },
+  statusChipText: {
+    color: "#e5e7eb",
+    marginLeft: 6,
+    fontSize: 12,
+  },
+  statusChipFriends: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: "#022c22",
+    borderWidth: 1,
+    borderColor: "rgba(74,222,128,0.8)",
+  },
+  statusChipFriendsText: {
+    color: "#bbf7d0",
+    marginLeft: 6,
+    fontSize: 12,
+    flexShrink: 1,
+  },
+  statusChipFriendsRemove: {
+    color: "#f97316",
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  statusChipAction: {
+    color: "#60a5fa",
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  statusIncomingRow: {
+    marginTop: 4,
+  },
+  statusIncomingBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 6,
+  },
+  statusIncomingText: {
+    color: "#60a5fa",
+    marginLeft: 6,
+    fontSize: 12,
+  },
+  actionButton: {
+    paddingVertical: 6,
+    paddingHorizontal: 14,
+    borderRadius: 999,
+  },
+  actionButtonText: {
+    color: "#e5e7eb",
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  addFriendButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    marginTop: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: "#2563eb",
+  },
+  addFriendText: {
+    color: "#f9fafb",
+    marginLeft: 6,
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  infoCard: {
+    width: "100%",
+    maxWidth: 420,
+    marginTop: 14,
+    padding: 14,
+    borderRadius: 18,
+    backgroundColor: "rgba(15,23,42,0.98)",
+    borderWidth: 1,
+    borderColor: "rgba(148,163,184,0.6)",
+  },
+  infoHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 10,
+  },
+  infoHeaderText: {
+    marginLeft: 6,
+    fontSize: 13,
+    color: "#f97316",
+    fontWeight: "600",
+  },
+  infoRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 8,
+  },
+  infoLabel: {
+    fontSize: 13,
+    color: "#9ca3af",
+  },
+  infoValue: {
+    fontSize: 13,
+    color: "#e5e7eb",
+    fontWeight: "500",
+  },
+  infoTeamLogo: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    marginRight: 6,
+  },
+  friendsCard: {
+    width: "100%",
+    maxWidth: 420,
+    marginTop: 14,
+    marginBottom: 32,
+    padding: 14,
+    borderRadius: 18,
+    backgroundColor: "rgba(15,23,42,0.98)",
+    borderWidth: 1,
+    borderColor: "rgba(148,163,184,0.6)",
+  },
+  friendsHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 10,
+  },
+  friendsHeaderText: {
+    marginLeft: 6,
+    fontSize: 13,
+    color: "#38bdf8",
+    fontWeight: "600",
+  },
+  viewAllButtonText: {
+    fontSize: 12,
+    color: "#60a5fa",
+    fontWeight: "600",
+  },
+  friendAvatarContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    overflow: "hidden",
+    marginRight: 6,
+    borderWidth: 1,
+    borderColor: "rgba(148,163,184,0.7)",
+  },
+  friendAvatar: {
+    width: "100%",
+    height: "100%",
+  },
+  emptyText: {
+    textAlign: "center",
+    color: "#9ca3af",
+    fontSize: 14,
+    marginTop: 20,
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(15,23,42,0.8)",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 24,
+  },
+  modalImageWrapper: {
+    width: "100%",
+    maxWidth: 360,
+    backgroundColor: "#020617",
+    borderRadius: 16,
+    padding: 16,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "rgba(148,163,184,0.8)",
+  },
+  modalImage: {
+    width: "100%",
+    height: 260,
+    borderRadius: 12,
+    resizeMode: "cover",
+  },
+  modalClose: {
+    position: "absolute",
+    top: 50,
+    right: 30,
+  },
+  modalContent: {
+    width: "100%",
+    maxWidth: 420,
+    maxHeight: "75%",
+    backgroundColor: "#020617",
+    borderRadius: 18,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "rgba(148,163,184,0.9)",
+  },
+  modalHeaderRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#e5f3ff",
+  },
+  modalSeparator: {
+    height: 1,
+    backgroundColor: "rgba(15,23,42,0.9)",
+    marginVertical: 8,
+  },
+  modalFriendRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 6,
+  },
+  modalFriendAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginRight: 10,
+  },
+  modalFriendName: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#e5e7eb",
+  },
+  modalFriendMeta: {
+    fontSize: 12,
+    color: "#9ca3af",
+    marginTop: 2,
+  },
 });
-
