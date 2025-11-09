@@ -10,6 +10,7 @@ import {
   StatusBar,
   Platform,
   StyleSheet,
+  TextInput,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as ImagePicker from "expo-image-picker";
@@ -30,9 +31,12 @@ export default function ProfileScreen({ navigation }) {
   );
   const [gradeLevel, setGradeLevel] = useState("Freshman");
   const [favoriteTeam, setFavoriteTeam] = useState("None");
+  const [bio, setBio] = useState(""); // new bio state
   const [saveStatus, setSaveStatus] = useState("All changes saved");
 
-  // 🔑 preload media permission so tapping avatar is faster
+  const BIO_MAX_LENGTH = 150; // max characters for bio
+  const [bioCharsLeft, setBioCharsLeft] = useState(BIO_MAX_LENGTH);
+
   const [hasMediaPermission, setHasMediaPermission] = useState(null);
 
   const POSITION_OPTIONS = [
@@ -129,6 +133,8 @@ export default function ProfileScreen({ navigation }) {
           setGradeLevel(data.gradeLevel || "Freshman");
           setFavoriteTeam(data.favoriteTeam || "None");
           setMemberSince(data.memberSince || memberSince);
+          setBio(data.bio || "");
+          setBioCharsLeft(BIO_MAX_LENGTH - (data.bio?.length || 0));
         } else {
           const payload = {
             username,
@@ -137,6 +143,7 @@ export default function ProfileScreen({ navigation }) {
             gradeLevel: "Freshman",
             favoriteTeam: "None",
             memberSince,
+            bio: "",
           };
           await setDoc(userDocRef, payload);
         }
@@ -166,6 +173,7 @@ export default function ProfileScreen({ navigation }) {
           gradeLevel,
           favoriteTeam,
           memberSince,
+          bio,
         };
         await setDoc(userDocRef, payload, { merge: true });
         setSaveStatus("All changes saved");
@@ -176,13 +184,12 @@ export default function ProfileScreen({ navigation }) {
     }, 800);
 
     return () => clearTimeout(timeout);
-  }, [username, profilePic, position, gradeLevel, favoriteTeam, memberSince, user]);
+  }, [username, profilePic, position, gradeLevel, favoriteTeam, memberSince, bio, user]);
 
   // Pick image, upload to Firebase Storage, save URL in profilePic
   const pickImage = async () => {
     if (!user) return;
 
-    // If permission definitely denied, bail early
     if (hasMediaPermission === false) {
       Alert.alert(
         "Permission needed",
@@ -191,7 +198,6 @@ export default function ProfileScreen({ navigation }) {
       return;
     }
 
-    // If we don't know yet (first tap very soon after mount), try requesting once
     if (hasMediaPermission === null) {
       try {
         const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -215,11 +221,10 @@ export default function ProfileScreen({ navigation }) {
     }
 
     try {
-      // tiny UX touch: show instant feedback
       setSaveStatus("Opening photos…");
 
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ["images"], // new API style
+        mediaTypes: ["images"],
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.5,
@@ -238,16 +243,14 @@ export default function ProfileScreen({ navigation }) {
 
       setSaveStatus("Uploading photo…");
 
-      // Convert local file to blob
       const response = await fetch(asset.uri);
       const blob = await response.blob();
 
-      // Upload to Storage: profilePictures/<uid>.jpg
       const imageRef = ref(storage, `profilePictures/${user.uid}.jpg`);
       await uploadBytes(imageRef, blob);
       const downloadURL = await getDownloadURL(imageRef);
 
-      setProfilePic(downloadURL); // auto-saved by useEffect
+      setProfilePic(downloadURL);
       setSaveStatus("Saving…");
     } catch (err) {
       console.log("Error picking image:", err);
@@ -280,14 +283,10 @@ export default function ProfileScreen({ navigation }) {
 
   return (
     <SafeAreaView
-      style={[
-        styles.safe,
-        { paddingTop: Platform.OS === "android" ? StatusBar.currentHeight : 0 },
-      ]}
+      style={[styles.safe, { paddingTop: Platform.OS === "android" ? StatusBar.currentHeight : 0 }]}
     >
       <StatusBar barStyle="light-content" />
 
-      {/* background blobs */}
       <View pointerEvents="none" style={styles.blobTop} />
       <View pointerEvents="none" style={styles.blobBottom} />
 
@@ -295,7 +294,6 @@ export default function ProfileScreen({ navigation }) {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-        {/* Header */}
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Your profile</Text>
           <Text style={styles.headerSubtitle}>
@@ -324,6 +322,11 @@ export default function ProfileScreen({ navigation }) {
               <Text style={styles.usernameText}>
                 {username || "Add username"}
               </Text>
+              {bio ? (
+                <Text style={styles.bioPreview}>
+                  {bio.length > 50 ? bio.substring(0, 50) + "…" : bio}
+                </Text>
+              ) : null}
               <Text style={styles.taglineText}>
                 {tagline || "Tap tags below to update your profile"}
               </Text>
@@ -345,7 +348,7 @@ export default function ProfileScreen({ navigation }) {
           <View style={styles.cardHeaderRow}>
             <Text style={styles.cardTitle}>Hooper profile</Text>
             <Text style={styles.cardSubtitle}>
-              Choose your natural spot and level.
+              Choose your natural spot and grade.
             </Text>
           </View>
 
@@ -354,19 +357,11 @@ export default function ProfileScreen({ navigation }) {
             {POSITION_OPTIONS.map((pos) => (
               <TouchableOpacity
                 key={pos}
-                style={[
-                  styles.tag,
-                  position === pos && styles.tagSelected,
-                ]}
+                style={[styles.tag, position === pos && styles.tagSelected]}
                 onPress={() => setPosition(pos)}
                 activeOpacity={0.85}
               >
-                <Text
-                  style={[
-                    styles.tagText,
-                    position === pos && styles.tagTextSelected,
-                  ]}
-                >
+                <Text style={[styles.tagText, position === pos && styles.tagTextSelected]}>
                   {pos}
                 </Text>
               </TouchableOpacity>
@@ -378,24 +373,41 @@ export default function ProfileScreen({ navigation }) {
             {GRADE_OPTIONS.map((grade) => (
               <TouchableOpacity
                 key={grade}
-                style={[
-                  styles.tag,
-                  gradeLevel === grade && styles.tagSelected,
-                ]}
+                style={[styles.tag, gradeLevel === grade && styles.tagSelected]}
                 onPress={() => setGradeLevel(grade)}
                 activeOpacity={0.85}
               >
-                <Text
-                  style={[
-                    styles.tagText,
-                    gradeLevel === grade && styles.tagTextSelected,
-                  ]}
-                >
+                <Text style={[styles.tagText, gradeLevel === grade && styles.tagTextSelected]}>
                   {grade}
                 </Text>
               </TouchableOpacity>
             ))}
           </View>
+        </View>
+
+        {/* BIO CARD */}
+        <View style={styles.card}>
+          <View style={styles.cardHeaderRow}>
+            <Text style={styles.cardTitle}>Bio</Text>
+            <Text style={styles.cardSubtitle}>
+              Write something about yourself so friends know you better.
+            </Text>
+          </View>
+
+          <TextInput
+            style={styles.bioInput}
+            placeholder="Add a short bio..."
+            placeholderTextColor="#9ca3af"
+            multiline
+            numberOfLines={4}
+            value={bio}
+            maxLength={BIO_MAX_LENGTH}
+            onChangeText={(text) => {
+              setBio(text);
+              setBioCharsLeft(BIO_MAX_LENGTH - text.length);
+            }}
+          />
+          <Text style={styles.bioCharCount}>{bioCharsLeft} characters remaining</Text>
         </View>
 
         {/* FAVORITE TEAM CARD */}
@@ -411,21 +423,12 @@ export default function ProfileScreen({ navigation }) {
             {Object.keys(teamLogos).map((team) => (
               <TouchableOpacity
                 key={team}
-                style={[
-                  styles.teamTag,
-                  favoriteTeam === team && styles.teamTagSelected,
-                ]}
+                style={[styles.teamTag, favoriteTeam === team && styles.teamTagSelected]}
                 onPress={() => setFavoriteTeam(team)}
                 activeOpacity={0.85}
               >
                 <Image source={teamLogos[team]} style={styles.teamLogo} />
-                <Text
-                  style={[
-                    styles.teamTagText,
-                    favoriteTeam === team && styles.teamTagTextSelected,
-                  ]}
-                  numberOfLines={1}
-                >
+                <Text style={[styles.teamTagText, favoriteTeam === team && styles.teamTagTextSelected]} numberOfLines={1}>
                   {team}
                 </Text>
               </TouchableOpacity>
@@ -458,243 +461,47 @@ export default function ProfileScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: "#020617",
-  },
-  blobTop: {
-    position: "absolute",
-    top: -80,
-    right: -80,
-    width: 260,
-    height: 260,
-    borderRadius: 130,
-    backgroundColor: "rgba(56,189,248,0.22)",
-  },
-  blobBottom: {
-    position: "absolute",
-    top: 180,
-    left: -100,
-    width: 260,
-    height: 260,
-    borderRadius: 130,
-    backgroundColor: "rgba(251,146,60,0.16)",
-  },
-  scrollContent: {
-    paddingHorizontal: 20,
-    paddingBottom: 32,
-  },
-  header: {
-    marginTop: 24,
-    marginBottom: 12,
-  },
-  headerTitle: {
-    fontSize: 22,
-    fontWeight: "800",
-    color: "#e5f3ff",
-    marginBottom: 4,
-  },
-  headerSubtitle: {
-    fontSize: 13,
-    color: "#9ca3af",
-  },
-
-  card: {
-    borderRadius: 24,
-    paddingVertical: 18,
-    paddingHorizontal: 16,
-    backgroundColor: "rgba(15,23,42,0.98)",
-    borderWidth: 1,
-    borderColor: "rgba(148,163,184,0.7)",
-    marginTop: 12,
-  },
-
-  // Player card
-  playerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  avatarWrap: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
-    borderWidth: 2,
-    borderColor: "#38bdf8",
-    overflow: "hidden",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#020617",
-  },
-  profileImage: {
-    width: "100%",
-    height: "100%",
-  },
-  avatarPlaceholder: {
-    width: "100%",
-    height: "100%",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#0f172a",
-  },
-  avatarInitial: {
-    fontSize: 32,
-    fontWeight: "700",
-    color: "#e5f3ff",
-  },
-  playerTextArea: {
-    flex: 1,
-    marginLeft: 14,
-  },
-  usernameText: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: "#f9fafb",
-  },
-  taglineText: {
-    marginTop: 4,
-    fontSize: 13,
-    color: "#cbd5f5",
-  },
-  memberSinceText: {
-    marginTop: 4,
-    fontSize: 12,
-    color: "#9ca3af",
-  },
-  saveStatusRow: {
-    marginTop: 10,
-    alignItems: "flex-end",
-  },
-  saveStatusText: {
-    fontSize: 11,
-    color: "#9ca3af",
-    fontStyle: "italic",
-  },
-
-  // Section / tags
-  cardHeaderRow: {
-    marginBottom: 10,
-  },
-  cardTitle: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: "#e5f3ff",
-    marginBottom: 2,
-  },
-  cardSubtitle: {
-    fontSize: 12,
-    color: "#9ca3af",
-  },
-  fieldLabel: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#cbd5f5",
-    marginBottom: 6,
-  },
-  tagRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-  },
-  tag: {
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: "rgba(148,163,184,0.6)",
-    marginRight: 8,
-    marginBottom: 8,
-    backgroundColor: "rgba(15,23,42,0.9)",
-  },
-  tagSelected: {
-    borderColor: "#38bdf8",
-    backgroundColor: "rgba(37,99,235,0.22)",
-  },
-  tagText: {
-    fontSize: 13,
-    color: "#e5e7eb",
-  },
-  tagTextSelected: {
-    color: "#e0f2fe",
-    fontWeight: "600",
-  },
-
-  // Teams
-  teamGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    marginTop: 4,
-  },
-  teamTag: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 6,
-    paddingHorizontal: 8,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: "rgba(148,163,184,0.5)",
-    backgroundColor: "rgba(15,23,42,0.95)",
-    marginRight: 8,
-    marginBottom: 8,
-  },
-  teamTagSelected: {
-    borderColor: "#38bdf8",
-    backgroundColor: "rgba(37,99,235,0.24)",
-  },
-  teamLogo: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    marginRight: 6,
-  },
-  teamTagText: {
-    fontSize: 12,
-    color: "#e5e7eb",
-    maxWidth: 90,
-  },
-  teamTagTextSelected: {
-    color: "#e0f2fe",
-    fontWeight: "600",
-  },
-  selectedTeamPill: {
-    flexDirection: "row",
-    alignItems: "center",
-    alignSelf: "flex-start",
-    marginTop: 4,
-    backgroundColor: "rgba(15,23,42,0.9)",
-    borderRadius: 999,
-    paddingVertical: 4,
-    paddingHorizontal: 10,
-    borderWidth: 1,
-    borderColor: "rgba(148,163,184,0.7)",
-  },
-  selectedTeamLogo: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    marginRight: 6,
-  },
-  selectedTeamText: {
-    fontSize: 13,
-    color: "#e5f3ff",
-    fontWeight: "600",
-  },
-
-  // Account
-  accountEmail: {
-    marginTop: 4,
-    fontSize: 13,
-    color: "#9ca3af",
-    marginBottom: 14,
-  },
-  logoutBtn: {
-    marginTop: 4,
-    backgroundColor: "#ef4444",
-    paddingVertical: 10,
-    borderRadius: 999,
-    alignItems: "center",
-  },
-  logoutText: {
-    color: "#fff",
-    fontWeight: "700",
-    fontSize: 15,
-  },
+  safe: { flex: 1, backgroundColor: "#020617" },
+  blobTop: { position: "absolute", top: -80, right: -80, width: 260, height: 260, borderRadius: 130, backgroundColor: "rgba(56,189,248,0.22)" },
+  blobBottom: { position: "absolute", top: 180, left: -100, width: 260, height: 260, borderRadius: 130, backgroundColor: "rgba(251,146,60,0.16)" },
+  scrollContent: { paddingHorizontal: 20, paddingBottom: 32 },
+  header: { marginTop: 24, marginBottom: 12 },
+  headerTitle: { fontSize: 22, fontWeight: "800", color: "#e5f3ff", marginBottom: 4 },
+  headerSubtitle: { fontSize: 13, color: "#9ca3af" },
+  card: { borderRadius: 24, paddingVertical: 18, paddingHorizontal: 16, backgroundColor: "rgba(15,23,42,0.98)", borderWidth: 1, borderColor: "rgba(148,163,184,0.7)", marginTop: 12 },
+  playerRow: { flexDirection: "row", alignItems: "center" },
+  avatarWrap: { width: 88, height: 88, borderRadius: 44, borderWidth: 2, borderColor: "#38bdf8", overflow: "hidden", alignItems: "center", justifyContent: "center", backgroundColor: "#020617" },
+  profileImage: { width: "100%", height: "100%" },
+  avatarPlaceholder: { width: "100%", height: "100%", alignItems: "center", justifyContent: "center", backgroundColor: "#0f172a" },
+  avatarInitial: { fontSize: 32, fontWeight: "700", color: "#e5f3ff" },
+  playerTextArea: { flex: 1, marginLeft: 14 },
+  usernameText: { fontSize: 20, fontWeight: "700", color: "#f9fafb" },
+  taglineText: { marginTop: 4, fontSize: 13, color: "#cbd5f5" },
+  bioPreview: { marginTop: 4, fontSize: 13, color: "#a5b4fc", fontStyle: "italic" },
+  memberSinceText: { marginTop: 4, fontSize: 12, color: "#9ca3af" },
+  saveStatusRow: { marginTop: 10, alignItems: "flex-end" },
+  saveStatusText: { fontSize: 11, color: "#9ca3af", fontStyle: "italic" },
+  cardHeaderRow: { marginBottom: 10 },
+  cardTitle: { fontSize: 15, fontWeight: "700", color: "#e5f3ff", marginBottom: 2 },
+  cardSubtitle: { fontSize: 12, color: "#9ca3af" },
+  fieldLabel: { fontSize: 13, fontWeight: "600", color: "#cbd5f5", marginBottom: 6 },
+  tagRow: { flexDirection: "row", flexWrap: "wrap" },
+  tag: { paddingVertical: 6, paddingHorizontal: 10, borderRadius: 999, borderWidth: 1, borderColor: "rgba(148,163,184,0.6)", marginRight: 8, marginBottom: 8, backgroundColor: "rgba(15,23,42,0.9)" },
+  tagSelected: { borderColor: "#38bdf8", backgroundColor: "rgba(37,99,235,0.22)" },
+  tagText: { fontSize: 13, color: "#e5e7eb" },
+  tagTextSelected: { color: "#e0f2fe", fontWeight: "600" },
+  teamGrid: { flexDirection: "row", flexWrap: "wrap", marginTop: 4 },
+  teamTag: { flexDirection: "row", alignItems: "center", paddingVertical: 6, paddingHorizontal: 8, borderRadius: 999, borderWidth: 1, borderColor: "rgba(148,163,184,0.5)", backgroundColor: "rgba(15,23,42,0.95)", marginRight: 8, marginBottom: 8 },
+  teamTagSelected: { borderColor: "#38bdf8", backgroundColor: "rgba(37,99,235,0.24)" },
+  teamLogo: { width: 20, height: 20, borderRadius: 10, marginRight: 6 },
+  teamTagText: { fontSize: 12, color: "#e5e7eb", maxWidth: 90 },
+  teamTagTextSelected: { color: "#e0f2fe", fontWeight: "600" },
+  selectedTeamPill: { flexDirection: "row", alignItems: "center", alignSelf: "flex-start", marginTop: 4, backgroundColor: "rgba(15,23,42,0.9)", borderRadius: 999, paddingVertical: 4, paddingHorizontal: 10, borderWidth: 1, borderColor: "rgba(148,163,184,0.7)" },
+  selectedTeamLogo: { width: 22, height: 22, borderRadius: 11, marginRight: 6 },
+  selectedTeamText: { fontSize: 13, color: "#e5f3ff", fontWeight: "600" },
+  accountEmail: { marginTop: 4, fontSize: 13, color: "#9ca3af", marginBottom: 14 },
+  logoutBtn: { marginTop: 4, backgroundColor: "#ef4444", paddingVertical: 10, borderRadius: 999, alignItems: "center" },
+  logoutText: { color: "#fff", fontWeight: "700", fontSize: 15 },
+  bioInput: { backgroundColor: "rgba(15,23,42,0.9)", borderRadius: 16, borderWidth: 1, borderColor: "rgba(148,163,184,0.6)", padding: 10, color: "#e5f3ff", fontSize: 13, textAlignVertical: "top" },
+  bioCharCount: { fontSize: 11, color: "#9ca3af", marginTop: 4, textAlign: "right" },
 });
