@@ -138,13 +138,21 @@ export default function MainTabs({ navigation }) {
     if (!dmBanner) return;
     hideDmBanner();
 
+    const isGroup = !!dmBanner.isGroup;
+    const title = isGroup
+      ? dmBanner.groupTitle || dmBanner.fromName || "Group chat"
+      : dmBanner.fromName;
+
     navigation.navigate("DirectMessage", {
       conversationId: dmBanner.conversationId,
-      otherUserId: dmBanner.otherUserId,
-      otherUsername: dmBanner.fromName,
-      otherProfilePic: dmBanner.otherProfilePic || null,
+      otherUserId: isGroup ? null : dmBanner.otherUserId,
+      otherUsername: isGroup ? null : dmBanner.fromName,
+      otherProfilePic: isGroup ? null : dmBanner.otherProfilePic || null,
+      isGroup,
+      title,
     });
   };
+
 
   // Listen globally to dmConversations for *new* messages
   useEffect(() => {
@@ -202,17 +210,25 @@ export default function MainTabs({ navigation }) {
         }
 
         // Build sender info + preview
-        const otherId =
-          participants.find((p) => p !== currentUser.uid) || currentUser.uid;
+        // Is this a group conversation?
+        const isGroup =
+          data.type === "group" || (participants && participants.length > 2);
+
         const pInfo = data.participantInfo || {};
-        const otherInfo = pInfo[otherId] || {};
+
+        // Who actually sent the last message?
+        const senderInfo = pInfo[lastSender] || {};
 
         const fromName =
-          otherInfo.username ||
-          (otherInfo.email
-            ? otherInfo.email.split("@")[0]
+          senderInfo.username ||
+          (senderInfo.email
+            ? senderInfo.email.split("@")[0]
             : "Player");
 
+        // Group title (if group), else null
+        const groupTitle = isGroup ? data.name || "Group chat" : null;
+
+        // Text preview
         let textPreview = data.lastMessage || "";
         if (!textPreview && data.lastMessageType === "gif") {
           textPreview = "GIF";
@@ -223,9 +239,13 @@ export default function MainTabs({ navigation }) {
           fromName,
           textPreview,
           conversationId: d.id,
-          otherUserId: otherId,
-          otherProfilePic: otherInfo.profilePic || null,
+          // For groups we won't use otherUserId in the DM screen
+          otherUserId: isGroup ? null : lastSender,
+          otherProfilePic: senderInfo.profilePic || null,
+          isGroup,
+          groupTitle,
         });
+
       });
     });
 

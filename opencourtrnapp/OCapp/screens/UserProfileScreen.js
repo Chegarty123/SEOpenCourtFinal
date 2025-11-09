@@ -453,18 +453,26 @@ export default function UserProfileScreen({ route, navigation }) {
         {relationshipStatus() === "friends" &&
           currentUser &&
           currentUser.uid !== userId && (
-            <TouchableOpacity
+            <Pressable
               onPress={startDirectMessage}
-              style={ui.headerMessageBtn}
-              activeOpacity={0.9}
+              style={({ pressed }) => [
+                ui.headerMessageBtn,
+                pressed && {
+                  backgroundColor: "#0b1120",          // slightly darker
+                  borderColor: "#60a5fa",              // subtle accent on press
+                  transform: [{ scale: 0.96 }],        // tiny “press in” effect
+                },
+              ]}
+              android_ripple={{ color: "rgba(148,163,184,0.4)", borderless: true }}
             >
               <Ionicons
                 name="chatbubble-ellipses-outline"
                 size={20}
                 color="#e5e7eb"
               />
-            </TouchableOpacity>
+            </Pressable>
           )}
+
       </View>
 
       <View pointerEvents="none" style={ui.blobTop} />

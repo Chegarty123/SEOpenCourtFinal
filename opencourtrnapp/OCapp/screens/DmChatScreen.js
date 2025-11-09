@@ -14,6 +14,7 @@ import {
   FlatList,
   ActivityIndicator,
   StatusBar,
+  Pressable,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { auth, db } from "../firebaseConfig";
@@ -82,6 +83,9 @@ export default function DmChatScreen({ route, navigation }) {
 
   const displayTitle = title || otherUsername || "Chat";
   const headerSubtitle = isGroup ? "Group chat" : "Direct messages";
+  const [participants, setParticipants] = useState([]);
+  const [participantInfo, setParticipantInfo] = useState({});
+  const [showGroupMembers, setShowGroupMembers] = useState(false);
 
   const scrollToBottom = () => {
     setTimeout(() => {
@@ -277,10 +281,15 @@ export default function DmChatScreen({ route, navigation }) {
       if (!snap.exists()) return;
       const data = snap.data();
       setReadBy(data.readBy || {});
+
+      // 👇 NEW: group meta
+      setParticipants(data.participants || []);
+      setParticipantInfo(data.participantInfo || {});
     });
 
     return () => unsub();
   }, [conversationId]);
+
 
   // Mark conversation read for me
   const markConversationRead = async () => {
@@ -681,17 +690,34 @@ export default function DmChatScreen({ route, navigation }) {
             </Text>
           </View>
 
-          <View
-            style={{
-              paddingHorizontal: 10,
-              paddingVertical: 4,
-              borderRadius: 999,
-              borderWidth: 1,
-              borderColor: "rgba(148,163,184,0.7)",
-              backgroundColor: "rgba(15,23,42,0.96)",
-              flexDirection: "row",
-              alignItems: "center",
+          <Pressable
+            disabled={!isGroup}
+            onPress={() => {
+              if (isGroup) setShowGroupMembers(true);
             }}
+            style={({ pressed }) => [
+              {
+                paddingHorizontal: 10,
+                paddingVertical: 4,
+                borderRadius: 999,
+                borderWidth: 1,
+                borderColor: "rgba(148,163,184,0.7)",
+                backgroundColor: "rgba(15,23,42,0.96)",
+                flexDirection: "row",
+                alignItems: "center",
+                opacity: isGroup ? 1 : 0.9,
+              },
+              isGroup &&
+                pressed && {
+                  backgroundColor: "rgba(37,99,235,0.35)",
+                  transform: [{ scale: 0.96 }],
+                },
+            ]}
+            android_ripple={
+              isGroup
+                ? { color: "rgba(148,163,184,0.4)", borderless: true }
+                : undefined
+            }
           >
             <Ionicons
               name={isGroup ? "people-outline" : "chatbubble-ellipses-outline"}
@@ -709,7 +735,7 @@ export default function DmChatScreen({ route, navigation }) {
             >
               {isGroup ? "Group" : "1:1"}
             </Text>
-          </View>
+          </Pressable>
         </View>
       </View>
 
@@ -1212,6 +1238,158 @@ export default function DmChatScreen({ route, navigation }) {
           </View>
         </View>
       </KeyboardAvoidingView>
+
+            {/* GROUP MEMBERS MODAL */}
+            {isGroup && (
+        <Modal
+          visible={showGroupMembers}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setShowGroupMembers(false)}
+        >
+          <View
+            style={{
+              flex: 1,
+              backgroundColor: "rgba(15,23,42,0.8)",
+              justifyContent: "center",
+              alignItems: "center",
+              paddingHorizontal: 16,
+            }}
+          >
+            <View
+              style={{
+                backgroundColor: "rgba(15,23,42,0.98)",
+                borderRadius: 16,
+                borderWidth: 1,
+                borderColor: "rgba(148,163,184,0.8)",
+                width: "85%",
+                maxHeight: "70%",
+                padding: 16,
+              }}
+            >
+              <View
+                style={{
+                  flexDirection: "row",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginBottom: 8,
+                }}
+              >
+                <Text
+                  style={{
+                    color: "#e5f3ff",
+                    fontSize: 16,
+                    fontWeight: "700",
+                  }}
+                >
+                  Group members
+                </Text>
+                <TouchableOpacity
+                  onPress={() => setShowGroupMembers(false)}
+                >
+                  <Ionicons name="close" size={20} color="#e5e7eb" />
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{ paddingVertical: 6 }}
+              >
+                {(participants.length
+                  ? participants
+                  : Object.keys(participantInfo || {})
+                ).map((uid) => {
+                  const info = participantInfo?.[uid] || {};
+                  const isMe = uid === user?.uid;
+                  const displayName =
+                    info.username ||
+                    (info.email ? info.email.split("@")[0] : "Player");
+
+                  return (
+                    <TouchableOpacity
+                      key={uid}
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        paddingVertical: 6,
+                      }}
+                      onPress={() => {
+                        setShowGroupMembers(false);
+                        if (!isMe) {
+                          navigation.navigate("UserProfile", { userId: uid });
+                        }
+                      }}
+                    >
+                      <View
+                        style={{
+                          width: 36,
+                          height: 36,
+                          borderRadius: 18,
+                          marginRight: 10,
+                          overflow: "hidden",
+                          borderWidth: 1,
+                          borderColor: "rgba(148,163,184,0.7)",
+                          backgroundColor: "#020617",
+                        }}
+                      >
+                        {info.profilePic ? (
+                          <Image
+                            source={{ uri: info.profilePic }}
+                            style={{ width: "100%", height: "100%" }}
+                          />
+                        ) : (
+                          <View
+                            style={{
+                              flex: 1,
+                              alignItems: "center",
+                              justifyContent: "center",
+                              backgroundColor: "#0f172a",
+                            }}
+                          >
+                            <Text
+                              style={{
+                                color: "#e5f3ff",
+                                fontWeight: "700",
+                              }}
+                            >
+                              {(displayName || "P")[0].toUpperCase()}
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+
+                      <View style={{ flex: 1 }}>
+                        <Text
+                          style={{
+                            color: "#e5f3ff",
+                            fontSize: 14,
+                            fontWeight: "600",
+                          }}
+                          numberOfLines={1}
+                        >
+                          {displayName}
+                          {isMe ? " (You)" : ""}
+                        </Text>
+                        {info.email && (
+                          <Text
+                            style={{
+                              color: "#9ca3af",
+                              fontSize: 12,
+                            }}
+                            numberOfLines={1}
+                          >
+                            {info.email}
+                          </Text>
+                        )}
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
+      )}
 
       {/* GIF PICKER MODAL — now matches CourtChatScreen */}
       <Modal
