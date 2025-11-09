@@ -346,12 +346,15 @@ export default function FriendScreen({ navigation }) {
 
   return (
     <SafeAreaView
+      edges={["top"]} // only safe area at the top
       style={{
         flex: 1,
-        backgroundColor: "#020617",
-        paddingTop: Platform.OS === "android" ? StatusBar.currentHeight : 0,
+        backgroundColor: "#020617", // 🔥 dark background
+        paddingTop:
+          Platform.OS === "android" ? StatusBar.currentHeight : 0,
       }}
     >
+
       <StatusBar barStyle="light-content" />
 
       {/* Subtle background blobs */}

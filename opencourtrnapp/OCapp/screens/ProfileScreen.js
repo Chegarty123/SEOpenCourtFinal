@@ -283,13 +283,25 @@ export default function ProfileScreen({ navigation }) {
 
   return (
     <SafeAreaView
-      style={[styles.safe, { paddingTop: Platform.OS === "android" ? StatusBar.currentHeight : 0 }]}
-    >
+    edges={["top"]} // 👈 only respect safe area at the top
+    style={[
+      styles.safe,
+      { paddingTop: Platform.OS === "android" ? StatusBar.currentHeight : 0 },
+    ]}
+  >
+
       <StatusBar barStyle="light-content" />
       <View pointerEvents="none" style={styles.blobTop} />
       <View pointerEvents="none" style={styles.blobBottom} />
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-        
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        style={{ flex: 1 }}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: 120 }, // 👈 big buffer so it clears the tab bar
+        ]}
+      >
+
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Your profile</Text>
           <Text style={styles.headerSubtitle}>

@@ -790,7 +790,7 @@ const ui = StyleSheet.create({
     width: 260,
     height: 260,
     borderRadius: 130,
-    backgroundColor: "#1e3a8a",
+    backgroundColor: "rgba(56,189,248,0.22)",
   },
   blobBottom: {
     position: "absolute",
@@ -799,7 +799,7 @@ const ui = StyleSheet.create({
     width: 260,
     height: 260,
     borderRadius: 130,
-    backgroundColor: "#0ea5e9",
+    backgroundColor: "rgba(251,146,60,0.16)",
   },
   scrollContent: {
     alignItems: "center",

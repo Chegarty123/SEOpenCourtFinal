@@ -38,6 +38,7 @@ export default function CourtDetailScreen({ route, navigation }) {
   });
 
   const [playersHere, setPlayersHere] = useState([]);
+  const [playerProfiles, setPlayerProfiles] = useState({}); // 🔵 live user docs
   const [checkedIn, setCheckedIn] = useState(false);
   const [messages, setMessages] = useState([]);
 
@@ -118,6 +119,61 @@ export default function CourtDetailScreen({ route, navigation }) {
 
     return () => unsub();
   }, [courtId, user]);
+
+  // 🔵 pull live profile data from users/{uid} for everyone checked in
+  useEffect(() => {
+    if (!playersHere || playersHere.length === 0) {
+      setPlayerProfiles({});
+      return;
+    }
+
+    let cancelled = false;
+
+    const fetchProfiles = async () => {
+      try {
+        const entries = await Promise.all(
+          playersHere.map(async (p) => {
+            try {
+              const snap = await getDoc(doc(db, "users", p.id));
+              if (!snap.exists()) return null;
+              const data = snap.data() || {};
+              return [
+                p.id,
+                {
+                  username:
+                    data.username ||
+                    (data.email ? data.email.split("@")[0] : "Player"),
+                  profilePic: data.profilePic || null,
+                },
+              ];
+            } catch (err) {
+              console.log("Error fetching user profile for court:", err);
+              return null;
+            }
+          })
+        );
+
+        if (cancelled) return;
+
+        const map = {};
+        entries.forEach((entry) => {
+          if (!entry) return;
+          const [uid, profile] = entry;
+          map[uid] = profile;
+        });
+
+        setPlayerProfiles(map);
+      } catch (err) {
+        console.log("Error building playerProfiles map:", err);
+      }
+    };
+
+    fetchProfiles();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [playersHere]);
 
   // listen to recent messages for preview
   useEffect(() => {
@@ -293,31 +349,39 @@ export default function CourtDetailScreen({ route, navigation }) {
                 </Text>
               )}
 
-              {playersHere.map((p) => (
-                <TouchableOpacity
-                  key={p.id}
-                  style={ui.playerBubble}
-                  onPress={() =>
-                    navigation.navigate("UserProfile", { userId: p.id })
-                  }
-                  activeOpacity={0.9}
-                >
-                  <Image
-                    source={
-                      p.avatar
-                        ? { uri: p.avatar }
-                        : require("../images/defaultProfile.png")
+              {playersHere.map((p) => {
+                const liveProfile = playerProfiles[p.id] || null;
+                const avatarUri =
+                  liveProfile?.profilePic || p.avatar || null;
+                const displayName =
+                  liveProfile?.username || p.name || "player";
+
+                return (
+                  <TouchableOpacity
+                    key={p.id}
+                    style={ui.playerBubble}
+                    onPress={() =>
+                      navigation.navigate("UserProfile", { userId: p.id })
                     }
-                    style={ui.playerAvatar}
-                  />
-                  <Text style={ui.playerName} numberOfLines={1}>
-                    {p.name}
-                  </Text>
-                  <Text style={ui.playerNote} numberOfLines={1}>
-                    {p.note}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+                    activeOpacity={0.9}
+                  >
+                    <Image
+                      source={
+                        avatarUri
+                          ? { uri: avatarUri }
+                          : require("../images/defaultProfile.png")
+                      }
+                      style={ui.playerAvatar}
+                    />
+                    <Text style={ui.playerName} numberOfLines={1}>
+                      {displayName}
+                    </Text>
+                    <Text style={ui.playerNote} numberOfLines={1}>
+                      {p.note}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
             </ScrollView>
 
             {/* Check in / out button */}

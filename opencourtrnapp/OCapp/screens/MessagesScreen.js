@@ -64,6 +64,9 @@ export default function MessagesScreen({ navigation }) {
   const [groupName, setGroupName] = useState("");
   const [creatingGroup, setCreatingGroup] = useState(false);
 
+  // NEW: live user profiles from users collection (for up-to-date avatars)
+  const [userProfiles, setUserProfiles] = useState({});
+
   const resetNewChatState = () => {
     setCreatingFor(null);
     setSelectedFriends([]);
@@ -203,6 +206,69 @@ export default function MessagesScreen({ navigation }) {
     return () => unsub();
   }, [currentUser]);
 
+  // NEW: Load live profile data for conversation participants from users collection
+  useEffect(() => {
+    if (!currentUser || conversations.length === 0) {
+      setUserProfiles({});
+      return;
+    }
+
+    const otherIdsSet = new Set();
+
+    conversations.forEach((conv) => {
+      (conv.participants || []).forEach((p) => {
+        if (p && p !== currentUser.uid) {
+          otherIdsSet.add(p);
+        }
+      });
+    });
+
+    const otherIds = Array.from(otherIdsSet);
+    if (otherIds.length === 0) {
+      setUserProfiles({});
+      return;
+    }
+
+    const fetchProfiles = async () => {
+      try {
+        const entries = await Promise.all(
+          otherIds.map(async (uid) => {
+            try {
+              const snap = await getDoc(doc(db, "users", uid));
+              if (!snap.exists()) return null;
+              const d = snap.data() || {};
+              return [
+                uid,
+                {
+                  username:
+                    d.username ||
+                    (d.email ? d.email.split("@")[0] : "Player"),
+                  profilePic: d.profilePic || null,
+                },
+              ];
+            } catch (err) {
+              console.log("Error fetching user profile for messages:", err);
+              return null;
+            }
+          })
+        );
+
+        const map = {};
+        entries.forEach((entry) => {
+          if (!entry) return;
+          const [uid, profile] = entry;
+          map[uid] = profile;
+        });
+
+        setUserProfiles(map);
+      } catch (err) {
+        console.log("Error building userProfiles map:", err);
+      }
+    };
+
+    fetchProfiles();
+  }, [currentUser, conversations]);
+
   const formatTime = (ts) => {
     if (!ts || typeof ts.toDate !== "function") return "";
     const date = ts.toDate();
@@ -292,13 +358,24 @@ export default function MessagesScreen({ navigation }) {
   };
 
   const openConversation = (conv) => {
+    const liveProfile =
+      !conv.isGroup && conv.otherId ? userProfiles[conv.otherId] : null;
+
+    const finalName = conv.isGroup
+      ? conv.title || conv.otherName
+      : liveProfile?.username || conv.otherName;
+
+    const finalAvatar = conv.isGroup
+      ? null
+      : liveProfile?.profilePic || conv.otherProfilePic || null;
+
     navigation.navigate("DirectMessage", {
       conversationId: conv.id,
       otherUserId: conv.isGroup ? null : conv.otherId,
-      otherUsername: conv.isGroup ? null : conv.otherName,
-      otherProfilePic: conv.isGroup ? null : conv.otherProfilePic,
+      otherUsername: conv.isGroup ? null : finalName,
+      otherProfilePic: finalAvatar,
       isGroup: !!conv.isGroup,
-      title: conv.title || conv.otherName,
+      title: finalName,
     });
   };
 
@@ -516,7 +593,16 @@ export default function MessagesScreen({ navigation }) {
 
   const renderConversationRow = ({ item }) => {
     const unread = hasUnread(item);
-    const displayName = item.title || item.otherName;
+
+    // Live profile (from users) for 1:1 DMs
+    const liveProfile =
+      !item.isGroup && item.otherId ? userProfiles[item.otherId] : null;
+
+    const displayName = item.isGroup
+      ? item.title || item.otherName
+      : liveProfile?.username || item.otherName;
+
+    const avatarUri = liveProfile?.profilePic || item.otherProfilePic || null;
 
     return (
       <TouchableOpacity
@@ -536,8 +622,8 @@ export default function MessagesScreen({ navigation }) {
                 style={{ marginBottom: 1 }}
               />
             </View>
-          ) : item.otherProfilePic ? (
-            <Image source={{ uri: item.otherProfilePic }} style={ui.avatar} />
+          ) : avatarUri ? (
+            <Image source={{ uri: avatarUri }} style={ui.avatar} />
           ) : (
             <View style={ui.avatarPlaceholder}>
               <Text style={ui.avatarInitial}>

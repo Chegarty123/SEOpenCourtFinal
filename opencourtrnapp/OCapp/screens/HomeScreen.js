@@ -21,6 +21,7 @@ import {
   query,
   orderBy,
   limit,
+  getDoc, // 🔵 NEW
 } from "firebase/firestore";
 import markers from "../assets/markers";
 import { styles } from "../styles/globalStyles";
@@ -99,6 +100,9 @@ export default function HomeScreen({ navigation }) {
   const [pullProgress, setPullProgress] = useState(0);
   const spinAnim = useRef(new Animated.Value(0)).current;
 
+  // 🔵 live friend profile docs (uid -> { username, profilePic })
+  const [friendProfiles, setFriendProfiles] = useState({});
+
   /* ========== Load current user (name, friends, stats) ========== */
   useEffect(() => {
     if (!user) {
@@ -121,6 +125,61 @@ export default function HomeScreen({ navigation }) {
     );
     return () => unsub();
   }, [user]);
+
+  /* ========== Load live profiles for friends (for avatars) ========== */
+  useEffect(() => {
+    if (!friends || friends.length === 0) {
+      setFriendProfiles({});
+      return;
+    }
+
+    let cancelled = false;
+
+    const fetchProfiles = async () => {
+      try {
+        const entries = await Promise.all(
+          friends.map(async (uid) => {
+            try {
+              const snap = await getDoc(doc(db, "users", uid));
+              if (!snap.exists()) return null;
+              const data = snap.data() || {};
+              return [
+                uid,
+                {
+                  username:
+                    data.username ||
+                    (data.email ? data.email.split("@")[0] : "Player"),
+                  profilePic: data.profilePic || null,
+                },
+              ];
+            } catch (err) {
+              console.log("Error fetching friend profile for home:", err);
+              return null;
+            }
+          })
+        );
+
+        if (cancelled) return;
+
+        const map = {};
+        entries.forEach((entry) => {
+          if (!entry) return;
+          const [uid, profile] = entry;
+          map[uid] = profile;
+        });
+
+        setFriendProfiles(map);
+      } catch (err) {
+        console.log("Error building friendProfiles map:", err);
+      }
+    };
+
+    fetchProfiles();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [friends]);
 
   /* ========== Get location (for “near you” + weather) ========== */
   useEffect(() => {
@@ -376,16 +435,17 @@ export default function HomeScreen({ navigation }) {
     return arr.slice(0, 5);
   }, [courtsWithMeta]);
 
-  /* ========== Friends hooping / activity feed ========== */
+  /* ========== Friends hooping / activity feed (with live avatars) ========== */
   const friendsHooping = useMemo(() => {
     const map = new Map();
     courtsWithMeta.forEach((c) => {
       c.players.forEach((p) => {
         if (friends.includes(p.id) && !map.has(p.id)) {
+          const profile = friendProfiles[p.id];
           map.set(p.id, {
             friendId: p.id,
-            friendName: p.name,
-            avatar: p.avatar || null,
+            friendName: profile?.username || p.name,
+            avatar: profile?.profilePic || p.avatar || null,
             court: c,
             ts: p.ts || null,
           });
@@ -393,7 +453,7 @@ export default function HomeScreen({ navigation }) {
       });
     });
     return Array.from(map.values());
-  }, [courtsWithMeta, friends]);
+  }, [courtsWithMeta, friends, friendProfiles]); // 🔵 include friendProfiles
 
   /* ========== Active chats (sorted teasers) ========== */
   const activeChats = useMemo(() => {
