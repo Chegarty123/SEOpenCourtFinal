@@ -314,7 +314,7 @@ export default function ProfileScreen({ navigation }) {
 
             <View style={styles.playerTextArea}>
               <Text style={styles.usernameText}>{username || "Add username"}</Text>
-              {bio ? <Text style={styles.bioPreview}>{bio.length > 50 ? bio.substring(0, 50) + "…" : bio}</Text> : null}
+              {bio ? <Text style={styles.bioPreview}>{bio}</Text> : null}
               <Text style={styles.taglineText}>{tagline || "Tap tags below to update your profile"}</Text>
               {memberSince ? <Text style={styles.memberSinceText}>Member since {memberSince}</Text> : null}
             </View>
