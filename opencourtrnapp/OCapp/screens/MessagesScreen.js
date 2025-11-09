@@ -13,6 +13,7 @@ import {
   StyleSheet,
   ScrollView,
   Alert,
+  TextInput,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -30,6 +31,24 @@ import {
 } from "firebase/firestore";
 import { auth, db } from "../firebaseConfig";
 
+// Helper to build a nice default group name from participant info
+const buildGroupTitle = (participants, participantInfo, myId) => {
+  const others = (participants || []).filter((p) => p !== myId);
+  const names = others.map((pid) => {
+    const info = participantInfo?.[pid] || {};
+    if (info.username) return info.username;
+    if (info.email) return info.email.split("@")[0];
+    return "Player";
+  });
+
+  if (!names.length) return "Group chat";
+  if (names.length <= 3) return names.join(", ");
+
+  const firstTwo = names.slice(0, 2).join(", ");
+  const remaining = names.length - 2;
+  return `${firstTwo} +${remaining}`;
+};
+
 export default function MessagesScreen({ navigation }) {
   const currentUser = auth.currentUser;
 
@@ -39,6 +58,18 @@ export default function MessagesScreen({ navigation }) {
   const [friends, setFriends] = useState([]);
   const [newChatVisible, setNewChatVisible] = useState(false);
   const [creatingFor, setCreatingFor] = useState(null);
+
+  // NEW: group-chat creation state
+  const [selectedFriends, setSelectedFriends] = useState([]);
+  const [groupName, setGroupName] = useState("");
+  const [creatingGroup, setCreatingGroup] = useState(false);
+
+  const resetNewChatState = () => {
+    setCreatingFor(null);
+    setSelectedFriends([]);
+    setGroupName("");
+    setCreatingGroup(false);
+  };
 
   // Load my user doc & friends
   useEffect(() => {
@@ -98,22 +129,47 @@ export default function MessagesScreen({ navigation }) {
           // only keep convos that include this user
           if (!participants.includes(currentUser.uid)) return;
 
-          const otherId =
-            participants.find((p) => p !== currentUser.uid) ||
-            currentUser.uid;
           const pInfo = data.participantInfo || {};
-          const otherInfo = pInfo[otherId] || {};
+          const isGroup =
+            data.type === "group" || (participants && participants.length > 2);
+
+          let otherId = null;
+          let otherInfo = {};
+          let otherName = "";
+          let otherProfilePic = null;
+
+          if (isGroup) {
+            const title =
+              data.name ||
+              buildGroupTitle(participants, pInfo, currentUser.uid);
+            otherName = title;
+          } else {
+            otherId =
+              participants.find((p) => p !== currentUser.uid) ||
+              currentUser.uid;
+            otherInfo = pInfo[otherId] || {};
+            otherName =
+              otherInfo.username ||
+              (otherInfo.email
+                ? otherInfo.email.split("@")[0]
+                : "Player");
+            otherProfilePic = otherInfo.profilePic || null;
+          }
+
+          const convType = isGroup ? "group" : (data.type || "dm");
+          const title =
+            isGroup ? (data.name || otherName || "Group chat") : otherName;
 
           arr.push({
             id: d.id,
             participants,
+            type: convType,
+            isGroup,
+            name: data.name || (isGroup ? otherName : null),
+            title,
             otherId,
-            otherName:
-              otherInfo.username ||
-              (otherInfo.email
-                ? otherInfo.email.split("@")[0]
-                : "Player"),
-            otherProfilePic: otherInfo.profilePic || null,
+            otherName,
+            otherProfilePic,
             lastMessage: data.lastMessage || "",
             lastMessageType: data.lastMessageType || "text",
             lastMessageSenderId: data.lastMessageSenderId || null,
@@ -182,6 +238,9 @@ export default function MessagesScreen({ navigation }) {
 
     if (!currentUser) return base;
 
+    // For group chats, just show the base preview (no Sent/Read prefix for now)
+    if (conv.isGroup) return base;
+
     const sentByMe = conv.lastMessageSenderId === currentUser.uid;
     if (!sentByMe) return base;
 
@@ -235,13 +294,15 @@ export default function MessagesScreen({ navigation }) {
   const openConversation = (conv) => {
     navigation.navigate("DirectMessage", {
       conversationId: conv.id,
-      otherUserId: conv.otherId,
-      otherUsername: conv.otherName,
-      otherProfilePic: conv.otherProfilePic,
+      otherUserId: conv.isGroup ? null : conv.otherId,
+      otherUsername: conv.isGroup ? null : conv.otherName,
+      otherProfilePic: conv.isGroup ? null : conv.otherProfilePic,
+      isGroup: !!conv.isGroup,
+      title: conv.title || conv.otherName,
     });
   };
 
-  // no duplicate conversations per friend
+  // no duplicate conversations per friend (1:1 DM)
   const startConversation = async (friend) => {
     if (!currentUser || !me || !friend) return;
 
@@ -250,6 +311,7 @@ export default function MessagesScreen({ navigation }) {
       // 1) check local list first
       const existingLocal = conversations.find(
         (c) =>
+          !c.isGroup &&
           c.participants &&
           c.participants.length === 2 &&
           c.participants.includes(currentUser.uid) &&
@@ -258,12 +320,14 @@ export default function MessagesScreen({ navigation }) {
 
       if (existingLocal) {
         setNewChatVisible(false);
-        setCreatingFor(null);
+        resetNewChatState();
         navigation.navigate("DirectMessage", {
           conversationId: existingLocal.id,
           otherUserId: friend.id,
           otherUsername: friend.username,
           otherProfilePic: friend.profilePic || null,
+          isGroup: false,
+          title: friend.username,
         });
         return;
       }
@@ -280,7 +344,9 @@ export default function MessagesScreen({ navigation }) {
       snap.forEach((docSnap) => {
         const data = docSnap.data();
         const parts = data.participants || [];
-        if (parts.includes(friend.id)) {
+        const isGroupRemote =
+          data.type === "group" || (parts && parts.length > 2);
+        if (!isGroupRemote && parts.includes(friend.id)) {
           existingRemote = {
             id: docSnap.id,
             data,
@@ -290,18 +356,21 @@ export default function MessagesScreen({ navigation }) {
 
       if (existingRemote) {
         setNewChatVisible(false);
-        setCreatingFor(null);
+        resetNewChatState();
         navigation.navigate("DirectMessage", {
           conversationId: existingRemote.id,
           otherUserId: friend.id,
           otherUsername: friend.username,
           otherProfilePic: friend.profilePic || null,
+          isGroup: false,
+          title: friend.username,
         });
         return;
       }
 
       // 3) actually create a new conversation
       const newConvRef = await addDoc(collection(db, "dmConversations"), {
+        type: "dm",
         participants: [currentUser.uid, friend.id],
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
@@ -323,13 +392,15 @@ export default function MessagesScreen({ navigation }) {
       });
 
       setNewChatVisible(false);
-      setCreatingFor(null);
+      resetNewChatState();
 
       navigation.navigate("DirectMessage", {
         conversationId: newConvRef.id,
         otherUserId: friend.id,
         otherUsername: friend.username,
         otherProfilePic: friend.profilePic || null,
+        isGroup: false,
+        title: friend.username,
       });
     } catch (err) {
       console.log("Error starting conversation:", err);
@@ -337,11 +408,95 @@ export default function MessagesScreen({ navigation }) {
     }
   };
 
+  // NEW: toggle friend selection for group chat
+  const toggleFriendSelected = (friendId) => {
+    setSelectedFriends((prev) =>
+      prev.includes(friendId)
+        ? prev.filter((id) => id !== friendId)
+        : [...prev, friendId]
+    );
+  };
+
+  // NEW: create a group conversation with selected friends
+  const createGroupConversation = async () => {
+    if (!currentUser || !me) return;
+    if (selectedFriends.length < 2) {
+      Alert.alert(
+        "Add more friends",
+        "Pick at least two friends to start a group chat."
+      );
+      return;
+    }
+
+    const trimmedName = groupName.trim();
+    if (!trimmedName) {
+      Alert.alert("Name your group", "Please enter a group name.");
+      return;
+    }
+
+    setCreatingGroup(true);
+    try {
+      const participantIds = [currentUser.uid, ...selectedFriends];
+
+      const participantInfo = {
+        [currentUser.uid]: {
+          username:
+            me.username ||
+            (me.email ? me.email.split("@")[0] : "You"),
+          profilePic: me.profilePic || null,
+        },
+      };
+
+      selectedFriends.forEach((fid) => {
+        const f = friends.find((fr) => fr.id === fid);
+        if (!f) return;
+        participantInfo[f.id] = {
+          username:
+            f.username ||
+            (f.email ? f.email.split("@")[0] : "Player"),
+          profilePic: f.profilePic || null,
+        };
+      });
+
+      const newConvRef = await addDoc(collection(db, "dmConversations"), {
+        type: "group",
+        name: trimmedName,
+        participants: participantIds,
+        participantInfo,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        lastMessage: "",
+        lastMessageType: null,
+        lastMessageSenderId: null,
+        readBy: {},
+      });
+
+      setNewChatVisible(false);
+      resetNewChatState();
+
+      navigation.navigate("DirectMessage", {
+        conversationId: newConvRef.id,
+        otherUserId: null,
+        otherUsername: null,
+        otherProfilePic: null,
+        isGroup: true,
+        title: trimmedName,
+      });
+    } catch (err) {
+      console.log("Error creating group conversation:", err);
+      setCreatingGroup(false);
+    }
+  };
+
   // delete a conversation
   const handleDeleteConversation = (conv) => {
+    const titleForAlert = conv.isGroup
+      ? conv.title || "this group"
+      : conv.otherName;
+
     Alert.alert(
       "Delete conversation?",
-      `This will remove your DM with ${conv.otherName} from Messages.`,
+      `This will remove ${titleForAlert} from Messages on your device.`,
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -361,6 +516,7 @@ export default function MessagesScreen({ navigation }) {
 
   const renderConversationRow = ({ item }) => {
     const unread = hasUnread(item);
+    const displayName = item.title || item.otherName;
 
     return (
       <TouchableOpacity
@@ -371,12 +527,21 @@ export default function MessagesScreen({ navigation }) {
         activeOpacity={0.9}
       >
         <View style={ui.avatarWrap}>
-          {item.otherProfilePic ? (
+          {item.isGroup ? (
+            <View style={[ui.avatarPlaceholder, { backgroundColor: "#020617" }]}>
+              <Ionicons
+                name="people-outline"
+                size={18}
+                color="#93c5fd"
+                style={{ marginBottom: 1 }}
+              />
+            </View>
+          ) : item.otherProfilePic ? (
             <Image source={{ uri: item.otherProfilePic }} style={ui.avatar} />
           ) : (
             <View style={ui.avatarPlaceholder}>
               <Text style={ui.avatarInitial}>
-                {item.otherName?.[0]?.toUpperCase() || "U"}
+                {displayName?.[0]?.toUpperCase() || "U"}
               </Text>
             </View>
           )}
@@ -388,8 +553,19 @@ export default function MessagesScreen({ navigation }) {
               style={[ui.convName, unread && ui.convNameUnread]}
               numberOfLines={1}
             >
-              {item.otherName}
+              {displayName}
             </Text>
+            {item.isGroup && (
+              <View style={ui.groupChip}>
+                <Ionicons
+                  name="people-outline"
+                  size={11}
+                  color="#93c5fd"
+                  style={{ marginRight: 4 }}
+                />
+                <Text style={ui.groupChipText}>Group</Text>
+              </View>
+            )}
           </View>
           <Text
             style={[ui.convPreview, unread && ui.convPreviewUnread]}
@@ -407,33 +583,63 @@ export default function MessagesScreen({ navigation }) {
     );
   };
 
-  const renderFriendRow = (friend) => (
-    <TouchableOpacity
-      key={friend.id}
-      style={ui.friendRow}
-      onPress={() => startConversation(friend)}
-      activeOpacity={0.9}
-    >
-      <View style={ui.friendAvatarWrap}>
-        {friend.profilePic ? (
-          <Image source={{ uri: friend.profilePic }} style={ui.friendAvatar} />
-        ) : (
-          <View style={ui.friendAvatarPlaceholder}>
-            <Text style={ui.friendAvatarInitial}>
-              {friend.username?.[0]?.toUpperCase() || "U"}
-            </Text>
-          </View>
-        )}
-      </View>
-      <View style={{ flex: 1 }}>
-        <Text style={ui.friendName}>{friend.username}</Text>
-        <Text style={ui.friendSub}>Tap to start a new chat</Text>
-      </View>
-      {creatingFor === friend.id && (
-        <ActivityIndicator size="small" color="#60a5fa" />
-      )}
-    </TouchableOpacity>
-  );
+  const renderFriendRow = (friend) => {
+    const isSelected = selectedFriends.includes(friend.id);
+    const anySelected = selectedFriends.length > 0;
+
+    const onPress = () => {
+      if (anySelected) {
+        toggleFriendSelected(friend.id);
+      } else {
+        startConversation(friend);
+      }
+    };
+
+    const onLongPress = () => {
+      toggleFriendSelected(friend.id);
+    };
+
+    return (
+      <TouchableOpacity
+        key={friend.id}
+        style={[
+          ui.friendRow,
+          isSelected && { backgroundColor: "#020617", borderColor: "#60a5fa" },
+        ]}
+        onPress={onPress}
+        onLongPress={onLongPress}
+        delayLongPress={250}
+        activeOpacity={0.9}
+      >
+        <View style={ui.friendAvatarWrap}>
+          {friend.profilePic ? (
+            <Image source={{ uri: friend.profilePic }} style={ui.friendAvatar} />
+          ) : (
+            <View style={ui.friendAvatarPlaceholder}>
+              <Text style={ui.friendAvatarInitial}>
+                {friend.username?.[0]?.toUpperCase() || "U"}
+              </Text>
+            </View>
+          )}
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={ui.friendName}>{friend.username}</Text>
+          <Text style={ui.friendSub}>
+            {isSelected
+              ? "Selected for group chat"
+              : anySelected
+              ? "Tap to toggle selection"
+              : "Tap to start a DM • long-press for group"}
+          </Text>
+        </View>
+        {creatingFor === friend.id && !anySelected ? (
+          <ActivityIndicator size="small" color="#60a5fa" />
+        ) : isSelected ? (
+          <Ionicons name="checkmark-circle" size={22} color="#60a5fa" />
+        ) : null}
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <SafeAreaView
@@ -448,7 +654,10 @@ export default function MessagesScreen({ navigation }) {
       <View style={ui.header}>
         <Text style={ui.headerTitle}>Messages</Text>
         <TouchableOpacity
-          onPress={() => setNewChatVisible(true)}
+          onPress={() => {
+            resetNewChatState();
+            setNewChatVisible(true);
+          }}
           style={ui.headerIconBtn}
         >
           <Ionicons name="create-outline" size={20} color="#e5e7eb" />
@@ -469,7 +678,10 @@ export default function MessagesScreen({ navigation }) {
               Start a conversation with one of your friends.
             </Text>
             <TouchableOpacity
-              onPress={() => setNewChatVisible(true)}
+              onPress={() => {
+                resetNewChatState();
+                setNewChatVisible(true);
+              }}
               style={ui.emptyButton}
             >
               <Text style={ui.emptyButtonText}>New message</Text>
@@ -490,13 +702,21 @@ export default function MessagesScreen({ navigation }) {
         visible={newChatVisible}
         transparent
         animationType="slide"
-        onRequestClose={() => setNewChatVisible(false)}
+        onRequestClose={() => {
+          setNewChatVisible(false);
+          resetNewChatState();
+        }}
       >
         <View style={ui.modalBackdrop}>
           <View style={ui.modalContainer}>
             <View style={ui.modalHeader}>
               <Text style={ui.modalTitle}>New message</Text>
-              <TouchableOpacity onPress={() => setNewChatVisible(false)}>
+              <TouchableOpacity
+                onPress={() => {
+                  setNewChatVisible(false);
+                  resetNewChatState();
+                }}
+              >
                 <Ionicons name="close" size={24} color="#e5e7eb" />
               </TouchableOpacity>
             </View>
@@ -508,12 +728,59 @@ export default function MessagesScreen({ navigation }) {
                 </Text>
               </View>
             ) : (
-              <ScrollView
-                showsVerticalScrollIndicator={false}
-                contentContainerStyle={{ paddingBottom: 10 }}
-              >
-                {friends.map(renderFriendRow)}
-              </ScrollView>
+              <>
+                <Text style={ui.selectionHint}>
+                  Tap a friend to start a DM. Long-press to select multiple for a
+                  group chat.
+                </Text>
+                <ScrollView
+                  showsVerticalScrollIndicator={false}
+                  contentContainerStyle={{ paddingBottom: 10 }}
+                >
+                  {friends.map(renderFriendRow)}
+                </ScrollView>
+              </>
+            )}
+
+            {/* Group chat builder */}
+            {selectedFriends.length >= 2 && (
+              <View style={ui.groupPanel}>
+                <Text style={ui.groupPanelTitle}>Create group chat</Text>
+                <Text style={ui.groupMembersText}>
+                  {selectedFriends.length} friends selected
+                </Text>
+                <TextInput
+                  style={ui.groupInput}
+                  placeholder="Group name"
+                  placeholderTextColor="#6b7280"
+                  value={groupName}
+                  onChangeText={setGroupName}
+                />
+                <TouchableOpacity
+                  onPress={createGroupConversation}
+                  disabled={creatingGroup || !groupName.trim()}
+                  style={[
+                    ui.groupCreateBtn,
+                    (!groupName.trim() || creatingGroup) &&
+                      ui.groupCreateBtnDisabled,
+                  ]}
+                  activeOpacity={0.9}
+                >
+                  {creatingGroup ? (
+                    <ActivityIndicator size="small" color="#e5e7eb" />
+                  ) : (
+                    <>
+                      <Ionicons
+                        name="people-outline"
+                        size={16}
+                        color="#e5e7eb"
+                        style={{ marginRight: 6 }}
+                      />
+                      <Text style={ui.groupCreateBtnText}>Start group chat</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </View>
             )}
           </View>
         </View>
@@ -554,38 +821,68 @@ const ui = StyleSheet.create({
   },
   centered: {
     flex: 1,
+    alignItems: "center",
     justifyContent: "center",
-    alignItems: "center",
   },
-  convRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 10,
-  },
-  avatarWrap: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: "rgba(148,163,184,0.7)",
-    backgroundColor: "#020617",
-    marginRight: 10,
-  },
-  avatar: {
-    width: "100%",
-    height: "100%",
-  },
-  avatarPlaceholder: {
+  emptyState: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#0f172a",
+    paddingHorizontal: 24,
   },
-  avatarInitial: {
-    fontSize: 22,
+  emptyTitle: {
+    fontSize: 18,
     fontWeight: "700",
     color: "#e5f3ff",
+    marginTop: 12,
+  },
+  emptyText: {
+    fontSize: 14,
+    color: "#9ca3af",
+    textAlign: "center",
+    marginTop: 6,
+  },
+  emptyButton: {
+    marginTop: 16,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 999,
+    backgroundColor: "#2563eb",
+  },
+  emptyButtonText: {
+    color: "#e5f3ff",
+    fontWeight: "600",
+  },
+  convRow: {
+    flexDirection: "row",
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "#1f2937",
+  },
+  avatarWrap: {
+    marginRight: 10,
+  },
+  avatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "rgba(148,163,184,0.7)",
+  },
+  avatarPlaceholder: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "rgba(148,163,184,0.7)",
+    backgroundColor: "#0f172a",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  avatarInitial: {
+    color: "#e5f3ff",
+    fontWeight: "700",
+    fontSize: 16,
   },
   convTextWrap: {
     flex: 1,
@@ -593,11 +890,11 @@ const ui = StyleSheet.create({
   convName: {
     fontSize: 15,
     fontWeight: "600",
-    color: "#e5f3ff",
+    color: "#e5e7eb",
+    marginRight: 6,
   },
   convNameUnread: {
-    fontWeight: "700",
-    color: "#e5f3ff",
+    color: "#f9fafb",
   },
   convPreview: {
     fontSize: 13,
@@ -605,113 +902,155 @@ const ui = StyleSheet.create({
     marginTop: 2,
   },
   convPreviewUnread: {
-    fontWeight: "600",
-    color: "#e5f3ff",
+    color: "#e5e7eb",
+    fontWeight: "500",
   },
   timeWrap: {
-    marginLeft: 8,
     alignItems: "flex-end",
+    marginLeft: 8,
+    justifyContent: "center",
   },
   convTime: {
     fontSize: 11,
     color: "#6b7280",
-    marginBottom: 2,
+    marginBottom: 4,
   },
-  emptyState: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 40,
-  },
-  emptyTitle: {
-    marginTop: 10,
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#e5f3ff",
-  },
-  emptyText: {
-    marginTop: 4,
-    fontSize: 13,
-    color: "#9ca3af",
-    textAlign: "center",
-  },
-  emptyButton: {
-    marginTop: 12,
-    paddingHorizontal: 18,
-    paddingVertical: 8,
-    backgroundColor: "#2563eb",
+  groupChip: {
+    marginLeft: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
     borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(129,140,248,0.8)",
+    backgroundColor: "rgba(15,23,42,0.95)",
+    flexDirection: "row",
+    alignItems: "center",
   },
-  emptyButtonText: {
-    color: "#f9fafb",
-    fontWeight: "700",
-    fontSize: 14,
+  groupChipText: {
+    fontSize: 10,
+    color: "#93c5fd",
+    fontWeight: "600",
+    textTransform: "uppercase",
   },
   modalBackdrop: {
     flex: 1,
-    backgroundColor: "rgba(15,23,42,0.9)",
+    backgroundColor: "rgba(15,23,42,0.8)",
     justifyContent: "center",
-    alignItems: "center",
     paddingHorizontal: 16,
   },
   modalContainer: {
-    width: "100%",
-    maxWidth: 420,
-    maxHeight: "75%",
     backgroundColor: "rgba(15,23,42,0.98)",
-    borderRadius: 20,
+    borderRadius: 18,
     padding: 16,
     borderWidth: 1,
     borderColor: "rgba(148,163,184,0.7)",
+    maxHeight: "80%",
   },
   modalHeader: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 10,
+    marginBottom: 8,
   },
   modalTitle: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: "700",
     color: "#e5f3ff",
+  },
+  selectionHint: {
+    fontSize: 12,
+    color: "#9ca3af",
+    marginBottom: 8,
   },
   friendRow: {
     flexDirection: "row",
     alignItems: "center",
     paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: "#1f2937",
+    paddingHorizontal: 4,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "transparent",
   },
   friendAvatarWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: "rgba(148,163,184,0.6)",
-    backgroundColor: "#020617",
     marginRight: 10,
   },
   friendAvatar: {
-    width: "100%",
-    height: "100%",
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(148,163,184,0.7)",
   },
   friendAvatarPlaceholder: {
-    flex: 1,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(148,163,184,0.7)",
+    backgroundColor: "#0f172a",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#0f172a",
   },
   friendAvatarInitial: {
-    fontSize: 18,
-    fontWeight: "700",
     color: "#e5f3ff",
+    fontWeight: "700",
   },
   friendName: {
     fontSize: 15,
-    color: "#f9fafb",
-    fontWeight: "600",
+    color: "#e5e7eb",
+    fontWeight: "500",
   },
   friendSub: {
     fontSize: 12,
     color: "#9ca3af",
+    marginTop: 2,
+  },
+  groupPanel: {
+    marginTop: 12,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: "#1f2937",
+  },
+  groupPanelTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#e5f3ff",
+  },
+  groupMembersText: {
+    fontSize: 12,
+    color: "#9ca3af",
+    marginTop: 2,
+    marginBottom: 6,
+  },
+  groupInput: {
+    marginTop: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(148,163,184,0.7)",
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    color: "#e5e7eb",
+    fontSize: 14,
+    backgroundColor: "#020617",
+  },
+  groupCreateBtn: {
+    marginTop: 10,
+    borderRadius: 999,
+    paddingVertical: 9,
+    paddingHorizontal: 14,
+    backgroundColor: "#2563eb",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  groupCreateBtnDisabled: {
+    opacity: 0.5,
+  },
+  groupCreateBtnText: {
+    color: "#e5f3ff",
+    fontWeight: "600",
+    fontSize: 14,
   },
 });

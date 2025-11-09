@@ -35,8 +35,14 @@ const TENOR_API_KEY = "AIzaSyDYgE5Z7qvK2PDPY8sg1GiqGcC_AVxFdho";
 const REACTION_EMOJIS = ["👍", "🔥", "😂", "💪", "❤️"];
 
 export default function DmChatScreen({ route, navigation }) {
-  const { conversationId, otherUserId, otherUsername, otherProfilePic } =
-    route.params || {};
+  const {
+    conversationId,
+    otherUserId,
+    otherUsername,
+    otherProfilePic,
+    isGroup = false,
+    title,
+  } = route.params || {};
   const user = auth.currentUser;
 
   const [myProfile, setMyProfile] = useState({
@@ -68,9 +74,14 @@ export default function DmChatScreen({ route, navigation }) {
 
   const [reactionDetail, setReactionDetail] = useState(null);
   const [reactionDetailLoading, setReactionDetailLoading] = useState(false);
+  const [messagesLoaded, setMessagesLoaded] = useState(false);
 
-  // 👇 read receipts state
+
+  // read receipts state (conversation-level)
   const [readBy, setReadBy] = useState({});
+
+  const displayTitle = title || otherUsername || "Chat";
+  const headerSubtitle = isGroup ? "Group chat" : "Direct messages";
 
   const scrollToBottom = () => {
     setTimeout(() => {
@@ -81,6 +92,7 @@ export default function DmChatScreen({ route, navigation }) {
     }, 50);
   };
 
+  // auto-scroll when keyboard shows
   useEffect(() => {
     const subShow = Keyboard.addListener("keyboardDidShow", scrollToBottom);
     return () => {
@@ -88,6 +100,7 @@ export default function DmChatScreen({ route, navigation }) {
     };
   }, []);
 
+  // Reset initial scroll flag when switching conversations
   useEffect(() => {
     initialScrollDoneRef.current = false;
     setInitialRenderDone(false);
@@ -148,51 +161,50 @@ export default function DmChatScreen({ route, navigation }) {
       .catch((err) => console.log("Error fetching user profile:", err));
   }, [user]);
 
-  // Listen to DM messages
+  // Subscribe to messages for this conversation
   useEffect(() => {
-    if (!conversationId) return;
+    if (!conversationId || !user) return;
 
-    const msgsRef = collection(
-      db,
-      "dmConversations",
-      conversationId,
-      "messages"
-    );
+    const msgsRef = collection(db, "dmConversations", conversationId, "messages");
     const qMsgs = query(msgsRef, orderBy("ts", "asc"));
 
-    const unsub = onSnapshot(qMsgs, (snapshot) => {
-      const chatArr = [];
-      snapshot.forEach((d) => {
+    const unsub = onSnapshot(qMsgs, (snap) => {
+      const list = [];
+      snap.forEach((d) => {
         const data = d.data();
-        chatArr.push({
+        list.push({
           id: d.id,
-          userId: data.userId,
-          user: data.username || "player",
           text: data.text || "",
-          type: data.type || (data.gifUrl ? "gif" : "text"),
+          ts: data.ts || data.createdAt || null,
+          userId: data.userId,
+          user:
+            data.username ||
+            data.user ||
+            (data.userId === user.uid ? "You" : "Player"),
+          type: data.type || "text",
           gifUrl: data.gifUrl || null,
           reactions: data.reactions || {},
-          ts: data.ts,
           mine: data.userId === user.uid,
         });
       });
+      setMessages(list);
 
-      const prevCount = prevMsgCountRef.current;
-      const newCount = chatArr.length;
-      const gotNewMessage = newCount > prevCount;
-      prevMsgCountRef.current = newCount;
-
-      setMessages(chatArr);
-
-      if (!isAtBottomRef.current && gotNewMessage) {
-        setHasNewMessage(true);
+      // new message detection for "jump to latest" pill
+      if (initialRenderDone && list.length > prevMsgCountRef.current) {
+        if (!isAtBottomRef.current) {
+          setHasNewMessage(true);
+        }
       }
+      prevMsgCountRef.current = list.length;
+
+
+      setMessagesLoaded(true);
     });
 
     return () => unsub();
-  }, [conversationId, user]);
+  }, [conversationId, user, initialRenderDone]);
 
-  // Typing indicator
+  // Typing indicator subscription
   useEffect(() => {
     if (!conversationId || !user) return;
 
@@ -202,15 +214,20 @@ export default function DmChatScreen({ route, navigation }) {
       conversationId,
       "typing"
     );
-    const unsub = onSnapshot(typingRef, (snap) => {
-      const currentTyping = [];
+    const qTyping = query(typingRef);
+
+    const unsub = onSnapshot(qTyping, (snap) => {
+      const arr = [];
       snap.forEach((docSnap) => {
         const data = docSnap.data();
-        if (docSnap.id !== user.uid && data.isTyping) {
-          currentTyping.push(data.username || "Someone");
+        const uid = data.userId;
+        if (uid && uid !== user.uid && data.isTyping) {
+          const name =
+            data.username || (data.email ? data.email.split("@")[0] : "Player");
+          arr.push(name);
         }
       });
-      setTypingUsers(currentTyping);
+      setTypingUsers(arr);
     });
 
     return () => unsub();
@@ -218,176 +235,157 @@ export default function DmChatScreen({ route, navigation }) {
 
   const setTypingStatus = async (isTyping) => {
     if (!conversationId || !user) return;
-    const typingDoc = doc(
-      db,
-      "dmConversations",
-      conversationId,
-      "typing",
-      user.uid
-    );
     try {
+      const typingDoc = doc(
+        db,
+        "dmConversations",
+        conversationId,
+        "typing",
+        user.uid
+      );
       await setDoc(
         typingDoc,
         {
+          userId: user.uid,
+          username: myProfile.name,
           isTyping,
-          username: myProfile.name || user.email.split("@")[0],
           updatedAt: serverTimestamp(),
         },
         { merge: true }
       );
     } catch (err) {
-      console.log("Error setting typing status:", err);
+      console.log("Error updating typing status:", err);
     }
   };
 
-  const handleChangeText = (text) => {
-    setDraftMessage(text);
-    setTypingStatus(text.length > 0);
+  const handleChangeText = (txt) => {
+    setDraftMessage(txt);
+    setTypingStatus(!!txt.trim());
   };
 
-  const updateConversationMeta = async (payload) => {
+  // Subscribe to dmConversations doc for readBy
+  useEffect(() => {
     if (!conversationId) return;
+
+    const convRef = doc(db, "dmConversations", conversationId);
+    const unsub = onSnapshot(convRef, (snap) => {
+      if (!snap.exists()) return;
+      const data = snap.data();
+      setReadBy(data.readBy || {});
+    });
+
+    return () => unsub();
+  }, [conversationId]);
+
+  // Mark conversation read for me
+  const markConversationRead = async () => {
+    if (!conversationId || !user) return;
     try {
-      await updateDoc(doc(db, "dmConversations", conversationId), payload);
+      const convRef = doc(db, "dmConversations", conversationId);
+      const field = `readBy.${user.uid}`;
+      await updateDoc(convRef, { [field]: serverTimestamp() });
+    } catch (err) {
+      console.log("Error marking conversation read:", err);
+    }
+  };
+
+  // initial read mark on mount / convo change
+  useEffect(() => {
+    markConversationRead();
+  }, [conversationId]);
+
+  // mark read whenever message count changes
+  useEffect(() => {
+    if (!messages.length) return;
+    markConversationRead();
+  }, [messages.length]);
+
+  const updateConversationMeta = async (messageType, textForPreview) => {
+    if (!conversationId || !user) return;
+    try {
+      const convRef = doc(db, "dmConversations", conversationId);
+      const preview =
+        messageType === "gif"
+          ? "[GIF]"
+          : (textForPreview || "").slice(0, 300);
+
+      await updateDoc(convRef, {
+        lastMessage: preview,
+        lastMessageType: messageType,
+        lastMessageSenderId: user.uid,
+        updatedAt: serverTimestamp(),
+        [`readBy.${user.uid}`]: serverTimestamp(),
+      });
     } catch (err) {
       console.log("Error updating conversation meta:", err);
     }
   };
 
-  // Send text
   const handleSend = async () => {
-    if (!draftMessage.trim() || !conversationId || !user) return;
-
-    const msgsRef = collection(
-      db,
-      "dmConversations",
-      conversationId,
-      "messages"
-    );
-
-    const messageObj = {
-      userId: user.uid,
-      username: myProfile.name,
-      text: draftMessage.trim(),
-      type: "text",
-      gifUrl: null,
-      ts: serverTimestamp(),
-      reactions: {},
-    };
+    const trimmed = draftMessage.trim();
+    if (!trimmed || !conversationId || !user) return;
 
     try {
-      await addDoc(msgsRef, messageObj);
-      await updateConversationMeta({
-        lastMessage: draftMessage.trim(),
-        lastMessageType: "text",
-        lastMessageSenderId: user.uid,
-        updatedAt: serverTimestamp(),
-      });
+      const msgsRef = collection(
+        db,
+        "dmConversations",
+        conversationId,
+        "messages"
+      );
+
+      const newMsg = {
+        text: trimmed,
+        userId: user.uid,
+        username: myProfile.name,
+        type: "text",
+        gifUrl: null,
+        ts: serverTimestamp(),
+        reactions: {},
+      };
+
+      await addDoc(msgsRef, newMsg);
       setDraftMessage("");
       setTypingStatus(false);
       scrollToBottom();
+      await updateConversationMeta("text", trimmed);
     } catch (err) {
-      console.log("Error sending message:", err);
+      console.log("Error sending DM:", err);
     }
   };
 
-  // Send GIF
   const sendGifMessage = async (gifUrl) => {
     if (!gifUrl || !conversationId || !user) return;
 
-    const msgsRef = collection(
-      db,
-      "dmConversations",
-      conversationId,
-      "messages"
-    );
-
-    const messageObj = {
-      userId: user.uid,
-      username: myProfile.name,
-      text: "",
-      type: "gif",
-      gifUrl,
-      ts: serverTimestamp(),
-      reactions: {},
-    };
-
     try {
-      await addDoc(msgsRef, messageObj);
-      await updateConversationMeta({
-        lastMessage: "GIF",
-        lastMessageType: "gif",
-        lastMessageSenderId: user.uid,
-        updatedAt: serverTimestamp(),
-      });
+      const msgsRef = collection(
+        db,
+        "dmConversations",
+        conversationId,
+        "messages"
+      );
+
+      const newMsg = {
+        text: "",
+        userId: user.uid,
+        username: myProfile.name,
+        type: "gif",
+        gifUrl,
+        ts: serverTimestamp(),
+        reactions: {},
+      };
+
+      await addDoc(msgsRef, newMsg);
+      scrollToBottom();
       setGifPickerVisible(false);
       setGifSearch("");
       setGifResults([]);
-      scrollToBottom();
+      await updateConversationMeta("gif", "");
     } catch (err) {
       console.log("Error sending GIF message:", err);
     }
   };
 
-  // Reactions
-  const toggleReaction = async (messageId, emoji) => {
-    if (!conversationId || !user) return;
-    const msgRef = doc(
-      db,
-      "dmConversations",
-      conversationId,
-      "messages",
-      messageId
-    );
-
-    try {
-      const snap = await getDoc(msgRef);
-      if (!snap.exists()) return;
-      const data = snap.data();
-      const reactions = data.reactions || {};
-
-      const currentUsers = reactions[emoji] || [];
-      const updatedUsers = currentUsers.includes(user.uid)
-        ? currentUsers.filter((u) => u !== user.uid)
-        : [...currentUsers, user.uid];
-
-      const updatedReactions = {
-        ...reactions,
-        [emoji]: updatedUsers,
-      };
-
-      await updateDoc(msgRef, { reactions: updatedReactions });
-    } catch (err) {
-      console.log("Error toggling reaction:", err);
-    }
-  };
-
-  const openReactionPicker = (msgId) => {
-    setReactionPickerFor(msgId);
-  };
-
-  const closeReactionPicker = () => {
-    setReactionPickerFor(null);
-  };
-
-  const handleDeleteMessage = async (messageId) => {
-    if (!conversationId || !user || !messageId) return;
-    try {
-      const msgRef = doc(
-        db,
-        "dmConversations",
-        conversationId,
-        "messages",
-        messageId
-      );
-      await deleteDoc(msgRef);
-      closeReactionPicker();
-    } catch (err) {
-      console.log("Error deleting message:", err);
-    }
-  };
-
-  // Tenor search
+  // Tenor GIF search
   const searchGifs = async () => {
     if (!gifSearch.trim()) {
       setGifResults([]);
@@ -417,6 +415,7 @@ export default function DmChatScreen({ route, navigation }) {
     }
   };
 
+  // Typing label
   let typingLabel = "";
   if (typingUsers.length === 1) {
     typingLabel = `${typingUsers[0]} is typing...`;
@@ -428,6 +427,12 @@ export default function DmChatScreen({ route, navigation }) {
     } others are typing...`;
   }
 
+  const handlePressUser = (userId) => {
+    if (!userId) return;
+    navigation.navigate("UserProfile", { userId });
+  };
+
+  // Double-tap to heart
   const handleMessagePress = (msgId) => {
     const now = Date.now();
     const { time, msgId: lastId } = lastTapRef.current;
@@ -439,6 +444,72 @@ export default function DmChatScreen({ route, navigation }) {
     lastTapRef.current = { time: now, msgId };
   };
 
+  const toggleReaction = async (msgId, emoji) => {
+    if (!conversationId || !user || !msgId || !emoji) return;
+
+    try {
+      const msgRef = doc(
+        db,
+        "dmConversations",
+        conversationId,
+        "messages",
+        msgId
+      );
+      const snap = await getDoc(msgRef);
+      if (!snap.exists()) return;
+
+      const data = snap.data();
+      const reactions = data.reactions || {};
+      const currentList = Array.isArray(reactions[emoji])
+        ? reactions[emoji]
+        : [];
+
+      const alreadyReacted = currentList.includes(user.uid);
+      let newList;
+      if (alreadyReacted) {
+        newList = currentList.filter((uid) => uid !== user.uid);
+      } else {
+        newList = [...currentList, user.uid];
+      }
+
+      const updatedReactions = {
+        ...reactions,
+        [emoji]: newList,
+      };
+
+      await updateDoc(msgRef, { reactions: updatedReactions });
+    } catch (err) {
+      console.log("Error toggling reaction:", err);
+    }
+  };
+
+  const openReactionPicker = (msgId) => {
+    setReactionPickerFor(msgId);
+  };
+
+  const closeReactionPicker = () => {
+    setReactionPickerFor(null);
+  };
+
+  // Delete / unsend message (only for your own messages in UI)
+  const handleDeleteMessage = async (messageId) => {
+    if (!conversationId || !user || !messageId) return;
+    try {
+      const msgRef = doc(
+        db,
+        "dmConversations",
+        conversationId,
+        "messages",
+        messageId
+      );
+      await deleteDoc(msgRef);
+      closeReactionPicker();
+    } catch (err) {
+      console.log("Error deleting message:", err);
+    }
+  };
+
+  // Reaction details ("who reacted with what")
   const openReactionDetails = async (message) => {
     const reactions = message.reactions || {};
     const entries = Object.entries(reactions).filter(
@@ -488,41 +559,6 @@ export default function DmChatScreen({ route, navigation }) {
     setReactionDetail(null);
     setReactionDetailLoading(false);
   };
-
-  // 👇 subscribe to dmConversations doc for readBy
-  useEffect(() => {
-    if (!conversationId) return;
-
-    const convRef = doc(db, "dmConversations", conversationId);
-    const unsub = onSnapshot(convRef, (snap) => {
-      if (!snap.exists()) return;
-      const data = snap.data();
-      setReadBy(data.readBy || {});
-    });
-
-    return () => unsub();
-  }, [conversationId]);
-
-  // 👇 mark conversation read for me
-  const markConversationRead = async () => {
-    if (!conversationId || !user) return;
-    try {
-      const convRef = doc(db, "dmConversations", conversationId);
-      const field = `readBy.${user.uid}`;
-      await updateDoc(convRef, { [field]: serverTimestamp() });
-    } catch (err) {
-      console.log("Error marking conversation read:", err);
-    }
-  };
-
-  useEffect(() => {
-    markConversationRead();
-  }, [conversationId]);
-
-  useEffect(() => {
-    if (!messages.length) return;
-    markConversationRead();
-  }, [messages.length]);
 
   return (
     <View style={{ flex: 1, backgroundColor: "#020617" }}>
@@ -596,7 +632,7 @@ export default function DmChatScreen({ route, navigation }) {
                     fontWeight: "700",
                   }}
                 >
-                  {otherUsername?.[0]?.toUpperCase() || "U"}
+                  {displayTitle?.[0]?.toUpperCase() || "C"}
                 </Text>
               </View>
             )}
@@ -605,13 +641,13 @@ export default function DmChatScreen({ route, navigation }) {
           <View style={{ flex: 1 }}>
             <Text
               style={{
-                color: "#f9fafb",
+                color: "#e5f3ff",
                 fontSize: 16,
                 fontWeight: "700",
               }}
               numberOfLines={1}
             >
-              {otherUsername || "Direct Message"}
+              {displayTitle}
             </Text>
             <Text
               style={{
@@ -619,92 +655,96 @@ export default function DmChatScreen({ route, navigation }) {
                 fontSize: 12,
                 marginTop: 2,
               }}
+              numberOfLines={1}
             >
-              Direct messages
+              {headerSubtitle}
+            </Text>
+          </View>
+
+          <View
+            style={{
+              paddingHorizontal: 10,
+              paddingVertical: 4,
+              borderRadius: 999,
+              borderWidth: 1,
+              borderColor: "rgba(148,163,184,0.7)",
+              backgroundColor: "rgba(15,23,42,0.96)",
+              flexDirection: "row",
+              alignItems: "center",
+            }}
+          >
+            <Ionicons
+              name={isGroup ? "people-outline" : "chatbubble-ellipses-outline"}
+              size={14}
+              color="#93c5fd"
+              style={{ marginRight: 4 }}
+            />
+            <Text
+              style={{
+                color: "#93c5fd",
+                fontSize: 11,
+                fontWeight: "600",
+                textTransform: "uppercase",
+              }}
+            >
+              {isGroup ? "Group" : "1:1"}
             </Text>
           </View>
         </View>
-
-        <View
-          style={{
-            paddingHorizontal: 10,
-            paddingVertical: 6,
-            borderRadius: 999,
-            backgroundColor: "#0f172a",
-            borderWidth: 1,
-            borderColor: "rgba(148,163,184,0.6)",
-            flexDirection: "row",
-            alignItems: "center",
-          }}
-        >
-          <Ionicons
-            name="chatbubble-ellipses-outline"
-            size={14}
-            color="#e5f3ff"
-          />
-          <Text
-            style={{
-              color: "#e5f3ff",
-              fontSize: 12,
-              marginLeft: 4,
-              fontWeight: "600",
-            }}
-          >
-            1:1
-          </Text>
-        </View>
       </View>
 
-      {/* CHAT + INPUT */}
+      {/* CHAT BODY */}
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        keyboardVerticalOffset={0}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
       >
         <View style={{ flex: 1 }}>
-          <ScrollView
-            ref={chatScrollRef}
-            style={{
-              flex: 1,
-              paddingHorizontal: 12,
-              paddingTop: 12,
-              opacity: initialRenderDone || messages.length === 0 ? 1 : 0,
-            }}
-            contentContainerStyle={{
-              paddingBottom: 16,
-            }}
-            showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-            keyboardDismissMode="on-drag"
-            onContentSizeChange={() => {
-              if (!initialScrollDoneRef.current) {
-                if (messages.length === 0) return;
-                initialScrollDoneRef.current = true;
-                chatScrollRef.current?.scrollToEnd({ animated: false });
-                setInitialRenderDone(true);
-                return;
-              }
-              if (isAtBottomRef.current) {
-                scrollToBottom();
-              }
-            }}
-            onScroll={({ nativeEvent }) => {
-              const { layoutMeasurement, contentOffset, contentSize } =
-                nativeEvent;
-              const paddingToBottom = 40;
-              const atBottom =
-                layoutMeasurement.height + contentOffset.y >=
-                contentSize.height - paddingToBottom;
+        <ScrollView
+          ref={chatScrollRef}
+          style={{
+            flex: 1,
+            paddingHorizontal: 12,
+            paddingTop: 12,
+            opacity: initialRenderDone || messages.length === 0 ? 1 : 0,
+          }}
+          contentContainerStyle={{
+            paddingBottom: 16,
+          }}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          onContentSizeChange={() => {
+            // First load: jump to bottom without animation, then fade in
+            if (!initialScrollDoneRef.current) {
+              if (messages.length === 0) return;
+              initialScrollDoneRef.current = true;
+              chatScrollRef.current?.scrollToEnd({ animated: false });
+              setInitialRenderDone(true);
+              return;
+            }
+            // After that, only auto-scroll if the user is already at the bottom
+            if (isAtBottomRef.current) {
+              scrollToBottom();
+            }
+          }}
+          onScroll={({ nativeEvent }) => {
+            const { layoutMeasurement, contentOffset, contentSize } = nativeEvent;
+            const paddingToBottom = 40;
+            const atBottom =
+              layoutMeasurement.height + contentOffset.y >=
+              contentSize.height - paddingToBottom;
 
-              setIsAtBottom(atBottom);
-              isAtBottomRef.current = atBottom;
-              if (atBottom) {
-                setHasNewMessage(false);
-              }
-            }}
-            scrollEventThrottle={16}
-          >
-            {messages.length === 0 ? (
+            setIsAtBottom(atBottom);
+            isAtBottomRef.current = atBottom;
+            if (atBottom) {
+              setHasNewMessage(false);
+            }
+          }}
+          scrollEventThrottle={16}
+        >
+
+            {messagesLoaded && messages.length === 0 ? (
               <View
                 style={{
                   alignItems: "center",
@@ -732,11 +772,18 @@ export default function DmChatScreen({ route, navigation }) {
                   ? "rgba(96,165,250,0.7)"
                   : "rgba(148,163,184,0.6)";
 
-                // sent/read receipt per message
+                // sent/read receipt per message (1:1 only)
                 let receiptLabel = "";
                 let isReadByOther = false;
-                if (isMine && m.ts && typeof m.ts.toMillis === "function") {
-                  const otherReadTs = readBy?.[otherUserId];
+                if (
+                  !isGroup &&
+                  isMine &&
+                  m.ts &&
+                  typeof m.ts.toMillis === "function"
+                ) {
+                  const otherReadTs = otherUserId
+                    ? readBy?.[otherUserId]
+                    : null;
                   if (
                     otherReadTs &&
                     typeof otherReadTs.toMillis === "function"
@@ -860,163 +907,68 @@ export default function DmChatScreen({ route, navigation }) {
                         <View
                           style={{
                             flexDirection: "row",
-                            justifyContent: "flex-end",
-                            marginTop: 6,
+                            justifyContent: "space-between",
                             alignItems: "center",
+                            marginTop: 6,
                           }}
                         >
+                          <Text
+                            style={{
+                              color: "#9ca3af",
+                              fontSize: 11,
+                            }}
+                          >
+                            {renderTime(m.ts)}
+                            {receiptLabel
+                              ? isMine
+                                ? ` • ${receiptLabel}`
+                                : ""
+                              : ""}
+                          </Text>
+
                           {reactionEntries.length > 0 && (
-                            <View
+                            <TouchableOpacity
+                              onPress={() => openReactionDetails(m)}
                               style={{
                                 flexDirection: "row",
                                 alignItems: "center",
-                                marginRight: 6,
                                 paddingHorizontal: 6,
                                 paddingVertical: 2,
                                 borderRadius: 999,
                                 backgroundColor: "rgba(15,23,42,0.9)",
-                                borderWidth: 1,
-                                borderColor: "rgba(148,163,184,0.7)",
                               }}
                             >
-                              {reactionEntries.map(
-                                ([emoji, users], idx) => (
-                                  <TouchableOpacity
-                                    key={`${m.id}-${emoji}-${idx}`}
-                                    onPress={() =>
-                                      toggleReaction(m.id, emoji)
-                                    }
+                              {reactionEntries.map(([emoji, users]) => (
+                                <View
+                                  key={emoji}
+                                  style={{
+                                    flexDirection: "row",
+                                    alignItems: "center",
+                                    marginLeft: 4,
+                                  }}
+                                >
+                                  <Text
                                     style={{
-                                      flexDirection: "row",
-                                      alignItems: "center",
-                                      marginRight: 4,
+                                      fontSize: 13,
                                     }}
                                   >
-                                    <Text
-                                      style={{
-                                        fontSize: 12,
-                                        color: "#e5e7eb",
-                                      }}
-                                    >
-                                      {emoji} {users.length}
-                                    </Text>
-                                  </TouchableOpacity>
-                                )
-                              )}
-
-                              <TouchableOpacity
-                                onPress={() => openReactionDetails(m)}
-                                style={{
-                                  marginLeft: 2,
-                                  paddingHorizontal: 2,
-                                }}
-                              >
-                                <Ionicons
-                                  name="information-circle-outline"
-                                  size={14}
-                                  color="#cbd5f5"
-                                />
-                              </TouchableOpacity>
-                            </View>
+                                    {emoji}
+                                  </Text>
+                                  <Text
+                                    style={{
+                                      fontSize: 11,
+                                      color: "#cbd5f5",
+                                      marginLeft: 2,
+                                    }}
+                                  >
+                                    {users.length}
+                                  </Text>
+                                </View>
+                              ))}
+                            </TouchableOpacity>
                           )}
-
-                          {receiptLabel ? (
-                            <Text
-                              style={{
-                                fontSize: 11,
-                                color: isReadByOther
-                                  ? "#a5b4fc"
-                                  : "#9ca3af",
-                                marginRight: 6,
-                              }}
-                            >
-                              {receiptLabel}
-                            </Text>
-                          ) : null}
-
-                          <Text
-                            style={{
-                              fontSize: 11,
-                              color: "#9ca3af",
-                            }}
-                          >
-                            {renderTime(m.ts)}
-                          </Text>
                         </View>
                       </TouchableOpacity>
-
-                      {reactionPickerFor === m.id && (
-                        <View
-                          style={{
-                            flexDirection: "row",
-                            marginTop: 4,
-                            paddingHorizontal: 8,
-                            alignItems: "center",
-                          }}
-                        >
-                          {REACTION_EMOJIS.map((emoji) => (
-                            <TouchableOpacity
-                              key={emoji}
-                              style={{
-                                marginRight: 8,
-                                width: 32,
-                                height: 32,
-                                borderRadius: 16,
-                                alignItems: "center",
-                                justifyContent: "center",
-                                backgroundColor: "#0f172a",
-                                borderWidth: 1,
-                                borderColor: "rgba(148,163,184,0.8)",
-                              }}
-                              onPress={() => {
-                                toggleReaction(m.id, emoji);
-                                closeReactionPicker();
-                              }}
-                            >
-                              <Text style={{ fontSize: 18 }}>
-                                {emoji}
-                              </Text>
-                            </TouchableOpacity>
-                          ))}
-
-                          {isMine && (
-                            <TouchableOpacity
-                              style={{
-                                marginRight: 8,
-                                width: 32,
-                                height: 32,
-                                borderRadius: 16,
-                                alignItems: "center",
-                                justifyContent: "center",
-                                backgroundColor: "#1f2937",
-                                borderWidth: 1,
-                                borderColor: "rgba(248,113,113,0.7)",
-                              }}
-                              onPress={() => handleDeleteMessage(m.id)}
-                            >
-                              <Ionicons
-                                name="trash-outline"
-                                size={18}
-                                color="#fca5a5"
-                              />
-                            </TouchableOpacity>
-                          )}
-
-                          <TouchableOpacity
-                            style={{
-                              alignItems: "center",
-                              justifyContent: "center",
-                            }}
-                            onPress={closeReactionPicker}
-                          >
-                            <Ionicons
-                              name="close-circle-outline"
-                              size={22}
-                              color="#9ca3af"
-                            />
-                          </TouchableOpacity>
-                        </View>
-                      )}
                     </View>
                   </View>
                 );
@@ -1024,59 +976,58 @@ export default function DmChatScreen({ route, navigation }) {
             })()}
           </ScrollView>
 
-          {!isAtBottom && hasNewMessage && (
+          {hasNewMessage && !isAtBottom && (
             <TouchableOpacity
               onPress={scrollToBottom}
               style={{
                 position: "absolute",
-                bottom: 74,
+                bottom: 76,
                 alignSelf: "center",
-                backgroundColor: "#0f172a",
-                paddingHorizontal: 14,
-                paddingVertical: 8,
+                paddingHorizontal: 12,
+                paddingVertical: 6,
                 borderRadius: 999,
+                backgroundColor: "rgba(15,23,42,0.95)",
+                borderWidth: 1,
+                borderColor: "rgba(148,163,184,0.8)",
                 flexDirection: "row",
                 alignItems: "center",
-                borderWidth: 1,
-                borderColor: "rgba(96,165,250,0.8)",
               }}
             >
-              <Ionicons name="chevron-down" size={16} color="#bfdbfe" />
+              <Ionicons
+                name="arrow-down-circle-outline"
+                size={16}
+                color="#93c5fd"
+                style={{ marginRight: 6 }}
+              />
               <Text
                 style={{
-                  color: "#bfdbfe",
-                  marginLeft: 6,
+                  color: "#e5f3ff",
                   fontSize: 12,
                   fontWeight: "600",
                 }}
               >
-                New messages
+                Jump to latest
               </Text>
             </TouchableOpacity>
           )}
+        </View>
 
-          {typingLabel ? (
-            <View
-              style={{
-                paddingHorizontal: 16,
-                paddingVertical: 4,
-                backgroundColor: "#020617",
-              }}
-            >
-              <Text
-                style={{
-                  color: "#9ca3af",
-                  fontSize: 12,
-                  fontStyle: "italic",
-                }}
-              >
-                {typingLabel}
-              </Text>
-            </View>
-          ) : null}
-
-          {/* INPUT BAR */}
+        {/* Typing indicator */}
+        {!!typingLabel && (
           <View
+            style={{
+              paddingHorizontal: 16,
+              paddingBottom: 4,
+            }}
+          >
+            <Text style={{ color: "#9ca3af", fontSize: 12 }}>
+              {typingLabel}
+            </Text>
+          </View>
+        )}
+
+        {/* INPUT BAR */}
+        <View
             style={{
               flexDirection: "row",
               alignItems: "center",
@@ -1085,256 +1036,379 @@ export default function DmChatScreen({ route, navigation }) {
               borderTopWidth: 1,
               borderTopColor: "#1f2937",
               backgroundColor: "#020617",
-              marginBottom: 4,
+              marginBottom: 4, // lift slightly off bottom
+            }}
+          >
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "flex-end",
             }}
           >
             <TouchableOpacity
               onPress={() => setGifPickerVisible(true)}
               style={{
-                width: 36,
-                height: 36,
-                borderRadius: 18,
+                marginRight: 8,
+                width: 32,
+                height: 32,
+                borderRadius: 16,
                 alignItems: "center",
                 justifyContent: "center",
                 backgroundColor: "#0f172a",
                 borderWidth: 1,
                 borderColor: "rgba(148,163,184,0.7)",
-                marginRight: 8,
               }}
             >
-              <Ionicons name="image-outline" size={20} color="#e5e7eb" />
+              <Ionicons name="image-outline" size={18} color="#93c5fd" />
             </TouchableOpacity>
 
             <View
               style={{
                 flex: 1,
-                flexDirection: "row",
-                alignItems: "center",
-                paddingHorizontal: 12,
-                paddingVertical: 4,
-                borderRadius: 999,
-                backgroundColor: "#020617",
+                minHeight: 40,
+                maxHeight: 120,
+                borderRadius: 18,
                 borderWidth: 1,
-                borderColor: "rgba(148,163,184,0.9)",
+                borderColor: "rgba(148,163,184,0.7)",
+                backgroundColor: "rgba(15,23,42,0.96)",
+                paddingHorizontal: 12,
+                paddingVertical: 8,
               }}
             >
               <TextInput
                 style={{
-                  flex: 1,
                   color: "#e5e7eb",
                   fontSize: 15,
-                  paddingVertical: 6,
+                  maxHeight: 100,
                 }}
                 placeholder={
-                  otherUsername
-                    ? `Message ${otherUsername}…`
-                    : "Message…"
+                  isGroup
+                    ? "Message the group..."
+                    : `Message ${otherUsername || "your friend"}...`
                 }
                 placeholderTextColor="#6b7280"
+                multiline
                 value={draftMessage}
                 onChangeText={handleChangeText}
-                returnKeyType="send"
-                onSubmitEditing={handleSend}
               />
-              <TouchableOpacity
-                onPress={handleSend}
-                style={{
-                  marginLeft: 6,
-                  width: 32,
-                  height: 32,
-                  borderRadius: 16,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  backgroundColor: draftMessage.trim()
-                    ? "#2563eb"
-                    : "rgba(31,41,55,0.9)",
-                }}
-              >
-                <Ionicons
-                  name="paper-plane"
-                  size={17}
-                  color={draftMessage.trim() ? "#eff6ff" : "#6b7280"}
-                />
-              </TouchableOpacity>
             </View>
-          </View>
-        </View>
-      </KeyboardAvoidingView>
 
-      {/* GIF PICKER */}
-      <Modal
-        visible={gifPickerVisible}
-        animationType="slide"
-        onRequestClose={() => setGifPickerVisible(false)}
-      >
-        <View style={{ flex: 1, backgroundColor: "#020617" }}>
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              paddingTop: 50,
-              paddingHorizontal: 16,
-              paddingBottom: 10,
-              borderBottomWidth: 1,
-              borderBottomColor: "#1f2937",
-              backgroundColor: "#020617",
-            }}
-            onStartShouldSetResponder={() => true}
-            onResponderGrant={(e) => {
-              headerSwipeStartY.current = e.nativeEvent.pageY;
-            }}
-            onResponderRelease={(e) => {
-              if (headerSwipeStartY.current != null) {
-                const deltaY =
-                  e.nativeEvent.pageY - headerSwipeStartY.current;
-                if (deltaY > 50) {
-                  setGifPickerVisible(false);
-                }
-              }
-              headerSwipeStartY.current = null;
-            }}
-          >
             <TouchableOpacity
-              onPress={() => setGifPickerVisible(false)}
+              onPress={handleSend}
+              disabled={!draftMessage.trim()}
               style={{
+                marginLeft: 8,
                 width: 36,
                 height: 36,
                 borderRadius: 18,
                 alignItems: "center",
                 justifyContent: "center",
-                backgroundColor: "rgba(15,23,42,0.9)",
+                backgroundColor: draftMessage.trim()
+                  ? "#2563eb"
+                  : "rgba(15,23,42,0.9)",
                 borderWidth: 1,
                 borderColor: "rgba(148,163,184,0.7)",
-                marginRight: 10,
               }}
             >
-              <Ionicons name="chevron-down" size={22} color="#e5e7eb" />
+              <Ionicons
+                name="send"
+                size={18}
+                color={draftMessage.trim() ? "#e5f3ff" : "#6b7280"}
+              />
             </TouchableOpacity>
-
-            <Text
-              style={{
-                color: "#f9fafb",
-                fontSize: 16,
-                fontWeight: "700",
-              }}
-            >
-              Search GIFs
-            </Text>
           </View>
+        </View>
+      </KeyboardAvoidingView>
 
-          <View style={{ paddingHorizontal: 16, paddingTop: 10 }}>
+      {/* GIF PICKER MODAL */}
+      <Modal
+        visible={gifPickerVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setGifPickerVisible(false)}
+      >
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(15,23,42,0.9)",
+            justifyContent: "flex-end",
+          }}
+        >
+          <View
+            style={{
+              maxHeight: "70%",
+              backgroundColor: "#020617",
+              borderTopLeftRadius: 20,
+              borderTopRightRadius: 20,
+              borderWidth: 1,
+              borderColor: "rgba(148,163,184,0.8)",
+            }}
+          >
             <View
               style={{
+                paddingHorizontal: 16,
+                paddingTop: 10,
+                paddingBottom: 8,
+                borderBottomWidth: 1,
+                borderBottomColor: "#1f2937",
                 flexDirection: "row",
                 alignItems: "center",
-                borderWidth: 1,
-                borderColor: "rgba(148,163,184,0.7)",
-                borderRadius: 10,
-                paddingHorizontal: 10,
-                marginBottom: 10,
-                backgroundColor: "#020617",
+              }}
+              onStartShouldSetResponder={() => true}
+              onResponderGrant={(e) => {
+                headerSwipeStartY.current = e.nativeEvent.pageY;
+              }}
+              onResponderMove={(e) => {
+                const startY = headerSwipeStartY.current;
+                if (startY == null) return;
+                const dy = e.nativeEvent.pageY - startY;
+                if (dy > 70) {
+                  setGifPickerVisible(false);
+                  headerSwipeStartY.current = null;
+                }
+              }}
+              onResponderRelease={() => {
+                headerSwipeStartY.current = null;
               }}
             >
-              <Ionicons name="search" size={18} color="#9ca3af" />
-              <TextInput
+              <View
                 style={{
-                  flex: 1,
-                  marginLeft: 6,
-                  paddingVertical: 8,
-                  color: "#e5f3ff",
+                  width: 36,
+                  height: 4,
+                  borderRadius: 999,
+                  backgroundColor: "#4b5563",
+                  marginRight: 10,
                 }}
-                placeholder="Search GIFs (e.g. dunk, hype)"
-                placeholderTextColor="#9ca3af"
-                value={gifSearch}
-                onChangeText={setGifSearch}
-                onSubmitEditing={searchGifs}
-                returnKeyType="search"
               />
-              <TouchableOpacity onPress={searchGifs}>
-                <Ionicons
-                  name="arrow-forward-circle"
-                  size={22}
-                  color="#60a5fa"
-                />
+              <Text
+                style={{
+                  color: "#e5f3ff",
+                  fontSize: 15,
+                  fontWeight: "600",
+                  flex: 1,
+                }}
+              >
+                Send a GIF
+              </Text>
+              <TouchableOpacity onPress={() => setGifPickerVisible(false)}>
+                <Ionicons name="close" size={22} color="#e5e7eb" />
               </TouchableOpacity>
             </View>
-          </View>
 
-          <View style={{ flex: 1, paddingHorizontal: 12, paddingTop: 4 }}>
-            {gifLoading ? (
+            <View
+              style={{
+                paddingHorizontal: 16,
+                paddingVertical: 8,
+                flexDirection: "row",
+                alignItems: "center",
+              }}
+            >
               <View
                 style={{
                   flex: 1,
+                  flexDirection: "row",
                   alignItems: "center",
-                  justifyContent: "center",
+                  borderRadius: 14,
+                  borderWidth: 1,
+                  borderColor: "rgba(148,163,184,0.7)",
+                  backgroundColor: "#020617",
+                  paddingHorizontal: 10,
+                  paddingVertical: 6,
                 }}
               >
-                <ActivityIndicator size="large" color="#60a5fa" />
+                <Ionicons name="search" size={16} color="#9ca3af" />
+                <TextInput
+                  style={{
+                    flex: 1,
+                    marginLeft: 6,
+                    color: "#e5e7eb",
+                    fontSize: 14,
+                  }}
+                  placeholder="Search Tenor..."
+                  placeholderTextColor="#6b7280"
+                  value={gifSearch}
+                  onChangeText={setGifSearch}
+                  onSubmitEditing={searchGifs}
+                  returnKeyType="search"
+                />
+              </View>
+              <TouchableOpacity
+                onPress={searchGifs}
+                style={{
+                  marginLeft: 8,
+                  paddingHorizontal: 12,
+                  paddingVertical: 8,
+                  borderRadius: 12,
+                  backgroundColor: "#2563eb",
+                }}
+              >
                 <Text
                   style={{
-                    color: "#9ca3af",
-                    marginTop: 10,
+                    color: "#e5f3ff",
+                    fontSize: 13,
+                    fontWeight: "600",
                   }}
                 >
-                  Loading GIFs...
+                  Search
                 </Text>
-              </View>
-            ) : (
-              <FlatList
-                data={gifResults}
-                keyExtractor={(item) => item.id}
-                numColumns={2}
-                columnWrapperStyle={{
-                  justifyContent: "space-between",
-                  marginBottom: 10,
-                }}
-                contentContainerStyle={{
-                  paddingHorizontal: 4,
-                  paddingTop: 4,
-                  paddingBottom: 16,
-                }}
-                renderItem={({ item }) => (
-                  <TouchableOpacity
-                    onPress={() => sendGifMessage(item.url)}
-                    style={{
-                      width: "49%",
-                      aspectRatio: 1,
-                      borderRadius: 8,
-                      overflow: "hidden",
-                      backgroundColor: "#020617",
-                      borderWidth: 1,
-                      borderColor: "#1f2937",
-                    }}
-                  >
-                    <Image
-                      source={{ uri: item.url }}
+              </TouchableOpacity>
+            </View>
+
+            <View
+              style={{
+                flex: 1,
+                paddingHorizontal: 10,
+                paddingBottom: 10,
+              }}
+            >
+              {gifLoading ? (
+                <View
+                  style={{
+                    flex: 1,
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <ActivityIndicator size="large" color="#60a5fa" />
+                </View>
+              ) : (
+                <FlatList
+                  data={gifResults}
+                  keyExtractor={(item) => item.id}
+                  numColumns={3}
+                  columnWrapperStyle={{ justifyContent: "space-between" }}
+                  renderItem={({ item }) => (
+                    <TouchableOpacity
                       style={{
-                        width: "100%",
-                        height: "100%",
-                        borderRadius: 8,
+                        width: "32%",
+                        aspectRatio: 1,
+                        borderRadius: 10,
+                        overflow: "hidden",
+                        marginBottom: 8,
+                        backgroundColor: "#020617",
                       }}
-                      resizeMode="cover"
-                    />
-                  </TouchableOpacity>
-                )}
-                ListEmptyComponent={
-                  <Text
-                    style={{
-                      color: "#9ca3af",
-                      textAlign: "center",
-                      marginTop: 8,
-                    }}
-                  >
-                    Search for a GIF to get started
-                  </Text>
-                }
-              />
-            )}
+                      onPress={() => sendGifMessage(item.url)}
+                    >
+                      <Image
+                        source={{ uri: item.url }}
+                        style={{ width: "100%", height: "100%" }}
+                        resizeMode="cover"
+                      />
+                    </TouchableOpacity>
+                  )}
+                  ListEmptyComponent={
+                    <View
+                      style={{
+                        flex: 1,
+                        alignItems: "center",
+                        justifyContent: "center",
+                        marginTop: 40,
+                      }}
+                    >
+                      <Text style={{ color: "#6b7280", fontSize: 13 }}>
+                        Search for a GIF to get started.
+                      </Text>
+                    </View>
+                  }
+                />
+              )}
+            </View>
           </View>
         </View>
       </Modal>
 
-      {/* REACTION DETAILS MODAL */}
+      {/* REACTION PICKER */}
+      <Modal
+        visible={!!reactionPickerFor}
+        transparent
+        animationType="fade"
+        onRequestClose={closeReactionPicker}
+      >
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(15,23,42,0.8)",
+            justifyContent: "center",
+            alignItems: "center",
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: "#020617",
+              borderRadius: 16,
+              paddingHorizontal: 16,
+              paddingVertical: 12,
+              borderWidth: 1,
+              borderColor: "rgba(148,163,184,0.8)",
+              minWidth: 220,
+            }}
+          >
+            <Text
+              style={{
+                color: "#e5f3ff",
+                fontWeight: "600",
+                fontSize: 14,
+                marginBottom: 8,
+              }}
+            >
+              React to message
+            </Text>
+            <View
+              style={{
+                flexDirection: "row",
+                justifyContent: "space-between",
+                marginBottom: 10,
+              }}
+            >
+              {REACTION_EMOJIS.map((emoji) => (
+                <TouchableOpacity
+                  key={emoji}
+                  onPress={() => {
+                    toggleReaction(reactionPickerFor, emoji);
+                    closeReactionPicker();
+                  }}
+                  style={{
+                    padding: 6,
+                  }}
+                >
+                  <Text style={{ fontSize: 22 }}>{emoji}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <TouchableOpacity
+              onPress={() => handleDeleteMessage(reactionPickerFor)}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                paddingVertical: 6,
+              }}
+            >
+              <Ionicons
+                name="trash-outline"
+                size={16}
+                color="#fca5a5"
+                style={{ marginRight: 6 }}
+              />
+              <Text style={{ color: "#fca5a5", fontSize: 13 }}>
+                Delete for everyone
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={closeReactionPicker}
+              style={{
+                marginTop: 8,
+                alignSelf: "flex-end",
+              }}
+            >
+              <Text style={{ color: "#9ca3af", fontSize: 13 }}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* REACTION DETAILS */}
       <Modal
         visible={!!reactionDetail}
         transparent
@@ -1344,84 +1418,61 @@ export default function DmChatScreen({ route, navigation }) {
         <View
           style={{
             flex: 1,
-            backgroundColor: "rgba(15,23,42,0.75)",
+            backgroundColor: "rgba(15,23,42,0.8)",
             justifyContent: "center",
             alignItems: "center",
-            paddingHorizontal: 24,
           }}
         >
           <View
             style={{
-              width: "100%",
-              maxWidth: 360,
               backgroundColor: "#020617",
               borderRadius: 16,
               padding: 16,
               borderWidth: 1,
-              borderColor: "rgba(148,163,184,0.7)",
+              borderColor: "rgba(148,163,184,0.8)",
+              width: "80%",
+              maxHeight: "70%",
             }}
           >
             <View
               style={{
                 flexDirection: "row",
+                justifyContent: "space-between",
                 alignItems: "center",
-                marginBottom: 10,
+                marginBottom: 8,
               }}
             >
               <Text
                 style={{
-                  flex: 1,
                   color: "#e5f3ff",
-                  fontSize: 16,
-                  fontWeight: "700",
+                  fontSize: 15,
+                  fontWeight: "600",
                 }}
               >
                 Reactions
               </Text>
               <TouchableOpacity onPress={closeReactionDetails}>
-                <Ionicons
-                  name="close-circle-outline"
-                  size={24}
-                  color="#9ca3af"
-                />
+                <Ionicons name="close" size={20} color="#e5e7eb" />
               </TouchableOpacity>
             </View>
 
             {reactionDetailLoading ? (
               <View
                 style={{
-                  alignItems: "center",
+                  flex: 1,
                   justifyContent: "center",
-                  paddingVertical: 12,
+                  alignItems: "center",
                 }}
               >
                 <ActivityIndicator size="small" color="#60a5fa" />
-                <Text
-                  style={{
-                    marginTop: 8,
-                    color: "#9ca3af",
-                    fontSize: 13,
-                  }}
-                >
-                  Loading reactions...
-                </Text>
               </View>
-            ) : !reactionDetail || !reactionDetail.entries.length ? (
-              <Text
-                style={{
-                  color: "#9ca3af",
-                  fontSize: 13,
-                }}
-              >
-                No reactions yet.
-              </Text>
-            ) : (
-              <ScrollView
-                style={{ maxHeight: 260 }}
-                contentContainerStyle={{ paddingVertical: 4 }}
-              >
+            ) : reactionDetail && reactionDetail.entries.length > 0 ? (
+              <ScrollView>
                 {reactionDetail.entries.map((entry) => (
-                  <View key={entry.emoji} style={{ marginBottom: 10 }}>
+                  <View
+                    key={entry.emoji}
+                    style={{ marginBottom: 10 }}
+                  >
                     <View
                       style={{
                         flexDirection: "row",
@@ -1429,17 +1480,12 @@ export default function DmChatScreen({ route, navigation }) {
                         marginBottom: 4,
                       }}
                     >
-                      <Text
-                        style={{
-                          fontSize: 18,
-                          marginRight: 6,
-                        }}
-                      >
+                      <Text style={{ fontSize: 18, marginRight: 6 }}>
                         {entry.emoji}
                       </Text>
                       <Text
                         style={{
-                          color: "#e5e7eb",
+                          color: "#e5f3ff",
                           fontSize: 13,
                           fontWeight: "600",
                         }}
@@ -1449,21 +1495,33 @@ export default function DmChatScreen({ route, navigation }) {
                       </Text>
                     </View>
                     {entry.users.map((u) => (
-                      <Text
+                      <TouchableOpacity
                         key={u.id}
+                        onPress={() => {
+                          closeReactionDetails();
+                          handlePressUser(u.id);
+                        }}
                         style={{
-                          marginLeft: 4,
-                          color: "#cbd5f5",
-                          fontSize: 13,
-                          marginBottom: 2,
+                          paddingVertical: 4,
                         }}
                       >
-                        • {u.name}
-                      </Text>
+                        <Text
+                          style={{
+                            color: "#cbd5f5",
+                            fontSize: 13,
+                          }}
+                        >
+                          {u.name}
+                        </Text>
+                      </TouchableOpacity>
                     ))}
                   </View>
                 ))}
               </ScrollView>
+            ) : (
+              <Text style={{ color: "#9ca3af", fontSize: 13 }}>
+                No reactions yet.
+              </Text>
             )}
           </View>
         </View>

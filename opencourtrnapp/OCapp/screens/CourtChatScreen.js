@@ -72,6 +72,8 @@ export default function CourtChatScreen({ route, navigation }) {
   // 👉 for reaction details modal ("who reacted with what")
   const [reactionDetail, setReactionDetail] = useState(null); // { messageId, entries: [{emoji, users:[{id,name}]}] }
   const [reactionDetailLoading, setReactionDetailLoading] = useState(false);
+  const [messagesLoaded, setMessagesLoaded] = useState(false);
+
 
   const scrollToBottom = () => {
     setTimeout(() => {
@@ -187,6 +189,8 @@ export default function CourtChatScreen({ route, navigation }) {
       if (!isAtBottomRef.current && gotNewMessage) {
         setHasNewMessage(true);
       }
+
+        setMessagesLoaded(true);
     });
 
     return () => unsub();
@@ -533,7 +537,7 @@ export default function CourtChatScreen({ route, navigation }) {
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
-        keyboardVerticalOffset={0}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
       >
         <View style={{ flex: 1 }}>
           <ScrollView
@@ -580,18 +584,19 @@ export default function CourtChatScreen({ route, navigation }) {
             }}
             scrollEventThrottle={16}
           >
-            {messages.length === 0 ? (
-              <View
-                style={{
-                  alignItems: "center",
-                  marginTop: 40,
-                }}
-              >
-                <Text style={{ color: "#64748b" }}>
-                  No messages yet. Start the conversation!
-                </Text>
-              </View>
+            {messagesLoaded && messages.length === 0 ? (
+                <View
+                    style={{
+                    alignItems: "center",
+                    marginTop: 40,
+                    }}
+                >
+                    <Text style={{ color: "#64748b" }}>
+                    No messages yet. Start the conversation!
+                    </Text>
+                </View>
             ) : null}
+
 
             {/* 🔹 Messages with date separators */}
             {(() => {
