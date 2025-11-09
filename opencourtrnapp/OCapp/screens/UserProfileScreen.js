@@ -600,7 +600,7 @@ export default function UserProfileScreen({ route, navigation }) {
           <View style={ui.friendsHeaderRow}>
             <View style={{ flexDirection: "row", alignItems: "center" }}>
               <Ionicons
-                name="people-circle-outline"
+                name="people-outline"
                 size={18}
                 color="#38bdf8"
               />

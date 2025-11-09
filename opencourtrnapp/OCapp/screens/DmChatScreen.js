@@ -73,9 +73,9 @@ export default function DmChatScreen({ route, navigation }) {
   const headerSwipeStartY = useRef(null);
 
   const [reactionDetail, setReactionDetail] = useState(null);
-  const [reactionDetailLoading, setReactionDetailLoading] = useState(false);
+  const [reactionDetailLoading, setReactionDetailLoading] =
+    useState(false);
   const [messagesLoaded, setMessagesLoaded] = useState(false);
-
 
   // read receipts state (conversation-level)
   const [readBy, setReadBy] = useState({});
@@ -165,7 +165,12 @@ export default function DmChatScreen({ route, navigation }) {
   useEffect(() => {
     if (!conversationId || !user) return;
 
-    const msgsRef = collection(db, "dmConversations", conversationId, "messages");
+    const msgsRef = collection(
+      db,
+      "dmConversations",
+      conversationId,
+      "messages"
+    );
     const qMsgs = query(msgsRef, orderBy("ts", "asc"));
 
     const unsub = onSnapshot(qMsgs, (snap) => {
@@ -197,7 +202,6 @@ export default function DmChatScreen({ route, navigation }) {
       }
       prevMsgCountRef.current = list.length;
 
-
       setMessagesLoaded(true);
     });
 
@@ -223,7 +227,8 @@ export default function DmChatScreen({ route, navigation }) {
         const uid = data.userId;
         if (uid && uid !== user.uid && data.isTyping) {
           const name =
-            data.username || (data.email ? data.email.split("@")[0] : "Player");
+            data.username ||
+            (data.email ? data.email.split("@")[0] : "Player");
           arr.push(name);
         }
       });
@@ -491,7 +496,7 @@ export default function DmChatScreen({ route, navigation }) {
     setReactionPickerFor(null);
   };
 
-  // Delete / unsend message (only for your own messages in UI)
+  // Delete / unsend message (guarded: only your own messages)
   const handleDeleteMessage = async (messageId) => {
     if (!conversationId || !user || !messageId) return;
     try {
@@ -502,6 +507,16 @@ export default function DmChatScreen({ route, navigation }) {
         "messages",
         messageId
       );
+
+      // Safety check: only allow deleting your own messages
+      const snap = await getDoc(msgRef);
+      if (!snap.exists()) return;
+      const data = snap.data();
+      if (data.userId !== user.uid) {
+        console.log("Blocked delete for non-owned message");
+        return;
+      }
+
       await deleteDoc(msgRef);
       closeReactionPicker();
     } catch (err) {
@@ -559,6 +574,11 @@ export default function DmChatScreen({ route, navigation }) {
     setReactionDetail(null);
     setReactionDetailLoading(false);
   };
+
+  // Placeholder text but with Court-style input layout
+  const inputPlaceholder = isGroup
+    ? "Message this group…"
+    : `Message ${otherUsername || "your friend"}…`;
 
   return (
     <View style={{ flex: 1, backgroundColor: "#020617" }}>
@@ -700,50 +720,50 @@ export default function DmChatScreen({ route, navigation }) {
         keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
       >
         <View style={{ flex: 1 }}>
-        <ScrollView
-          ref={chatScrollRef}
-          style={{
-            flex: 1,
-            paddingHorizontal: 12,
-            paddingTop: 12,
-            opacity: initialRenderDone || messages.length === 0 ? 1 : 0,
-          }}
-          contentContainerStyle={{
-            paddingBottom: 16,
-          }}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="on-drag"
-          onContentSizeChange={() => {
-            // First load: jump to bottom without animation, then fade in
-            if (!initialScrollDoneRef.current) {
-              if (messages.length === 0) return;
-              initialScrollDoneRef.current = true;
-              chatScrollRef.current?.scrollToEnd({ animated: false });
-              setInitialRenderDone(true);
-              return;
-            }
-            // After that, only auto-scroll if the user is already at the bottom
-            if (isAtBottomRef.current) {
-              scrollToBottom();
-            }
-          }}
-          onScroll={({ nativeEvent }) => {
-            const { layoutMeasurement, contentOffset, contentSize } = nativeEvent;
-            const paddingToBottom = 40;
-            const atBottom =
-              layoutMeasurement.height + contentOffset.y >=
-              contentSize.height - paddingToBottom;
+          <ScrollView
+            ref={chatScrollRef}
+            style={{
+              flex: 1,
+              paddingHorizontal: 12,
+              paddingTop: 12,
+              opacity: initialRenderDone || messages.length === 0 ? 1 : 0,
+            }}
+            contentContainerStyle={{
+              paddingBottom: 16,
+            }}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
+            onContentSizeChange={() => {
+              // First load: jump to bottom without animation, then fade in
+              if (!initialScrollDoneRef.current) {
+                if (messages.length === 0) return;
+                initialScrollDoneRef.current = true;
+                chatScrollRef.current?.scrollToEnd({ animated: false });
+                setInitialRenderDone(true);
+                return;
+              }
+              // After that, only auto-scroll if the user is already at the bottom
+              if (isAtBottomRef.current) {
+                scrollToBottom();
+              }
+            }}
+            onScroll={({ nativeEvent }) => {
+              const { layoutMeasurement, contentOffset, contentSize } =
+                nativeEvent;
+              const paddingToBottom = 40;
+              const atBottom =
+                layoutMeasurement.height + contentOffset.y >=
+                contentSize.height - paddingToBottom;
 
-            setIsAtBottom(atBottom);
-            isAtBottomRef.current = atBottom;
-            if (atBottom) {
-              setHasNewMessage(false);
-            }
-          }}
-          scrollEventThrottle={16}
-        >
-
+              setIsAtBottom(atBottom);
+              isAtBottomRef.current = atBottom;
+              if (atBottom) {
+                setHasNewMessage(false);
+              }
+            }}
+            scrollEventThrottle={16}
+          >
             {messagesLoaded && messages.length === 0 ? (
               <View
                 style={{
@@ -927,48 +947,134 @@ export default function DmChatScreen({ route, navigation }) {
                           </Text>
 
                           {reactionEntries.length > 0 && (
-                            <TouchableOpacity
-                              onPress={() => openReactionDetails(m)}
+                            <View
                               style={{
                                 flexDirection: "row",
                                 alignItems: "center",
+                                marginRight: 0,
                                 paddingHorizontal: 6,
                                 paddingVertical: 2,
                                 borderRadius: 999,
                                 backgroundColor: "rgba(15,23,42,0.9)",
+                                borderWidth: 1,
+                                borderColor: "rgba(148,163,184,0.7)",
                               }}
                             >
-                              {reactionEntries.map(([emoji, users]) => (
-                                <View
-                                  key={emoji}
-                                  style={{
-                                    flexDirection: "row",
-                                    alignItems: "center",
-                                    marginLeft: 4,
-                                  }}
-                                >
-                                  <Text
+                              {reactionEntries.map(
+                                ([emoji, users], idx) => (
+                                  <TouchableOpacity
+                                    key={`${m.id}-${emoji}-${idx}`}
+                                    onPress={() =>
+                                      toggleReaction(m.id, emoji)
+                                    }
                                     style={{
-                                      fontSize: 13,
+                                      flexDirection: "row",
+                                      alignItems: "center",
+                                      marginRight: 4,
                                     }}
                                   >
-                                    {emoji}
-                                  </Text>
-                                  <Text
-                                    style={{
-                                      fontSize: 11,
-                                      color: "#cbd5f5",
-                                      marginLeft: 2,
-                                    }}
-                                  >
-                                    {users.length}
-                                  </Text>
-                                </View>
-                              ))}
-                            </TouchableOpacity>
+                                    <Text
+                                      style={{
+                                        fontSize: 12,
+                                        color: "#e5e7eb",
+                                      }}
+                                    >
+                                      {emoji} {users.length}
+                                    </Text>
+                                  </TouchableOpacity>
+                                )
+                              )}
+
+                              <TouchableOpacity
+                                onPress={() => openReactionDetails(m)}
+                                style={{
+                                  marginLeft: 2,
+                                  paddingHorizontal: 2,
+                                }}
+                              >
+                                <Ionicons
+                                  name="information-circle-outline"
+                                  size={14}
+                                  color="#cbd5f5"
+                                />
+                              </TouchableOpacity>
+                            </View>
                           )}
                         </View>
                       </TouchableOpacity>
+
+                      {/* Inline reaction picker, CourtChat-style */}
+                      {reactionPickerFor === m.id && (
+                        <View
+                          style={{
+                            flexDirection: "row",
+                            marginTop: 4,
+                            paddingHorizontal: 8,
+                            alignItems: "center",
+                          }}
+                        >
+                          {REACTION_EMOJIS.map((emoji) => (
+                            <TouchableOpacity
+                              key={emoji}
+                              style={{
+                                marginRight: 8,
+                                width: 32,
+                                height: 32,
+                                borderRadius: 16,
+                                alignItems: "center",
+                                justifyContent: "center",
+                                backgroundColor: "#0f172a",
+                                borderWidth: 1,
+                                borderColor: "rgba(148,163,184,0.8)",
+                              }}
+                              onPress={() => {
+                                toggleReaction(m.id, emoji);
+                                closeReactionPicker();
+                              }}
+                            >
+                              <Text style={{ fontSize: 18 }}>{emoji}</Text>
+                            </TouchableOpacity>
+                          ))}
+
+                          {/* Delete button only for your own messages */}
+                          {isMine && (
+                            <TouchableOpacity
+                              style={{
+                                marginRight: 8,
+                                width: 32,
+                                height: 32,
+                                borderRadius: 16,
+                                alignItems: "center",
+                                justifyContent: "center",
+                                backgroundColor: "#1f2937",
+                                borderWidth: 1,
+                                borderColor: "rgba(248,113,113,0.7)",
+                              }}
+                              onPress={() => handleDeleteMessage(m.id)}
+                            >
+                              <Ionicons
+                                name="trash-outline"
+                                size={18}
+                                color="#fca5a5"
+                              />
+                            </TouchableOpacity>
+                          )}
+
+                          <TouchableOpacity
+                            style={{
+                              alignItems: "center",
+                              justifyContent: "center",
+                            }}
+                            onPress={closeReactionPicker}
+                          >
+                            <Ionicons
+                              name="close-circle-outline"
+                              size={22}
+                              color="#9ca3af"
+                            />
+                          </TouchableOpacity>
+                        </View>
+                      )}
                     </View>
                   </View>
                 );
@@ -1026,389 +1132,264 @@ export default function DmChatScreen({ route, navigation }) {
           </View>
         )}
 
-        {/* INPUT BAR */}
+        {/* INPUT BAR — now matches CourtChatScreen */}
         <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            paddingHorizontal: 12,
+            paddingVertical: 10,
+            borderTopWidth: 1,
+            borderTopColor: "#1f2937",
+            backgroundColor: "#020617",
+            marginBottom: 4, // lift slightly off bottom
+          }}
+        >
+          <TouchableOpacity
+            onPress={() => setGifPickerVisible(true)}
             style={{
+              width: 36,
+              height: 36,
+              borderRadius: 18,
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: "#0f172a",
+              borderWidth: 1,
+              borderColor: "rgba(148,163,184,0.7)",
+              marginRight: 8,
+            }}
+          >
+            <Ionicons name="image-outline" size={20} color="#e5e7eb" />
+          </TouchableOpacity>
+
+          <View
+            style={{
+              flex: 1,
               flexDirection: "row",
               alignItems: "center",
               paddingHorizontal: 12,
-              paddingVertical: 10,
-              borderTopWidth: 1,
-              borderTopColor: "#1f2937",
+              paddingVertical: 4,
+              borderRadius: 999,
               backgroundColor: "#020617",
-              marginBottom: 4, // lift slightly off bottom
+              borderWidth: 1,
+              borderColor: "rgba(148,163,184,0.9)",
             }}
           >
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "flex-end",
-            }}
-          >
-            <TouchableOpacity
-              onPress={() => setGifPickerVisible(true)}
+            <TextInput
               style={{
-                marginRight: 8,
+                flex: 1,
+                color: "#e5e7eb",
+                fontSize: 15,
+                paddingVertical: 6,
+              }}
+              placeholder={inputPlaceholder}
+              placeholderTextColor="#6b7280"
+              value={draftMessage}
+              onChangeText={handleChangeText}
+              returnKeyType="send"
+              onSubmitEditing={handleSend}
+            />
+            <TouchableOpacity
+              onPress={handleSend}
+              style={{
+                marginLeft: 6,
                 width: 32,
                 height: 32,
                 borderRadius: 16,
                 alignItems: "center",
                 justifyContent: "center",
-                backgroundColor: "#0f172a",
-                borderWidth: 1,
-                borderColor: "rgba(148,163,184,0.7)",
-              }}
-            >
-              <Ionicons name="image-outline" size={18} color="#93c5fd" />
-            </TouchableOpacity>
-
-            <View
-              style={{
-                flex: 1,
-                minHeight: 40,
-                maxHeight: 120,
-                borderRadius: 18,
-                borderWidth: 1,
-                borderColor: "rgba(148,163,184,0.7)",
-                backgroundColor: "rgba(15,23,42,0.96)",
-                paddingHorizontal: 12,
-                paddingVertical: 8,
-              }}
-            >
-              <TextInput
-                style={{
-                  color: "#e5e7eb",
-                  fontSize: 15,
-                  maxHeight: 100,
-                }}
-                placeholder={
-                  isGroup
-                    ? "Message the group..."
-                    : `Message ${otherUsername || "your friend"}...`
-                }
-                placeholderTextColor="#6b7280"
-                multiline
-                value={draftMessage}
-                onChangeText={handleChangeText}
-              />
-            </View>
-
-            <TouchableOpacity
-              onPress={handleSend}
-              disabled={!draftMessage.trim()}
-              style={{
-                marginLeft: 8,
-                width: 36,
-                height: 36,
-                borderRadius: 18,
-                alignItems: "center",
-                justifyContent: "center",
                 backgroundColor: draftMessage.trim()
                   ? "#2563eb"
-                  : "rgba(15,23,42,0.9)",
-                borderWidth: 1,
-                borderColor: "rgba(148,163,184,0.7)",
+                  : "rgba(31,41,55,0.9)",
               }}
             >
               <Ionicons
-                name="send"
-                size={18}
-                color={draftMessage.trim() ? "#e5f3ff" : "#6b7280"}
+                name="paper-plane"
+                size={17}
+                color={draftMessage.trim() ? "#eff6ff" : "#6b7280"}
               />
             </TouchableOpacity>
           </View>
         </View>
       </KeyboardAvoidingView>
 
-      {/* GIF PICKER MODAL */}
+      {/* GIF PICKER MODAL — now matches CourtChatScreen */}
       <Modal
         visible={gifPickerVisible}
-        transparent
         animationType="slide"
         onRequestClose={() => setGifPickerVisible(false)}
       >
-        <View
-          style={{
-            flex: 1,
-            backgroundColor: "rgba(15,23,42,0.9)",
-            justifyContent: "flex-end",
-          }}
-        >
+        <View style={{ flex: 1, backgroundColor: "#020617" }}>
+          {/* GIF picker header (swipe down here to close) */}
           <View
             style={{
-              maxHeight: "70%",
-              backgroundColor: "#020617",
-              borderTopLeftRadius: 20,
-              borderTopRightRadius: 20,
-              borderWidth: 1,
-              borderColor: "rgba(148,163,184,0.8)",
-            }}
-          >
-            <View
-              style={{
-                paddingHorizontal: 16,
-                paddingTop: 10,
-                paddingBottom: 8,
-                borderBottomWidth: 1,
-                borderBottomColor: "#1f2937",
-                flexDirection: "row",
-                alignItems: "center",
-              }}
-              onStartShouldSetResponder={() => true}
-              onResponderGrant={(e) => {
-                headerSwipeStartY.current = e.nativeEvent.pageY;
-              }}
-              onResponderMove={(e) => {
-                const startY = headerSwipeStartY.current;
-                if (startY == null) return;
-                const dy = e.nativeEvent.pageY - startY;
-                if (dy > 70) {
-                  setGifPickerVisible(false);
-                  headerSwipeStartY.current = null;
-                }
-              }}
-              onResponderRelease={() => {
-                headerSwipeStartY.current = null;
-              }}
-            >
-              <View
-                style={{
-                  width: 36,
-                  height: 4,
-                  borderRadius: 999,
-                  backgroundColor: "#4b5563",
-                  marginRight: 10,
-                }}
-              />
-              <Text
-                style={{
-                  color: "#e5f3ff",
-                  fontSize: 15,
-                  fontWeight: "600",
-                  flex: 1,
-                }}
-              >
-                Send a GIF
-              </Text>
-              <TouchableOpacity onPress={() => setGifPickerVisible(false)}>
-                <Ionicons name="close" size={22} color="#e5e7eb" />
-              </TouchableOpacity>
-            </View>
-
-            <View
-              style={{
-                paddingHorizontal: 16,
-                paddingVertical: 8,
-                flexDirection: "row",
-                alignItems: "center",
-              }}
-            >
-              <View
-                style={{
-                  flex: 1,
-                  flexDirection: "row",
-                  alignItems: "center",
-                  borderRadius: 14,
-                  borderWidth: 1,
-                  borderColor: "rgba(148,163,184,0.7)",
-                  backgroundColor: "#020617",
-                  paddingHorizontal: 10,
-                  paddingVertical: 6,
-                }}
-              >
-                <Ionicons name="search" size={16} color="#9ca3af" />
-                <TextInput
-                  style={{
-                    flex: 1,
-                    marginLeft: 6,
-                    color: "#e5e7eb",
-                    fontSize: 14,
-                  }}
-                  placeholder="Search Tenor..."
-                  placeholderTextColor="#6b7280"
-                  value={gifSearch}
-                  onChangeText={setGifSearch}
-                  onSubmitEditing={searchGifs}
-                  returnKeyType="search"
-                />
-              </View>
-              <TouchableOpacity
-                onPress={searchGifs}
-                style={{
-                  marginLeft: 8,
-                  paddingHorizontal: 12,
-                  paddingVertical: 8,
-                  borderRadius: 12,
-                  backgroundColor: "#2563eb",
-                }}
-              >
-                <Text
-                  style={{
-                    color: "#e5f3ff",
-                    fontSize: 13,
-                    fontWeight: "600",
-                  }}
-                >
-                  Search
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            <View
-              style={{
-                flex: 1,
-                paddingHorizontal: 10,
-                paddingBottom: 10,
-              }}
-            >
-              {gifLoading ? (
-                <View
-                  style={{
-                    flex: 1,
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  <ActivityIndicator size="large" color="#60a5fa" />
-                </View>
-              ) : (
-                <FlatList
-                  data={gifResults}
-                  keyExtractor={(item) => item.id}
-                  numColumns={3}
-                  columnWrapperStyle={{ justifyContent: "space-between" }}
-                  renderItem={({ item }) => (
-                    <TouchableOpacity
-                      style={{
-                        width: "32%",
-                        aspectRatio: 1,
-                        borderRadius: 10,
-                        overflow: "hidden",
-                        marginBottom: 8,
-                        backgroundColor: "#020617",
-                      }}
-                      onPress={() => sendGifMessage(item.url)}
-                    >
-                      <Image
-                        source={{ uri: item.url }}
-                        style={{ width: "100%", height: "100%" }}
-                        resizeMode="cover"
-                      />
-                    </TouchableOpacity>
-                  )}
-                  ListEmptyComponent={
-                    <View
-                      style={{
-                        flex: 1,
-                        alignItems: "center",
-                        justifyContent: "center",
-                        marginTop: 40,
-                      }}
-                    >
-                      <Text style={{ color: "#6b7280", fontSize: 13 }}>
-                        Search for a GIF to get started.
-                      </Text>
-                    </View>
-                  }
-                />
-              )}
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* REACTION PICKER */}
-      <Modal
-        visible={!!reactionPickerFor}
-        transparent
-        animationType="fade"
-        onRequestClose={closeReactionPicker}
-      >
-        <View
-          style={{
-            flex: 1,
-            backgroundColor: "rgba(15,23,42,0.8)",
-            justifyContent: "center",
-            alignItems: "center",
-          }}
-        >
-          <View
-            style={{
-              backgroundColor: "#020617",
-              borderRadius: 16,
+              flexDirection: "row",
+              alignItems: "center",
+              paddingTop: 50,
               paddingHorizontal: 16,
-              paddingVertical: 12,
-              borderWidth: 1,
-              borderColor: "rgba(148,163,184,0.8)",
-              minWidth: 220,
+              paddingBottom: 10,
+              borderBottomWidth: 1,
+              borderBottomColor: "#1f2937",
+              backgroundColor: "#020617",
+            }}
+            onStartShouldSetResponder={() => true}
+            onResponderGrant={(e) => {
+              headerSwipeStartY.current = e.nativeEvent.pageY;
+            }}
+            onResponderRelease={(e) => {
+              if (headerSwipeStartY.current != null) {
+                const deltaY =
+                  e.nativeEvent.pageY - headerSwipeStartY.current;
+                if (deltaY > 50) {
+                  setGifPickerVisible(false);
+                }
+              }
+              headerSwipeStartY.current = null;
             }}
           >
+            <TouchableOpacity
+              onPress={() => setGifPickerVisible(false)}
+              style={{
+                width: 36,
+                height: 36,
+                borderRadius: 18,
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: "rgba(15,23,42,0.9)",
+                borderWidth: 1,
+                borderColor: "rgba(148,163,184,0.7)",
+                marginRight: 10,
+              }}
+            >
+              <Ionicons name="chevron-down" size={22} color="#e5e7eb" />
+            </TouchableOpacity>
+
             <Text
               style={{
-                color: "#e5f3ff",
-                fontWeight: "600",
-                fontSize: 14,
-                marginBottom: 8,
+                color: "#f9fafb",
+                fontSize: 16,
+                fontWeight: "700",
               }}
             >
-              React to message
+              Search GIFs
             </Text>
+          </View>
+
+          {/* Search input */}
+          <View style={{ paddingHorizontal: 16, paddingTop: 10 }}>
             <View
               style={{
                 flexDirection: "row",
-                justifyContent: "space-between",
+                alignItems: "center",
+                borderWidth: 1,
+                borderColor: "rgba(148,163,184,0.7)",
+                borderRadius: 10,
+                paddingHorizontal: 10,
                 marginBottom: 10,
+                backgroundColor: "#020617",
               }}
             >
-              {REACTION_EMOJIS.map((emoji) => (
-                <TouchableOpacity
-                  key={emoji}
-                  onPress={() => {
-                    toggleReaction(reactionPickerFor, emoji);
-                    closeReactionPicker();
-                  }}
+              <Ionicons name="search" size={18} color="#9ca3af" />
+              <TextInput
+                style={{
+                  flex: 1,
+                  marginLeft: 6,
+                  paddingVertical: 8,
+                  color: "#e5f3ff",
+                }}
+                placeholder="Search GIFs (e.g. dunk, hype)"
+                placeholderTextColor="#9ca3af"
+                value={gifSearch}
+                onChangeText={setGifSearch}
+                onSubmitEditing={searchGifs}
+                returnKeyType="search"
+              />
+              <TouchableOpacity onPress={searchGifs}>
+                <Ionicons
+                  name="arrow-forward-circle"
+                  size={22}
+                  color="#60a5fa"
+                />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* GIF results */}
+          <View style={{ flex: 1, paddingHorizontal: 12, paddingTop: 4 }}>
+            {gifLoading ? (
+              <View
+                style={{
+                  flex: 1,
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <ActivityIndicator size="large" color="#60a5fa" />
+                <Text
                   style={{
-                    padding: 6,
+                    color: "#9ca3af",
+                    marginTop: 10,
                   }}
                 >
-                  <Text style={{ fontSize: 22 }}>{emoji}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            <TouchableOpacity
-              onPress={() => handleDeleteMessage(reactionPickerFor)}
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                paddingVertical: 6,
-              }}
-            >
-              <Ionicons
-                name="trash-outline"
-                size={16}
-                color="#fca5a5"
-                style={{ marginRight: 6 }}
+                  Loading GIFs...
+                </Text>
+              </View>
+            ) : (
+              <FlatList
+                data={gifResults}
+                keyExtractor={(item) => item.id}
+                numColumns={2}
+                columnWrapperStyle={{
+                  justifyContent: "space-between",
+                  marginBottom: 10,
+                }}
+                contentContainerStyle={{
+                  paddingHorizontal: 4,
+                  paddingTop: 4,
+                  paddingBottom: 16,
+                }}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    onPress={() => sendGifMessage(item.url)}
+                    style={{
+                      width: "49%",
+                      aspectRatio: 1,
+                      borderRadius: 8,
+                      overflow: "hidden",
+                      backgroundColor: "#020617",
+                      borderWidth: 1,
+                      borderColor: "#1f2937",
+                    }}
+                  >
+                    <Image
+                      source={{ uri: item.url }}
+                      style={{
+                        width: "100%",
+                        height: "100%",
+                        borderRadius: 8,
+                      }}
+                      resizeMode="cover"
+                    />
+                  </TouchableOpacity>
+                )}
+                ListEmptyComponent={
+                  <Text
+                    style={{
+                      color: "#9ca3af",
+                      textAlign: "center",
+                      marginTop: 8,
+                    }}
+                  >
+                    Search for a GIF to get started
+                  </Text>
+                }
               />
-              <Text style={{ color: "#fca5a5", fontSize: 13 }}>
-                Delete for everyone
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={closeReactionPicker}
-              style={{
-                marginTop: 8,
-                alignSelf: "flex-end",
-              }}
-            >
-              <Text style={{ color: "#9ca3af", fontSize: 13 }}>Cancel</Text>
-            </TouchableOpacity>
+            )}
           </View>
         </View>
       </Modal>
 
-      {/* REACTION DETAILS */}
+      {/* REACTION DETAILS (unchanged) */}
       <Modal
         visible={!!reactionDetail}
         transparent
@@ -1469,10 +1450,7 @@ export default function DmChatScreen({ route, navigation }) {
             ) : reactionDetail && reactionDetail.entries.length > 0 ? (
               <ScrollView>
                 {reactionDetail.entries.map((entry) => (
-                  <View
-                    key={entry.emoji}
-                    style={{ marginBottom: 10 }}
-                  >
+                  <View key={entry.emoji} style={{ marginBottom: 10 }}>
                     <View
                       style={{
                         flexDirection: "row",
