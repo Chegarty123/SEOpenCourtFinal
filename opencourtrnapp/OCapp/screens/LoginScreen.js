@@ -94,7 +94,7 @@ export default function LoginScreen({ navigation }) {
             width: 260,
             height: 260,
             borderRadius: 130,
-            backgroundColor: "rgba(37,99,235,0.18)", // blue
+            backgroundColor: "rgba(37,99,235,0.18)",
             top: -80,
             right: -60,
           }}
@@ -106,7 +106,7 @@ export default function LoginScreen({ navigation }) {
             width: 220,
             height: 220,
             borderRadius: 110,
-            backgroundColor: "rgba(147,51,234,0.14)", // purple
+            backgroundColor: "rgba(147,51,234,0.14)",
             top: 120,
             left: -70,
           }}
@@ -118,7 +118,7 @@ export default function LoginScreen({ navigation }) {
             width: 260,
             height: 260,
             borderRadius: 130,
-            backgroundColor: "rgba(56,189,248,0.12)", // cyan
+            backgroundColor: "rgba(56,189,248,0.12)",
             bottom: -90,
             right: -80,
           }}
@@ -134,7 +134,7 @@ export default function LoginScreen({ navigation }) {
             style={{
               flex: 1,
               paddingHorizontal: 20,
-              paddingTop: 72, // pulled content down a bit
+              paddingTop: 72,
               paddingBottom: 24,
               justifyContent: "space-between",
             }}
@@ -189,7 +189,7 @@ export default function LoginScreen({ navigation }) {
                 </View>
               </View>
 
-              {/* Heading block – nudged down */}
+              {/* Heading block */}
               <View style={{ marginTop: 10 }}>
                 <Text
                   style={{
@@ -240,7 +240,7 @@ export default function LoginScreen({ navigation }) {
                 </View>
               ) : null}
 
-              {/* Email */}
+              {/* Email input */}
               <View style={{ marginBottom: 14 }}>
                 <Text
                   style={{
@@ -288,7 +288,7 @@ export default function LoginScreen({ navigation }) {
                 </View>
               </View>
 
-              {/* Password */}
+              {/* Password input */}
               <View style={{ marginBottom: 8 }}>
                 <Text
                   style={{
@@ -345,7 +345,7 @@ export default function LoginScreen({ navigation }) {
                 </View>
               </View>
 
-              {/* Remember + Forgot */}
+              {/* Remember me + forgot password */}
               <View
                 style={{
                   flexDirection: "row",
@@ -423,94 +423,6 @@ export default function LoginScreen({ navigation }) {
                   {loading ? "Signing in..." : "Sign in"}
                 </Text>
               </TouchableOpacity>
-
-              {/* Divider + faux social */}
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  marginVertical: 12,
-                }}
-              >
-                <View
-                  style={{
-                    flex: 1,
-                    height: 1,
-                    backgroundColor: "#111827",
-                  }}
-                />
-                <Text
-                  style={{
-                    color: "#6b7280",
-                    fontSize: 12,
-                    marginHorizontal: 10,
-                  }}
-                >
-                  or continue with
-                </Text>
-                <View
-                  style={{
-                    flex: 1,
-                    height: 1,
-                    backgroundColor: "#111827",
-                  }}
-                />
-              </View>
-
-              <View
-                style={{
-                  flexDirection: "row",
-                  justifyContent: "space-between",
-                  marginBottom: 10,
-                }}
-              >
-                <TouchableOpacity
-                  style={{
-                    flex: 1,
-                    marginRight: 6,
-                    borderRadius: 999,
-                    borderWidth: 1,
-                    borderColor: "#1f2937",
-                    paddingVertical: 10,
-                    alignItems: "center",
-                    backgroundColor: "rgba(15,23,42,0.9)",
-                  }}
-                  onPress={() => {}}
-                >
-                  <Text
-                    style={{
-                      color: "#e5e7eb",
-                      fontSize: 14,
-                      fontWeight: "500",
-                    }}
-                  >
-                    Google
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={{
-                    flex: 1,
-                    marginLeft: 6,
-                    borderRadius: 999,
-                    borderWidth: 1,
-                    borderColor: "#1f2937",
-                    paddingVertical: 10,
-                    alignItems: "center",
-                    backgroundColor: "rgba(15,23,42,0.9)",
-                  }}
-                  onPress={() => {}}
-                >
-                  <Text
-                    style={{
-                      color: "#e5e7eb",
-                      fontSize: 14,
-                      fontWeight: "500",
-                    }}
-                  >
-                    Apple
-                  </Text>
-                </TouchableOpacity>
-              </View>
             </View>
 
             {/* Footer */}
