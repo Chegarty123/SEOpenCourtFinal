@@ -31,10 +31,10 @@ export default function ProfileScreen({ navigation }) {
   );
   const [gradeLevel, setGradeLevel] = useState("Freshman");
   const [favoriteTeam, setFavoriteTeam] = useState("None");
-  const [bio, setBio] = useState(""); // new bio state
+  const [bio, setBio] = useState(""); 
   const [saveStatus, setSaveStatus] = useState("All changes saved");
 
-  const BIO_MAX_LENGTH = 150; // max characters for bio
+  const BIO_MAX_LENGTH = 75; // max characters for bio
   const [bioCharsLeft, setBioCharsLeft] = useState(BIO_MAX_LENGTH);
 
   const [hasMediaPermission, setHasMediaPermission] = useState(null);
@@ -82,7 +82,7 @@ export default function ProfileScreen({ navigation }) {
     Kings: require("../images/kings.png"),
   };
 
-  // 🔁 On mount: check/request media library permission once
+  // Media permission
   useEffect(() => {
     let isMounted = true;
 
@@ -116,7 +116,7 @@ export default function ProfileScreen({ navigation }) {
     };
   }, []);
 
-  // Load saved profile
+  // Load profile
   useEffect(() => {
     if (!user) return;
 
@@ -157,7 +157,7 @@ export default function ProfileScreen({ navigation }) {
     loadProfile();
   }, []);
 
-  // Auto-save when things change
+  // Auto-save
   useEffect(() => {
     if (!user) return;
 
@@ -186,7 +186,7 @@ export default function ProfileScreen({ navigation }) {
     return () => clearTimeout(timeout);
   }, [username, profilePic, position, gradeLevel, favoriteTeam, memberSince, bio, user]);
 
-  // Pick image, upload to Firebase Storage, save URL in profilePic
+  // Pick image
   const pickImage = async () => {
     if (!user) return;
 
@@ -286,18 +286,14 @@ export default function ProfileScreen({ navigation }) {
       style={[styles.safe, { paddingTop: Platform.OS === "android" ? StatusBar.currentHeight : 0 }]}
     >
       <StatusBar barStyle="light-content" />
-
       <View pointerEvents="none" style={styles.blobTop} />
       <View pointerEvents="none" style={styles.blobBottom} />
-
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
-      >
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+        
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Your profile</Text>
           <Text style={styles.headerSubtitle}>
-            Set up your hooper card so friends know who&apos;s pulling up.
+            Set up your hooper card so friends know who's pulling up.
           </Text>
         </View>
 
@@ -310,37 +306,49 @@ export default function ProfileScreen({ navigation }) {
                   <Image source={{ uri: profilePic }} style={styles.profileImage} />
                 ) : (
                   <View style={styles.avatarPlaceholder}>
-                    <Text style={styles.avatarInitial}>
-                      {username?.[0]?.toUpperCase() || "U"}
-                    </Text>
+                    <Text style={styles.avatarInitial}>{username?.[0]?.toUpperCase() || "U"}</Text>
                   </View>
                 )}
               </View>
             </TouchableOpacity>
 
             <View style={styles.playerTextArea}>
-              <Text style={styles.usernameText}>
-                {username || "Add username"}
-              </Text>
-              {bio ? (
-                <Text style={styles.bioPreview}>
-                  {bio.length > 50 ? bio.substring(0, 50) + "…" : bio}
-                </Text>
-              ) : null}
-              <Text style={styles.taglineText}>
-                {tagline || "Tap tags below to update your profile"}
-              </Text>
-              {memberSince ? (
-                <Text style={styles.memberSinceText}>
-                  Member since {memberSince}
-                </Text>
-              ) : null}
+              <Text style={styles.usernameText}>{username || "Add username"}</Text>
+              {bio ? <Text style={styles.bioPreview}>{bio.length > 50 ? bio.substring(0, 50) + "…" : bio}</Text> : null}
+              <Text style={styles.taglineText}>{tagline || "Tap tags below to update your profile"}</Text>
+              {memberSince ? <Text style={styles.memberSinceText}>Member since {memberSince}</Text> : null}
             </View>
           </View>
 
           <View style={styles.saveStatusRow}>
             <Text style={styles.saveStatusText}>{saveStatus}</Text>
           </View>
+        </View>
+
+        {/* BIO CARD */}
+        <View style={styles.card}>
+          <View style={styles.cardHeaderRow}>
+            <Text style={styles.cardTitle}>Bio</Text>
+            <Text style={styles.cardSubtitle}>
+              Write something about yourself so friends know you better.
+            </Text>
+          </View>
+
+          <TextInput
+            style={styles.bioInput}
+            placeholder="Add a short bio..."
+            placeholderTextColor="#9ca3af"
+            value={bio}
+            maxLength={BIO_MAX_LENGTH}
+            blurOnSubmit={true}
+            onSubmitEditing={() => {}}
+            onChangeText={(text) => {
+              const singleLineText = text.replace(/\n/g, ""); // remove newlines
+              setBio(singleLineText);
+              setBioCharsLeft(BIO_MAX_LENGTH - singleLineText.length);
+            }}
+          />
+          <Text style={styles.bioCharCount}>{bioCharsLeft} characters remaining</Text>
         </View>
 
         {/* HOOPER PROFILE CARD */}
@@ -383,31 +391,6 @@ export default function ProfileScreen({ navigation }) {
               </TouchableOpacity>
             ))}
           </View>
-        </View>
-
-        {/* BIO CARD */}
-        <View style={styles.card}>
-          <View style={styles.cardHeaderRow}>
-            <Text style={styles.cardTitle}>Bio</Text>
-            <Text style={styles.cardSubtitle}>
-              Write something about yourself so friends know you better.
-            </Text>
-          </View>
-
-          <TextInput
-            style={styles.bioInput}
-            placeholder="Add a short bio..."
-            placeholderTextColor="#9ca3af"
-            multiline
-            numberOfLines={4}
-            value={bio}
-            maxLength={BIO_MAX_LENGTH}
-            onChangeText={(text) => {
-              setBio(text);
-              setBioCharsLeft(BIO_MAX_LENGTH - text.length);
-            }}
-          />
-          <Text style={styles.bioCharCount}>{bioCharsLeft} characters remaining</Text>
         </View>
 
         {/* FAVORITE TEAM CARD */}
@@ -455,6 +438,7 @@ export default function ProfileScreen({ navigation }) {
             <Text style={styles.logoutText}>Log out</Text>
           </TouchableOpacity>
         </View>
+
       </ScrollView>
     </SafeAreaView>
   );
@@ -502,6 +486,6 @@ const styles = StyleSheet.create({
   accountEmail: { marginTop: 4, fontSize: 13, color: "#9ca3af", marginBottom: 14 },
   logoutBtn: { marginTop: 4, backgroundColor: "#ef4444", paddingVertical: 10, borderRadius: 999, alignItems: "center" },
   logoutText: { color: "#fff", fontWeight: "700", fontSize: 15 },
-  bioInput: { backgroundColor: "rgba(15,23,42,0.9)", borderRadius: 16, borderWidth: 1, borderColor: "rgba(148,163,184,0.6)", padding: 10, color: "#e5f3ff", fontSize: 13, textAlignVertical: "top" },
+  bioInput: { backgroundColor: "rgba(15,23,42,0.9)", borderRadius: 16, borderWidth: 1, borderColor: "rgba(148,163,184,0.6)", padding: 10, color: "#e5f3ff", fontSize: 13, textAlignVertical: "center" },
   bioCharCount: { fontSize: 11, color: "#9ca3af", marginTop: 4, textAlign: "right" },
 });
