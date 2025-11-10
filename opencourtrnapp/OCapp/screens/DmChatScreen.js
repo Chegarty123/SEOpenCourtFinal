@@ -726,10 +726,9 @@ export default function DmChatScreen({ route, navigation }) {
 
                 const isMine = m.mine;
                 const bubbleAlign = isMine ? "flex-end" : "flex-start";
-                const bgColor = isMine ? "#0f172a" : "#020617";
-                const borderColor = isMine
-                  ? "rgba(96,165,250,0.7)"
-                  : "rgba(148,163,184,0.6)";
+                const bgColor = isMine
+                  ? "rgba(59,130,246,0.15)"
+                  : "rgba(30,41,59,0.6)";
 
                 // sent/read receipt per message (1:1 only)
                 let receiptLabel = "";
@@ -863,21 +862,24 @@ export default function DmChatScreen({ route, navigation }) {
                         onLongPress={() => openReactionPicker(m.id)}
                         onPress={() => handleMessagePress(m.id)}
                         style={{
-                          paddingHorizontal: 10,
-                          paddingVertical: 6,
-                          borderRadius: 12,
+                          paddingHorizontal: 14,
+                          paddingVertical: 10,
+                          borderRadius: 18,
                           maxWidth: "78%",
                           backgroundColor: bgColor,
-                          borderWidth: 1,
-                          borderColor,
+                          shadowColor: "#000",
+                          shadowOffset: { width: 0, height: 1 },
+                          shadowOpacity: 0.1,
+                          shadowRadius: 2,
+                          elevation: 2,
                         }}
                       >
                         <Text
                           style={{
-                            fontSize: 11,
-                            fontWeight: "700",
-                            marginBottom: 2,
-                            color: isMine ? "#e5f3ff" : "#cbd5f5",
+                            fontSize: 12,
+                            fontWeight: "600",
+                            marginBottom: 4,
+                            color: isMine ? "#93c5fd" : "#cbd5e1",
                           }}
                         >
                           {isMine ? "You" : m.user}
@@ -945,9 +947,9 @@ export default function DmChatScreen({ route, navigation }) {
                         ) : (
                           <Text
                             style={{
-                              color: "#e5e7eb",
+                              color: "#f1f5f9",
                               fontSize: 15,
-                              lineHeight: 20,
+                              lineHeight: 21,
                             }}
                           >
                             {m.text}
@@ -1348,6 +1350,7 @@ export default function DmChatScreen({ route, navigation }) {
               onChangeText={handleChangeText}
               returnKeyType="send"
               onSubmitEditing={handleSend}
+              blurOnSubmit={false}
             />
             <TouchableOpacity
               onPress={handleSend}
