@@ -302,11 +302,6 @@ export default function CourtDetailScreen({ route, navigation }) {
                   </Text>
                 </View>
               )}
-
-              <View style={ui.courtStatChip}>
-                <Ionicons name="star" size={14} color="#e5f3ff" />
-                <Text style={ui.courtStatText}>4.6 rating</Text>
-              </View>
             </View>
           </View>
         </View>
