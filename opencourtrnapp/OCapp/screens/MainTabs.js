@@ -19,7 +19,7 @@ import SettingsScreen from "./SettingsScreen"; // Friends
 import MessagesScreen from "./MessagesScreen";
 
 import { auth, db } from "../firebaseConfig";
-import { collection, onSnapshot } from "firebase/firestore";
+import { collection, onSnapshot, doc } from "firebase/firestore";
 
 const Tab = createBottomTabNavigator();
 
@@ -83,6 +83,46 @@ function MessagesTabIcon({ color, size }) {
         <View style={styles.unreadBadge}>
           <Text style={styles.unreadBadgeText}>
             {unreadCount > 9 ? "9+" : unreadCount}
+          </Text>
+        </View>
+      )}
+    </View>
+  );
+}
+
+/* ----------------- Incoming friend requests badge on Friends tab ----------------- */
+function FriendsTabIcon({ color, size }) {
+  const [requestCount, setRequestCount] = useState(0);
+
+  useEffect(() => {
+    const user = auth.currentUser;
+    if (!user) return;
+
+    const userRef = doc(db, "users", user.uid);
+    const unsub = onSnapshot(userRef, (snap) => {
+      if (!snap.exists()) return;
+      const data = snap.data();
+      const incomingRequests = data.incomingRequests || [];
+      setRequestCount(incomingRequests.length);
+    });
+
+    return () => unsub();
+  }, []);
+
+  return (
+    <View
+      style={{
+        width: size + 6,
+        height: size + 6,
+        justifyContent: "center",
+        alignItems: "center",
+      }}
+    >
+      <Ionicons name="people-outline" size={size} color={color} />
+      {requestCount > 0 && (
+        <View style={styles.unreadBadge}>
+          <Text style={styles.unreadBadgeText}>
+            {requestCount > 9 ? "9+" : requestCount}
           </Text>
         </View>
       )}
@@ -285,9 +325,7 @@ export default function MainTabs({ navigation }) {
               );
             }
             if (route.name === "Friends") {
-              return (
-                <Ionicons name="people-outline" size={size} color={color} />
-              );
+              return <FriendsTabIcon color={color} size={size} />;
             }
             if (route.name === "Messages") {
               return <MessagesTabIcon color={color} size={size} />;
