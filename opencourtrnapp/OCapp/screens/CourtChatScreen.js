@@ -20,18 +20,16 @@ import { auth, db } from "../firebaseConfig";
 import {
   collection,
   doc,
-  onSnapshot,
   getDoc,
-  query,
-  orderBy,
   addDoc,
   serverTimestamp,
-  setDoc,
   updateDoc,
   deleteDoc,
 } from "firebase/firestore";
 import { searchGifs, REACTION_EMOJIS } from "../services/gifService";
 import { formatTime, formatDateLabel, getDateKey } from "../utils/dateUtils";
+import { useMessages } from "../hooks/useMessages";
+import { useTypingIndicator } from "../hooks/useTypingIndicator";
 
 export default function CourtChatScreen({ route, navigation }) {
   const { courtId, courtName, courtAddress, courtImage } = route.params || {};
@@ -42,7 +40,18 @@ export default function CourtChatScreen({ route, navigation }) {
     name: user?.email ? user.email.split("@")[0] : "you",
   });
 
-  const [messages, setMessages] = useState([]);
+  // Use custom hooks for messages and typing
+  const { messages, loading: messagesLoading } = useMessages(
+    courtId,
+    user?.uid,
+    "court"
+  );
+  const { typingLabel, setTypingStatus } = useTypingIndicator(
+    courtId,
+    user?.uid,
+    myProfile.name,
+    "court"
+  );
   const [draftMessage, setDraftMessage] = useState("");
   const chatScrollRef = useRef(null);
 
@@ -51,7 +60,6 @@ export default function CourtChatScreen({ route, navigation }) {
   const [gifResults, setGifResults] = useState([]);
   const [gifLoading, setGifLoading] = useState(false);
 
-  const [typingUsers, setTypingUsers] = useState([]);
   const [reactionPickerFor, setReactionPickerFor] = useState(null); // msg.id or null
 
   // reply-to state
@@ -74,7 +82,9 @@ export default function CourtChatScreen({ route, navigation }) {
   // 👉 for reaction details modal ("who reacted with what")
   const [reactionDetail, setReactionDetail] = useState(null); // { messageId, entries: [{emoji, users:[{id,name}]}] }
   const [reactionDetailLoading, setReactionDetailLoading] = useState(false);
-  const [messagesLoaded, setMessagesLoaded] = useState(false);
+
+  // Compute messagesLoaded from hook's loading state
+  const messagesLoaded = !messagesLoading && messages.length >= 0;
 
   const scrollToBottom = () => {
     setTimeout(() => {
@@ -120,99 +130,27 @@ export default function CourtChatScreen({ route, navigation }) {
       .catch((err) => console.log("Error fetching user profile:", err));
   }, [user]);
 
-  // Subscribe to messages for this court
+  // Messages are now handled by useMessages hook
+  // Detect new messages for "jump to latest" pill and handle initial scroll
   useEffect(() => {
-    if (!courtId || !user) return;
+    const prevCount = prevMsgCountRef.current;
+    const newCount = messages.length;
+    const gotNewMessage = newCount > prevCount;
+    prevMsgCountRef.current = newCount;
 
-    const courtRef = doc(db, "courts", courtId);
-    const msgsRef = collection(courtRef, "messages");
-    const qMsgs = query(msgsRef, orderBy("ts", "asc"));
-
-    const unsub = onSnapshot(qMsgs, (snapshot) => {
-      const chatArr = [];
-      snapshot.forEach((d) => {
-        const data = d.data();
-        chatArr.push({
-          id: d.id,
-          userId: data.userId,
-          user: data.username || "player",
-          text: data.text || "",
-          type: data.type || (data.gifUrl ? "gif" : "text"),
-          gifUrl: data.gifUrl || null,
-          reactions: data.reactions || {},
-          ts: data.ts,
-          mine: data.userId === user.uid,
-          replyTo: data.replyTo || null,
-        });
-      });
-
-      const prevCount = prevMsgCountRef.current;
-      const newCount = chatArr.length;
-      const gotNewMessage = newCount > prevCount;
-      prevMsgCountRef.current = newCount;
-
-      setMessages(chatArr);
-
-      if (!isAtBottomRef.current && gotNewMessage) {
-        setHasNewMessage(true);
-      }
-
-      setMessagesLoaded(true);
-
-      // on initial load, jump to bottom once messages exist
-      if (!initialScrollDoneRef.current && chatArr.length > 0) {
-        initialScrollDoneRef.current = true;
-        chatScrollRef.current?.scrollToEnd({ animated: false });
-        setInitialRenderDone(true);
-      }
-    });
-
-    return () => unsub();
-  }, [courtId, user]);
-
-  // Typing indicator subscription for this court
-  useEffect(() => {
-    if (!courtId || !user) return;
-
-    const courtRef = doc(db, "courts", courtId);
-    const typingRef = collection(courtRef, "typing");
-    const qTyping = query(typingRef);
-
-    const unsub = onSnapshot(qTyping, (snap) => {
-      const currentTyping = [];
-      snap.forEach((docSnap) => {
-        const data = docSnap.data();
-        if (docSnap.id !== user.uid && data.isTyping) {
-          currentTyping.push(data.username || "Someone");
-        }
-      });
-      setTypingUsers(currentTyping);
-    });
-
-    return () => unsub();
-  }, [courtId, user]);
-
-  // Update my typing status
-  const setTypingStatus = async (isTyping) => {
-    if (!courtId || !user) return;
-
-    try {
-      const courtRef = doc(db, "courts", courtId);
-      const typingDoc = doc(courtRef, "typing", user.uid);
-      await setDoc(
-        typingDoc,
-        {
-          userId: user.uid,
-          username: myProfile.name,
-          isTyping,
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true }
-      );
-    } catch (err) {
-      console.log("Error updating typing status:", err);
+    if (!isAtBottomRef.current && gotNewMessage) {
+      setHasNewMessage(true);
     }
-  };
+
+    // on initial load, jump to bottom once messages exist
+    if (!initialScrollDoneRef.current && messages.length > 0) {
+      initialScrollDoneRef.current = true;
+      chatScrollRef.current?.scrollToEnd({ animated: false });
+      setInitialRenderDone(true);
+    }
+  }, [messages.length]);
+
+  // Typing indicator now handled by useTypingIndicator hook
 
   const handleChangeText = (text) => {
     setDraftMessage(text);
@@ -312,17 +250,7 @@ export default function CourtChatScreen({ route, navigation }) {
     }
   };
 
-  // Typing label text
-  let typingLabel = "";
-  if (typingUsers.length === 1) {
-    typingLabel = `${typingUsers[0]} is typing...`;
-  } else if (typingUsers.length === 2) {
-    typingLabel = `${typingUsers[0]} and ${typingUsers[1]} are typing...`;
-  } else if (typingUsers.length > 2) {
-    typingLabel = `${typingUsers[0]} and ${
-      typingUsers.length - 1
-    } others are typing...`;
-  }
+  // Typing label now provided by useTypingIndicator hook
 
   const handlePressUser = (userId) => {
     if (!userId) return;

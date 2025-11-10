@@ -19,6 +19,7 @@ import { doc, getDoc, setDoc } from "firebase/firestore";
 import { signOut } from "firebase/auth";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { NBA_TEAM_LOGOS } from "../utils/profileUtils";
 
 export default function ProfileScreen({ navigation }) {
   const user = auth.currentUser;
@@ -49,38 +50,7 @@ export default function ProfileScreen({ navigation }) {
 
   const GRADE_OPTIONS = ["Freshman", "Sophomore", "Junior", "Senior", "Other"];
 
-  const teamLogos = {
-    Hawks: require("../images/hawks.png"),
-    Raptors: require("../images/raptors.png"),
-    Nets: require("../images/nets.png"),
-    Heat: require("../images/heat.png"),
-    Sixers: require("../images/sixers.png"),
-    Knicks: require("../images/knicks.png"),
-    Magic: require("../images/magic.webp"),
-    Celtics: require("../images/celtics.png"),
-    Bulls: require("../images/bulls.png"),
-    Cavaliers: require("../images/cavs.png"),
-    Pistons: require("../images/pistons.png"),
-    Bucks: require("../images/bucks.png"),
-    Wizards: require("../images/wizards.webp"),
-    Hornets: require("../images/hornets.png"),
-    Pacers: require("../images/pacers.png"),
-    Nuggets: require("../images/nuggets.png"),
-    Suns: require("../images/suns.png"),
-    Clippers: require("../images/clippers.png"),
-    Lakers: require("../images/lakers.png"),
-    Trailblazers: require("../images/trailblazers.png"),
-    Thunder: require("../images/thunder.png"),
-    Timberwolves: require("../images/timberwolves.png"),
-    Rockets: require("../images/rockets.png"),
-    Pelicans: require("../images/pelicans.png"),
-    Grizzlies: require("../images/grizzlies.png"),
-    Mavericks: require("../images/mavericks.png"),
-    Spurs: require("../images/spurs.png"),
-    Warriors: require("../images/warriors.png"),
-    Jazz: require("../images/jazz.png"),
-    Kings: require("../images/kings.png"),
-  };
+  // Team logos now imported from centralized utility
 
   // Media permission
   useEffect(() => {
@@ -279,7 +249,7 @@ export default function ProfileScreen({ navigation }) {
   const tagline = taglinePieces.join(" • ");
 
   const favoriteTeamLogo =
-    favoriteTeam && favoriteTeam !== "None" && teamLogos[favoriteTeam];
+    favoriteTeam && favoriteTeam !== "None" && NBA_TEAM_LOGOS[favoriteTeam];
 
   return (
     <SafeAreaView
@@ -415,14 +385,14 @@ export default function ProfileScreen({ navigation }) {
           </View>
 
           <View style={styles.teamGrid}>
-            {Object.keys(teamLogos).map((team) => (
+            {Object.keys(NBA_TEAM_LOGOS).map((team) => (
               <TouchableOpacity
                 key={team}
                 style={[styles.teamTag, favoriteTeam === team && styles.teamTagSelected]}
                 onPress={() => setFavoriteTeam(team)}
                 activeOpacity={0.85}
               >
-                <Image source={teamLogos[team]} style={styles.teamLogo} />
+                <Image source={NBA_TEAM_LOGOS[team]} style={styles.teamLogo} />
                 <Text style={[styles.teamTagText, favoriteTeam === team && styles.teamTagTextSelected]} numberOfLines={1}>
                   {team}
                 </Text>

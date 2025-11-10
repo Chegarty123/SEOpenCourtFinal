@@ -23,16 +23,15 @@ import {
   doc,
   onSnapshot,
   getDoc,
-  query,
-  orderBy,
   addDoc,
   serverTimestamp,
-  setDoc,
   updateDoc,
   deleteDoc,
 } from "firebase/firestore";
 import { searchGifs, REACTION_EMOJIS } from "../services/gifService";
 import { formatTime, formatDateLabel, getDateKey } from "../utils/dateUtils";
+import { useMessages } from "../hooks/useMessages";
+import { useTypingIndicator } from "../hooks/useTypingIndicator";
 
 export default function DmChatScreen({ route, navigation }) {
   const {
@@ -50,7 +49,19 @@ export default function DmChatScreen({ route, navigation }) {
     name: user?.email ? user.email.split("@")[0] : "you",
   });
 
-  const [messages, setMessages] = useState([]);
+  // Use custom hooks for messages and typing
+  const { messages, loading: messagesLoading } = useMessages(
+    conversationId,
+    user?.uid,
+    "dm"
+  );
+  const { typingLabel, setTypingStatus } = useTypingIndicator(
+    conversationId,
+    user?.uid,
+    myProfile.name,
+    "dm"
+  );
+
   const [draftMessage, setDraftMessage] = useState("");
   const chatScrollRef = useRef(null);
 
@@ -59,7 +70,6 @@ export default function DmChatScreen({ route, navigation }) {
   const [gifResults, setGifResults] = useState([]);
   const [gifLoading, setGifLoading] = useState(false);
 
-  const [typingUsers, setTypingUsers] = useState([]);
   const [reactionPickerFor, setReactionPickerFor] = useState(null);
 
   // reply-to state
@@ -78,7 +88,9 @@ export default function DmChatScreen({ route, navigation }) {
   const [reactionDetail, setReactionDetail] = useState(null);
   const [reactionDetailLoading, setReactionDetailLoading] =
     useState(false);
-  const [messagesLoaded, setMessagesLoaded] = useState(false);
+
+  // messagesLoaded is now handled by the messagesLoading from useMessages hook
+  const messagesLoaded = !messagesLoading && messages.length >= 0;
 
   // read receipts state (conversation-level)
   const [readBy, setReadBy] = useState({});
@@ -133,108 +145,18 @@ export default function DmChatScreen({ route, navigation }) {
       .catch((err) => console.log("Error fetching user profile:", err));
   }, [user]);
 
-  // Subscribe to messages for this conversation
+  // Messages are now handled by useMessages hook
+  // Detect new messages for "jump to latest" pill
   useEffect(() => {
-    if (!conversationId || !user) return;
-
-    const msgsRef = collection(
-      db,
-      "dmConversations",
-      conversationId,
-      "messages"
-    );
-    const qMsgs = query(msgsRef, orderBy("ts", "asc"));
-
-    const unsub = onSnapshot(qMsgs, (snap) => {
-      const list = [];
-      snap.forEach((d) => {
-        const data = d.data();
-        list.push({
-          id: d.id,
-          text: data.text || "",
-          ts: data.ts || data.createdAt || null,
-          userId: data.userId,
-          user:
-            data.username ||
-            data.user ||
-            (data.userId === user.uid ? "You" : "Player"),
-          type: data.type || "text",
-          gifUrl: data.gifUrl || null,
-          reactions: data.reactions || {},
-          mine: data.userId === user.uid,
-          replyTo: data.replyTo || null,
-        });
-      });
-      setMessages(list);
-
-      // new message detection for "jump to latest" pill
-      if (initialRenderDone && list.length > prevMsgCountRef.current) {
-        if (!isAtBottomRef.current) {
-          setHasNewMessage(true);
-        }
+    if (initialRenderDone && messages.length > prevMsgCountRef.current) {
+      if (!isAtBottomRef.current) {
+        setHasNewMessage(true);
       }
-      prevMsgCountRef.current = list.length;
-
-      setMessagesLoaded(true);
-    });
-
-    return () => unsub();
-  }, [conversationId, user, initialRenderDone]);
-
-  // Typing indicator subscription
-  useEffect(() => {
-    if (!conversationId || !user) return;
-
-    const typingRef = collection(
-      db,
-      "dmConversations",
-      conversationId,
-      "typing"
-    );
-    const qTyping = query(typingRef);
-
-    const unsub = onSnapshot(qTyping, (snap) => {
-      const arr = [];
-      snap.forEach((docSnap) => {
-        const data = docSnap.data();
-        const uid = data.userId;
-        if (uid && uid !== user.uid && data.isTyping) {
-          const name =
-            data.username ||
-            (data.email ? data.email.split("@")[0] : "Player");
-          arr.push(name);
-        }
-      });
-      setTypingUsers(arr);
-    });
-
-    return () => unsub();
-  }, [conversationId, user]);
-
-  const setTypingStatus = async (isTyping) => {
-    if (!conversationId || !user) return;
-    try {
-      const typingDoc = doc(
-        db,
-        "dmConversations",
-        conversationId,
-        "typing",
-        user.uid
-      );
-      await setDoc(
-        typingDoc,
-        {
-          userId: user.uid,
-          username: myProfile.name,
-          isTyping,
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true }
-      );
-    } catch (err) {
-      console.log("Error updating typing status:", err);
     }
-  };
+    prevMsgCountRef.current = messages.length;
+  }, [messages.length, initialRenderDone]);
+
+  // Typing indicator now handled by useTypingIndicator hook
 
   const handleChangeText = (txt) => {
     setDraftMessage(txt);
@@ -405,17 +327,7 @@ export default function DmChatScreen({ route, navigation }) {
     }
   };
 
-  // Typing label
-  let typingLabel = "";
-  if (typingUsers.length === 1) {
-    typingLabel = `${typingUsers[0]} is typing...`;
-  } else if (typingUsers.length === 2) {
-    typingLabel = `${typingUsers[0]} and ${typingUsers[1]} are typing...`;
-  } else if (typingUsers.length > 2) {
-    typingLabel = `${typingUsers[0]} and ${
-      typingUsers.length - 1
-    } others are typing...`;
-  }
+  // Typing label now provided by useTypingIndicator hook
 
   const handlePressUser = (userId) => {
     if (!userId) return;
