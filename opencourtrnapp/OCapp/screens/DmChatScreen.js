@@ -796,7 +796,15 @@ export default function DmChatScreen({ route, navigation }) {
             </View>
           )}
 
-          <View style={{ flex: 1 }}>
+          <TouchableOpacity
+            style={{ flex: 1 }}
+            activeOpacity={isGroup ? 1 : 0.7}
+            onPress={() => {
+              if (!isGroup && otherUserId) {
+                navigation.navigate("UserProfile", { userId: otherUserId });
+              }
+            }}
+          >
             <Text
               style={{
                 color: "#e5f3ff",
@@ -817,7 +825,7 @@ export default function DmChatScreen({ route, navigation }) {
             >
               {headerSubtitle}
             </Text>
-          </View>
+          </TouchableOpacity>
 
           <Pressable
             disabled={!isGroup}
