@@ -363,22 +363,25 @@ export default function DmChatScreen({ route, navigation }) {
 
       const data = snap.data();
       const reactions = data.reactions || {};
-      const currentList = Array.isArray(reactions[emoji])
-        ? reactions[emoji]
-        : [];
 
-      const alreadyReacted = currentList.includes(user.uid);
-      let newList;
-      if (alreadyReacted) {
-        newList = currentList.filter((uid) => uid !== user.uid);
+      // First, remove user from all other emojis (one reaction per user)
+      const updatedReactions = {};
+      Object.keys(reactions).forEach((key) => {
+        const reactionList = Array.isArray(reactions[key]) ? reactions[key] : [];
+        updatedReactions[key] = reactionList.filter((u) => u !== user.uid);
+      });
+
+      // Then toggle the selected emoji
+      const currentUsers = updatedReactions[emoji] || [];
+      const wasAlreadyReacted = reactions[emoji]?.includes(user.uid);
+
+      if (wasAlreadyReacted) {
+        // Remove reaction (already filtered above)
+        updatedReactions[emoji] = currentUsers;
       } else {
-        newList = [...currentList, user.uid];
+        // Add new reaction
+        updatedReactions[emoji] = [...currentUsers, user.uid];
       }
-
-      const updatedReactions = {
-        ...reactions,
-        [emoji]: newList,
-      };
 
       await updateDoc(msgRef, { reactions: updatedReactions });
     } catch (err) {
@@ -811,6 +814,50 @@ export default function DmChatScreen({ route, navigation }) {
                         alignItems: bubbleAlign,
                       }}
                     >
+                      {/* Emoji reactions row - ABOVE message bubble */}
+                      {reactionPickerFor === m.id && (
+                        <View
+                          style={{
+                            flexDirection: "row",
+                            paddingHorizontal: 12,
+                            paddingVertical: 6,
+                            alignItems: "center",
+                            backgroundColor: "rgba(15,23,42,0.95)",
+                            borderRadius: 20,
+                            borderWidth: 1,
+                            borderColor: "rgba(148,163,184,0.3)",
+                            marginBottom: 6,
+                            shadowColor: "#000",
+                            shadowOffset: { width: 0, height: 2 },
+                            shadowOpacity: 0.25,
+                            shadowRadius: 4,
+                            elevation: 5,
+                          }}
+                        >
+                          {REACTION_EMOJIS.map((emoji, idx) => (
+                            <TouchableOpacity
+                              key={emoji}
+                              activeOpacity={0.6}
+                              style={{
+                                marginRight: idx === REACTION_EMOJIS.length - 1 ? 0 : 6,
+                                width: 36,
+                                height: 36,
+                                borderRadius: 18,
+                                alignItems: "center",
+                                justifyContent: "center",
+                                backgroundColor: "rgba(30,41,59,0.8)",
+                              }}
+                              onPress={() => {
+                                toggleReaction(m.id, emoji);
+                                closeReactionPicker();
+                              }}
+                            >
+                              <Text style={{ fontSize: 20 }}>{emoji}</Text>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+                      )}
+
                       <TouchableOpacity
                         activeOpacity={0.85}
                         onLongPress={() => openReactionPicker(m.id)}
@@ -934,38 +981,54 @@ export default function DmChatScreen({ route, navigation }) {
                               style={{
                                 flexDirection: "row",
                                 alignItems: "center",
-                                marginRight: 0,
-                                paddingHorizontal: 6,
-                                paddingVertical: 2,
-                                borderRadius: 999,
-                                backgroundColor: "rgba(15,23,42,0.9)",
-                                borderWidth: 1,
-                                borderColor: "rgba(148,163,184,0.7)",
+                                marginRight: 4,
+                                gap: 4,
                               }}
                             >
                               {reactionEntries.map(
-                                ([emoji, users], idx) => (
-                                  <TouchableOpacity
-                                    key={`${m.id}-${emoji}-${idx}`}
-                                    onPress={() =>
-                                      toggleReaction(m.id, emoji)
-                                    }
-                                    style={{
-                                      flexDirection: "row",
-                                      alignItems: "center",
-                                      marginRight: 4,
-                                    }}
-                                  >
-                                    <Text
+                                ([emoji, users], idx) => {
+                                  const hasReacted = users.includes(user.uid);
+                                  return (
+                                    <TouchableOpacity
+                                      key={`${m.id}-${emoji}-${idx}`}
+                                      onPress={() =>
+                                        toggleReaction(m.id, emoji)
+                                      }
                                       style={{
-                                        fontSize: 12,
-                                        color: "#e5e7eb",
+                                        flexDirection: "row",
+                                        alignItems: "center",
+                                        paddingHorizontal: 8,
+                                        paddingVertical: 4,
+                                        borderRadius: 12,
+                                        backgroundColor: hasReacted
+                                          ? "rgba(59,130,246,0.2)"
+                                          : "rgba(15,23,42,0.6)",
+                                        borderWidth: 1,
+                                        borderColor: hasReacted
+                                          ? "rgba(59,130,246,0.5)"
+                                          : "rgba(148,163,184,0.3)",
                                       }}
                                     >
-                                      {emoji} {users.length}
-                                    </Text>
-                                  </TouchableOpacity>
-                                )
+                                      <Text
+                                        style={{
+                                          fontSize: 14,
+                                          marginRight: 4,
+                                        }}
+                                      >
+                                        {emoji}
+                                      </Text>
+                                      <Text
+                                        style={{
+                                          fontSize: 12,
+                                          color: hasReacted ? "#93c5fd" : "#9ca3af",
+                                          fontWeight: hasReacted ? "600" : "400",
+                                        }}
+                                      >
+                                        {users.length}
+                                      </Text>
+                                    </TouchableOpacity>
+                                  );
+                                }
                               )}
 
                               <TouchableOpacity
@@ -986,64 +1049,46 @@ export default function DmChatScreen({ route, navigation }) {
                         </View>
                       </TouchableOpacity>
 
-                      {/* Inline reaction picker, CourtChat-style */}
+                      {/* Action buttons row - BELOW message bubble */}
                       {reactionPickerFor === m.id && (
                         <View
                           style={{
+                            marginTop: 6,
                             flexDirection: "row",
-                            marginTop: 4,
-                            paddingHorizontal: 8,
                             alignItems: "center",
+                            gap: 8,
                           }}
                         >
-                          {REACTION_EMOJIS.map((emoji) => (
-                            <TouchableOpacity
-                              key={emoji}
-                              style={{
-                                marginRight: 8,
-                                width: 32,
-                                height: 32,
-                                borderRadius: 16,
-                                alignItems: "center",
-                                justifyContent: "center",
-                                backgroundColor: "#0f172a",
-                                borderWidth: 1,
-                                borderColor: "rgba(148,163,184,0.8)",
-                              }}
-                              onPress={() => {
-                                toggleReaction(m.id, emoji);
-                                closeReactionPicker();
-                              }}
-                            >
-                              <Text style={{ fontSize: 18 }}>{emoji}</Text>
-                            </TouchableOpacity>
-                          ))}
-
                           {/* Reply button */}
                           <TouchableOpacity
+                            activeOpacity={0.7}
                             style={{
-                              marginRight: 8,
-                              paddingHorizontal: 10,
-                              paddingVertical: 4,
-                              borderRadius: 999,
-                              backgroundColor: "#0f172a",
+                              paddingHorizontal: 16,
+                              paddingVertical: 8,
+                              borderRadius: 16,
+                              backgroundColor: "rgba(15,23,42,0.95)",
                               borderWidth: 1,
-                              borderColor: "rgba(96,165,250,0.8)",
+                              borderColor: "rgba(59,130,246,0.4)",
                               flexDirection: "row",
                               alignItems: "center",
+                              shadowColor: "#000",
+                              shadowOffset: { width: 0, height: 2 },
+                              shadowOpacity: 0.2,
+                              shadowRadius: 3,
+                              elevation: 3,
                             }}
                             onPress={() => startReplyToMessage(m)}
                           >
                             <Ionicons
-                              name="return-down-back"
-                              size={14}
-                              color="#bfdbfe"
-                              style={{ marginRight: 4 }}
+                              name="arrow-undo-outline"
+                              size={16}
+                              color="#93c5fd"
+                              style={{ marginRight: 6 }}
                             />
                             <Text
                               style={{
-                                color: "#bfdbfe",
-                                fontSize: 12,
+                                color: "#93c5fd",
+                                fontSize: 14,
                                 fontWeight: "600",
                               }}
                             >
@@ -1054,37 +1099,65 @@ export default function DmChatScreen({ route, navigation }) {
                           {/* Delete button only for your own messages */}
                           {isMine && (
                             <TouchableOpacity
+                              activeOpacity={0.7}
                               style={{
-                                marginRight: 8,
-                                width: 32,
-                                height: 32,
+                                paddingHorizontal: 16,
+                                paddingVertical: 8,
                                 borderRadius: 16,
-                                alignItems: "center",
-                                justifyContent: "center",
-                                backgroundColor: "#1f2937",
+                                backgroundColor: "rgba(15,23,42,0.95)",
                                 borderWidth: 1,
-                                borderColor: "rgba(248,113,113,0.7)",
+                                borderColor: "rgba(239,68,68,0.4)",
+                                flexDirection: "row",
+                                alignItems: "center",
+                                shadowColor: "#000",
+                                shadowOffset: { width: 0, height: 2 },
+                                shadowOpacity: 0.2,
+                                shadowRadius: 3,
+                                elevation: 3,
                               }}
                               onPress={() => handleDeleteMessage(m.id)}
                             >
                               <Ionicons
                                 name="trash-outline"
-                                size={18}
+                                size={16}
                                 color="#fca5a5"
+                                style={{ marginRight: 6 }}
                               />
+                              <Text
+                                style={{
+                                  color: "#fca5a5",
+                                  fontSize: 14,
+                                  fontWeight: "600",
+                                }}
+                              >
+                                Delete
+                              </Text>
                             </TouchableOpacity>
                           )}
 
+                          {/* Close button */}
                           <TouchableOpacity
+                            activeOpacity={0.7}
                             style={{
+                              paddingHorizontal: 12,
+                              paddingVertical: 8,
+                              borderRadius: 16,
+                              backgroundColor: "rgba(15,23,42,0.95)",
+                              borderWidth: 1,
+                              borderColor: "rgba(148,163,184,0.3)",
                               alignItems: "center",
                               justifyContent: "center",
+                              shadowColor: "#000",
+                              shadowOffset: { width: 0, height: 2 },
+                              shadowOpacity: 0.2,
+                              shadowRadius: 3,
+                              elevation: 3,
                             }}
                             onPress={closeReactionPicker}
                           >
                             <Ionicons
-                              name="close-circle-outline"
-                              size={22}
+                              name="close"
+                              size={18}
                               color="#9ca3af"
                             />
                           </TouchableOpacity>
