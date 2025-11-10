@@ -54,6 +54,7 @@ export default function CourtChatScreen({ route, navigation }) {
   );
   const [draftMessage, setDraftMessage] = useState("");
   const chatScrollRef = useRef(null);
+  const messageInputRef = useRef(null);
 
   const [gifPickerVisible, setGifPickerVisible] = useState(false);
   const [gifSearch, setGifSearch] = useState("");
@@ -82,9 +83,7 @@ export default function CourtChatScreen({ route, navigation }) {
   // 👉 for reaction details modal ("who reacted with what")
   const [reactionDetail, setReactionDetail] = useState(null); // { messageId, entries: [{emoji, users:[{id,name}]}] }
   const [reactionDetailLoading, setReactionDetailLoading] = useState(false);
-
-  // Compute messagesLoaded from hook's loading state
-  const messagesLoaded = !messagesLoading && messages.length >= 0;
+  const [messagesLoaded, setMessagesLoaded] = useState(false);
 
   const scrollToBottom = () => {
     setTimeout(() => {
@@ -315,6 +314,10 @@ export default function CourtChatScreen({ route, navigation }) {
       gifUrl: message.gifUrl || null,
     });
     closeReactionPicker();
+    // Auto-focus the input to bring up the keyboard
+    setTimeout(() => {
+      messageInputRef.current?.focus();
+    }, 100);
   };
 
   const cancelReply = () => {
@@ -731,14 +734,25 @@ export default function CourtChatScreen({ route, navigation }) {
                                 ? "You"
                                 : m.replyTo.user}
                             </Text>
-                            <Text
-                              style={{ fontSize: 12, color: "#e5e7eb" }}
-                              numberOfLines={1}
-                            >
-                              {m.replyTo.type === "gif"
-                                ? "[GIF]"
-                                : m.replyTo.text || ""}
-                            </Text>
+                            {m.replyTo.type === "gif" && m.replyTo.gifUrl ? (
+                              <Image
+                                source={{ uri: m.replyTo.gifUrl }}
+                                style={{
+                                  width: 80,
+                                  height: 80,
+                                  borderRadius: 6,
+                                  backgroundColor: "#020617",
+                                }}
+                                resizeMode="cover"
+                              />
+                            ) : (
+                              <Text
+                                style={{ fontSize: 12, color: "#e5e7eb" }}
+                                numberOfLines={1}
+                              >
+                                {m.replyTo.text || ""}
+                              </Text>
+                            )}
                           </View>
                         )}
 
@@ -1047,14 +1061,26 @@ export default function CourtChatScreen({ route, navigation }) {
                     Replying to{" "}
                     {replyingTo.user === myProfile.name ? "you" : replyingTo.user}
                   </Text>
-                  <Text
-                    style={{ color: "#e5e7eb", fontSize: 13 }}
-                    numberOfLines={1}
-                  >
-                    {replyingTo.type === "gif"
-                      ? "[GIF]"
-                      : replyingTo.text || ""}
-                  </Text>
+                  {replyingTo.type === "gif" && replyingTo.gifUrl ? (
+                    <Image
+                      source={{ uri: replyingTo.gifUrl }}
+                      style={{
+                        width: 60,
+                        height: 60,
+                        borderRadius: 6,
+                        backgroundColor: "#020617",
+                        marginTop: 2,
+                      }}
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <Text
+                      style={{ color: "#e5e7eb", fontSize: 13 }}
+                      numberOfLines={1}
+                    >
+                      {replyingTo.text || ""}
+                    </Text>
+                  )}
                 </View>
 
                 <TouchableOpacity
@@ -1111,6 +1137,7 @@ export default function CourtChatScreen({ route, navigation }) {
               }}
             >
               <TextInput
+                ref={messageInputRef}
                 style={{
                   flex: 1,
                   color: "#e5e7eb",
