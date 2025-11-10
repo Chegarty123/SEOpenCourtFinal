@@ -802,7 +802,6 @@ export default function CourtChatScreen({ route, navigation }) {
                             ) : (
                               <Text
                                 style={{ fontSize: 12, color: "#e5e7eb" }}
-                                numberOfLines={1}
                               >
                                 {m.replyTo.text || ""}
                               </Text>
@@ -1154,7 +1153,6 @@ export default function CourtChatScreen({ route, navigation }) {
                   ) : (
                     <Text
                       style={{ color: "#e5e7eb", fontSize: 13 }}
-                      numberOfLines={1}
                     >
                       {replyingTo.text || ""}
                     </Text>
@@ -1175,13 +1173,13 @@ export default function CourtChatScreen({ route, navigation }) {
           <View
             style={{
               flexDirection: "row",
-              alignItems: "center",
+              alignItems: "flex-end",
               paddingHorizontal: 12,
               paddingVertical: 10,
               borderTopWidth: 1,
               borderTopColor: "#1f2937",
               backgroundColor: "#020617",
-              marginBottom: 4, // lift slightly off bottom
+              marginBottom: 4,
             }}
           >
             <TouchableOpacity
@@ -1196,6 +1194,7 @@ export default function CourtChatScreen({ route, navigation }) {
                 borderWidth: 1,
                 borderColor: "rgba(148,163,184,0.7)",
                 marginRight: 8,
+                marginBottom: 4,
               }}
             >
               <Ionicons name="image-outline" size={20} color="#e5e7eb" />
@@ -1205,13 +1204,14 @@ export default function CourtChatScreen({ route, navigation }) {
               style={{
                 flex: 1,
                 flexDirection: "row",
-                alignItems: "center",
+                alignItems: "flex-end",
                 paddingHorizontal: 12,
                 paddingVertical: 4,
-                borderRadius: 999,
+                borderRadius: 20,
                 backgroundColor: "#020617",
                 borderWidth: 1,
                 borderColor: "rgba(148,163,184,0.9)",
+                maxHeight: 120,
               }}
             >
               <TextInput
@@ -1220,7 +1220,8 @@ export default function CourtChatScreen({ route, navigation }) {
                   flex: 1,
                   color: "#e5e7eb",
                   fontSize: 15,
-                  paddingVertical: 6,
+                  paddingVertical: 8,
+                  maxHeight: 100,
                 }}
                 placeholder="Message this court…"
                 placeholderTextColor="#6b7280"
@@ -1229,11 +1230,14 @@ export default function CourtChatScreen({ route, navigation }) {
                 returnKeyType="send"
                 onSubmitEditing={handleSend}
                 blurOnSubmit={false}
+                multiline
+                textAlignVertical="center"
               />
               <TouchableOpacity
                 onPress={handleSend}
                 style={{
                   marginLeft: 6,
+                  marginBottom: 4,
                   width: 32,
                   height: 32,
                   borderRadius: 16,

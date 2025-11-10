@@ -11,6 +11,7 @@ import {
   Alert,
   StatusBar,
   Platform,
+  Modal,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { db, auth } from "../firebaseConfig";
@@ -37,6 +38,13 @@ export default function FriendScreen({ navigation }) {
   const [outgoingRequests, setOutgoingRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchText, setSearchText] = useState("");
+  const [showAllSearchResults, setShowAllSearchResults] = useState(false);
+  const [deleteConfirmUser, setDeleteConfirmUser] = useState(null);
+  const [sectionsExpanded, setSectionsExpanded] = useState({
+    incoming: true,
+    pending: false,
+    friends: true,
+  });
 
   // Track auth state
   useEffect(() => {
@@ -190,10 +198,15 @@ export default function FriendScreen({ navigation }) {
         updateDoc(currentRef, { friends: arrayRemove(uid) }),
         updateDoc(friendRef, { friends: arrayRemove(currentUser.uid) }),
       ]);
+      setDeleteConfirmUser(null);
     } catch (err) {
       console.error("Error removing friend:", err);
       Alert.alert("Failed to remove friend", "Please try again.");
     }
+  };
+
+  const toggleSection = (section) => {
+    setSectionsExpanded((prev) => ({ ...prev, [section]: !prev[section] }));
   };
 
   const filteredUsers = allUsers.filter(
@@ -337,7 +350,7 @@ export default function FriendScreen({ navigation }) {
       )}
 
       {actionType === "remove" && (
-        <TouchableOpacity onPress={() => removeFriend(user.uid)}>
+        <TouchableOpacity onPress={() => setDeleteConfirmUser(user)}>
           <Ionicons name="trash-outline" size={22} color="#ef4444" />
         </TouchableOpacity>
       )}
@@ -424,51 +437,291 @@ export default function FriendScreen({ navigation }) {
         {/* Search results */}
         {searchText.length > 0 && (
           <View style={cardStyle}>
-            <Text style={titleStyle}>Search Results</Text>
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+              <Text style={titleStyle}>Search Results</Text>
+              {filteredUsers.length > 5 && (
+                <Text style={{ fontSize: 12, color: "#60a5fa", fontWeight: "600" }}>
+                  {filteredUsers.length} found
+                </Text>
+              )}
+            </View>
             {filteredUsers.length === 0 ? (
-              <Text style={mutedText}>No users found.</Text>
+              <View style={{ alignItems: "center", paddingVertical: 16 }}>
+                <Ionicons name="search-outline" size={32} color="#6b7280" />
+                <Text style={{ ...mutedText, textAlign: "center" }}>
+                  No users found matching "{searchText}"
+                </Text>
+              </View>
             ) : (
-              filteredUsers.map((u) => renderUserRow(u, "add"))
+              <>
+                {(showAllSearchResults ? filteredUsers : filteredUsers.slice(0, 5)).map((u) =>
+                  renderUserRow(u, "add")
+                )}
+                {filteredUsers.length > 5 && (
+                  <TouchableOpacity
+                    onPress={() => setShowAllSearchResults(!showAllSearchResults)}
+                    style={{
+                      paddingVertical: 12,
+                      alignItems: "center",
+                      borderTopWidth: 1,
+                      borderTopColor: "#1f2937",
+                      marginTop: 8,
+                    }}
+                  >
+                    <Text style={{ color: "#60a5fa", fontWeight: "600", fontSize: 13 }}>
+                      {showAllSearchResults
+                        ? "Show less"
+                        : `Show ${filteredUsers.length - 5} more`}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </>
             )}
           </View>
         )}
 
         {/* Incoming requests */}
-        <View style={cardStyle}>
-          <Text style={titleStyle}>Incoming Friend Requests</Text>
-          {incomingRequests.length === 0 ? (
-            <Text style={mutedText}>No incoming requests.</Text>
-          ) : (
-            allUsers
-              .filter((u) => incomingRequests.includes(u.uid))
-              .map((u) => renderUserRow(u, "accept"))
-          )}
-        </View>
+        {incomingRequests.length > 0 && (
+          <View style={cardStyle}>
+            <TouchableOpacity
+              style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}
+              onPress={() => toggleSection("incoming")}
+              activeOpacity={0.8}
+            >
+              <View style={{ flexDirection: "row", alignItems: "center" }}>
+                <Text style={titleStyle}>Incoming Requests</Text>
+                <View
+                  style={{
+                    marginLeft: 8,
+                    backgroundColor: "#ef4444",
+                    borderRadius: 999,
+                    paddingHorizontal: 8,
+                    paddingVertical: 2,
+                    minWidth: 20,
+                    alignItems: "center",
+                  }}
+                >
+                  <Text style={{ color: "#fff", fontSize: 11, fontWeight: "700" }}>
+                    {incomingRequests.length}
+                  </Text>
+                </View>
+              </View>
+              <Ionicons
+                name={sectionsExpanded.incoming ? "chevron-up" : "chevron-down"}
+                size={20}
+                color="#9ca3af"
+              />
+            </TouchableOpacity>
+            {sectionsExpanded.incoming && (
+              <View style={{ marginTop: 8 }}>
+                {allUsers
+                  .filter((u) => incomingRequests.includes(u.uid))
+                  .map((u) => renderUserRow(u, "accept"))}
+              </View>
+            )}
+          </View>
+        )}
 
         {/* Pending (outgoing) requests */}
-        <View style={cardStyle}>
-          <Text style={titleStyle}>Pending Friend Requests</Text>
-          {outgoingRequests.length === 0 ? (
-            <Text style={mutedText}>No pending requests.</Text>
-          ) : (
-            allUsers
-              .filter((u) => outgoingRequests.includes(u.uid))
-              .map((u) => renderUserRow(u, "pending"))
-          )}
-        </View>
+        {outgoingRequests.length > 0 && (
+          <View style={cardStyle}>
+            <TouchableOpacity
+              style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}
+              onPress={() => toggleSection("pending")}
+              activeOpacity={0.8}
+            >
+              <View style={{ flexDirection: "row", alignItems: "center" }}>
+                <Text style={titleStyle}>Pending Requests</Text>
+                <View
+                  style={{
+                    marginLeft: 8,
+                    backgroundColor: "#6b7280",
+                    borderRadius: 999,
+                    paddingHorizontal: 8,
+                    paddingVertical: 2,
+                    minWidth: 20,
+                    alignItems: "center",
+                  }}
+                >
+                  <Text style={{ color: "#fff", fontSize: 11, fontWeight: "700" }}>
+                    {outgoingRequests.length}
+                  </Text>
+                </View>
+              </View>
+              <Ionicons
+                name={sectionsExpanded.pending ? "chevron-up" : "chevron-down"}
+                size={20}
+                color="#9ca3af"
+              />
+            </TouchableOpacity>
+            {sectionsExpanded.pending && (
+              <View style={{ marginTop: 8 }}>
+                {allUsers
+                  .filter((u) => outgoingRequests.includes(u.uid))
+                  .map((u) => renderUserRow(u, "pending"))}
+              </View>
+            )}
+          </View>
+        )}
 
         {/* Friends list */}
         <View style={cardStyle}>
-          <Text style={titleStyle}>Friends</Text>
-          {friends.length === 0 ? (
-            <Text style={mutedText}>No friends yet.</Text>
-          ) : (
-            allUsers
-              .filter((u) => friends.includes(u.uid))
-              .map((u) => renderUserRow(u, "remove"))
+          <TouchableOpacity
+            style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}
+            onPress={() => toggleSection("friends")}
+            activeOpacity={0.8}
+          >
+            <View style={{ flexDirection: "row", alignItems: "center" }}>
+              <Text style={titleStyle}>Your Friends</Text>
+              <View
+                style={{
+                  marginLeft: 8,
+                  backgroundColor: "#2563eb",
+                  borderRadius: 999,
+                  paddingHorizontal: 8,
+                  paddingVertical: 2,
+                  minWidth: 20,
+                  alignItems: "center",
+                }}
+              >
+                <Text style={{ color: "#fff", fontSize: 11, fontWeight: "700" }}>
+                  {friends.length}
+                </Text>
+              </View>
+            </View>
+            <Ionicons
+              name={sectionsExpanded.friends ? "chevron-up" : "chevron-down"}
+              size={20}
+              color="#9ca3af"
+            />
+          </TouchableOpacity>
+          {sectionsExpanded.friends && (
+            <View style={{ marginTop: 8 }}>
+              {friends.length === 0 ? (
+                <View style={{ alignItems: "center", paddingVertical: 16 }}>
+                  <Ionicons name="people-outline" size={32} color="#6b7280" />
+                  <Text style={{ ...mutedText, textAlign: "center" }}>
+                    No friends yet. Search and add some!
+                  </Text>
+                </View>
+              ) : (
+                allUsers
+                  .filter((u) => friends.includes(u.uid))
+                  .map((u) => renderUserRow(u, "remove"))
+              )}
+            </View>
           )}
         </View>
       </ScrollView>
+
+      {/* DELETE CONFIRMATION MODAL */}
+      <Modal
+        visible={!!deleteConfirmUser}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setDeleteConfirmUser(null)}
+      >
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(2,6,23,0.85)",
+            justifyContent: "center",
+            alignItems: "center",
+            paddingHorizontal: 20,
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: "rgba(15,23,42,0.98)",
+              borderRadius: 20,
+              padding: 24,
+              borderWidth: 1,
+              borderColor: "rgba(148,163,184,0.5)",
+              width: "100%",
+              maxWidth: 340,
+            }}
+          >
+            <View style={{ alignItems: "center", marginBottom: 16 }}>
+              <View
+                style={{
+                  width: 56,
+                  height: 56,
+                  borderRadius: 28,
+                  backgroundColor: "rgba(239,68,68,0.15)",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  marginBottom: 12,
+                }}
+              >
+                <Ionicons name="person-remove" size={28} color="#ef4444" />
+              </View>
+              <Text
+                style={{
+                  fontSize: 18,
+                  fontWeight: "700",
+                  color: "#e5f3ff",
+                  marginBottom: 8,
+                  textAlign: "center",
+                }}
+              >
+                Remove Friend?
+              </Text>
+              <Text
+                style={{
+                  fontSize: 14,
+                  color: "#9ca3af",
+                  textAlign: "center",
+                  lineHeight: 20,
+                }}
+              >
+                Are you sure you want to remove{" "}
+                <Text style={{ color: "#e5e7eb", fontWeight: "600" }}>
+                  {deleteConfirmUser?.username}
+                </Text>{" "}
+                from your friends? You can always add them back later.
+              </Text>
+            </View>
+
+            <View style={{ flexDirection: "row", gap: 12 }}>
+              <TouchableOpacity
+                style={{
+                  flex: 1,
+                  backgroundColor: "rgba(148,163,184,0.15)",
+                  borderRadius: 12,
+                  paddingVertical: 12,
+                  alignItems: "center",
+                  borderWidth: 1,
+                  borderColor: "rgba(148,163,184,0.3)",
+                }}
+                onPress={() => setDeleteConfirmUser(null)}
+                activeOpacity={0.8}
+              >
+                <Text style={{ color: "#e5e7eb", fontWeight: "600", fontSize: 15 }}>
+                  Cancel
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={{
+                  flex: 1,
+                  backgroundColor: "#ef4444",
+                  borderRadius: 12,
+                  paddingVertical: 12,
+                  alignItems: "center",
+                  shadowColor: "#ef4444",
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.3,
+                  shadowRadius: 8,
+                  elevation: 4,
+                }}
+                onPress={() => removeFriend(deleteConfirmUser.uid)}
+                activeOpacity={0.8}
+              >
+                <Text style={{ color: "#fff", fontWeight: "700", fontSize: 15 }}>Remove</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
