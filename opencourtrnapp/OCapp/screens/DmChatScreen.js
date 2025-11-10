@@ -63,6 +63,9 @@ export default function DmChatScreen({ route, navigation }) {
   const [typingUsers, setTypingUsers] = useState([]);
   const [reactionPickerFor, setReactionPickerFor] = useState(null);
 
+  // reply-to state
+  const [replyingTo, setReplyingTo] = useState(null); // { id, user, text, type, gifUrl }
+
   const isAtBottomRef = useRef(true);
   const [isAtBottom, setIsAtBottom] = useState(true);
   const [hasNewMessage, setHasNewMessage] = useState(false);
@@ -194,6 +197,7 @@ export default function DmChatScreen({ route, navigation }) {
           gifUrl: data.gifUrl || null,
           reactions: data.reactions || {},
           mine: data.userId === user.uid,
+          replyTo: data.replyTo || null,
         });
       });
       setMessages(list);
@@ -355,11 +359,21 @@ export default function DmChatScreen({ route, navigation }) {
         gifUrl: null,
         ts: serverTimestamp(),
         reactions: {},
+        replyTo: replyingTo
+          ? {
+              id: replyingTo.id,
+              user: replyingTo.user,
+              text: replyingTo.text || "",
+              type: replyingTo.type,
+              gifUrl: replyingTo.gifUrl || null,
+            }
+          : null,
       };
 
       await addDoc(msgsRef, newMsg);
       setDraftMessage("");
       setTypingStatus(false);
+      setReplyingTo(null);
       scrollToBottom();
       await updateConversationMeta("text", trimmed);
     } catch (err) {
@@ -386,6 +400,15 @@ export default function DmChatScreen({ route, navigation }) {
         gifUrl,
         ts: serverTimestamp(),
         reactions: {},
+        replyTo: replyingTo
+          ? {
+              id: replyingTo.id,
+              user: replyingTo.user,
+              text: replyingTo.text || "",
+              type: replyingTo.type,
+              gifUrl: replyingTo.gifUrl || null,
+            }
+          : null,
       };
 
       await addDoc(msgsRef, newMsg);
@@ -393,6 +416,7 @@ export default function DmChatScreen({ route, navigation }) {
       setGifPickerVisible(false);
       setGifSearch("");
       setGifResults([]);
+      setReplyingTo(null);
       await updateConversationMeta("gif", "");
     } catch (err) {
       console.log("Error sending GIF message:", err);
@@ -503,6 +527,23 @@ export default function DmChatScreen({ route, navigation }) {
 
   const closeReactionPicker = () => {
     setReactionPickerFor(null);
+  };
+
+  // Start replying to a specific message
+  const startReplyToMessage = (message) => {
+    if (!message) return;
+    setReplyingTo({
+      id: message.id,
+      user: message.user,
+      text: message.text || "",
+      type: message.type || (message.gifUrl ? "gif" : "text"),
+      gifUrl: message.gifUrl || null,
+    });
+    closeReactionPicker();
+  };
+
+  const cancelReply = () => {
+    setReplyingTo(null);
   };
 
   // Delete / unsend message (guarded: only your own messages)
@@ -927,6 +968,43 @@ export default function DmChatScreen({ route, navigation }) {
                           {isMine ? "You" : m.user}
                         </Text>
 
+                        {/* replied-to snippet */}
+                        {m.replyTo && (
+                          <View
+                            style={{
+                              marginBottom: 4,
+                              paddingVertical: 4,
+                              paddingHorizontal: 8,
+                              borderLeftWidth: 2,
+                              borderLeftColor: "rgba(96,165,250,0.9)",
+                              backgroundColor: "rgba(15,23,42,0.9)",
+                              borderRadius: 8,
+                            }}
+                          >
+                            <Text
+                              style={{
+                                fontSize: 11,
+                                fontWeight: "600",
+                                color: "#bfdbfe",
+                                marginBottom: 2,
+                              }}
+                              numberOfLines={1}
+                            >
+                              {m.replyTo.user === myProfile.name
+                                ? "You"
+                                : m.replyTo.user}
+                            </Text>
+                            <Text
+                              style={{ fontSize: 12, color: "#e5e7eb" }}
+                              numberOfLines={1}
+                            >
+                              {m.replyTo.type === "gif"
+                                ? "[GIF]"
+                                : m.replyTo.text || ""}
+                            </Text>
+                          </View>
+                        )}
+
                         {m.type === "gif" && m.gifUrl ? (
                           <Image
                             source={{ uri: m.gifUrl }}
@@ -1062,6 +1140,38 @@ export default function DmChatScreen({ route, navigation }) {
                             </TouchableOpacity>
                           ))}
 
+                          {/* Reply button */}
+                          <TouchableOpacity
+                            style={{
+                              marginRight: 8,
+                              paddingHorizontal: 10,
+                              paddingVertical: 4,
+                              borderRadius: 999,
+                              backgroundColor: "#0f172a",
+                              borderWidth: 1,
+                              borderColor: "rgba(96,165,250,0.8)",
+                              flexDirection: "row",
+                              alignItems: "center",
+                            }}
+                            onPress={() => startReplyToMessage(m)}
+                          >
+                            <Ionicons
+                              name="return-down-back"
+                              size={14}
+                              color="#bfdbfe"
+                              style={{ marginRight: 4 }}
+                            />
+                            <Text
+                              style={{
+                                color: "#bfdbfe",
+                                fontSize: 12,
+                                fontWeight: "600",
+                              }}
+                            >
+                              Reply
+                            </Text>
+                          </TouchableOpacity>
+
                           {/* Delete button only for your own messages */}
                           {isMine && (
                             <TouchableOpacity
@@ -1155,6 +1265,65 @@ export default function DmChatScreen({ route, navigation }) {
             <Text style={{ color: "#9ca3af", fontSize: 12 }}>
               {typingLabel}
             </Text>
+          </View>
+        )}
+
+        {/* Replying bar */}
+        {replyingTo && (
+          <View
+            style={{
+              paddingHorizontal: 16,
+              paddingVertical: 6,
+              backgroundColor: "#020617",
+              borderTopWidth: 1,
+              borderTopColor: "#1f2937",
+            }}
+          >
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+              }}
+            >
+              <View
+                style={{
+                  flex: 1,
+                  paddingVertical: 4,
+                  paddingHorizontal: 10,
+                  borderLeftWidth: 3,
+                  borderLeftColor: "#60a5fa",
+                  backgroundColor: "#020617",
+                  borderRadius: 8,
+                }}
+              >
+                <Text
+                  style={{
+                    color: "#9ca3af",
+                    fontSize: 11,
+                    marginBottom: 2,
+                  }}
+                  numberOfLines={1}
+                >
+                  Replying to{" "}
+                  {replyingTo.user === myProfile.name ? "you" : replyingTo.user}
+                </Text>
+                <Text
+                  style={{ color: "#e5e7eb", fontSize: 13 }}
+                  numberOfLines={1}
+                >
+                  {replyingTo.type === "gif"
+                    ? "[GIF]"
+                    : replyingTo.text || ""}
+                </Text>
+              </View>
+
+              <TouchableOpacity
+                onPress={cancelReply}
+                style={{ marginLeft: 8, padding: 4 }}
+              >
+                <Ionicons name="close" size={18} color="#9ca3af" />
+              </TouchableOpacity>
+            </View>
           </View>
         )}
 
