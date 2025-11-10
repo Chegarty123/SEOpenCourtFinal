@@ -5,7 +5,7 @@ const TENOR_API_KEY = "AIzaSyDYgE5Z7qvK2PDPY8sg1GiqGcC_AVxFdho";
 const TENOR_BASE_URL = "https://tenor.googleapis.com/v2";
 const CLIENT_KEY = "OpenCourt";
 
-export const REACTION_EMOJIS = ["👍", "🔥", "😂", "💪", "❤️"];
+export const REACTION_EMOJIS = ["👍", "🔥", "😂", "👎", "❤️"];
 
 /**
  * Search for GIFs using Tenor API
