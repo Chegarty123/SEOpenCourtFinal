@@ -28,14 +28,14 @@ import {
   serverTimestamp,
   setDoc,
   updateDoc,
-  deleteDoc, // delete / unsend
+  deleteDoc,
 } from "firebase/firestore";
 
-const TENOR_API_KEY = "AIzaSyDYgE5Z7qvK2PDPY8sg1GiqGcC_AVxFdho"; // your Tenor key
+const TENOR_API_KEY = "AIzaSyDYgE5Z7qvK2PDPY8sg1GiqGcC_AVxFdho";
 const REACTION_EMOJIS = ["👍", "🔥", "😂", "💪", "❤️"];
 
 export default function CourtChatScreen({ route, navigation }) {
-  const { courtId, marker } = route.params || {};
+  const { courtId, courtName, courtAddress, courtImage } = route.params || {};
   const user = auth.currentUser;
 
   const [myProfile, setMyProfile] = useState({
@@ -55,6 +55,9 @@ export default function CourtChatScreen({ route, navigation }) {
   const [typingUsers, setTypingUsers] = useState([]);
   const [reactionPickerFor, setReactionPickerFor] = useState(null); // msg.id or null
 
+  // reply-to state
+  const [replyingTo, setReplyingTo] = useState(null); // { id, user, text, type, gifUrl }
+
   // scroll state for "new messages" pill
   const isAtBottomRef = useRef(true);
   const [isAtBottom, setIsAtBottom] = useState(true);
@@ -73,7 +76,6 @@ export default function CourtChatScreen({ route, navigation }) {
   const [reactionDetail, setReactionDetail] = useState(null); // { messageId, entries: [{emoji, users:[{id,name}]}] }
   const [reactionDetailLoading, setReactionDetailLoading] = useState(false);
   const [messagesLoaded, setMessagesLoaded] = useState(false);
-
 
   const scrollToBottom = () => {
     setTimeout(() => {
@@ -110,7 +112,6 @@ export default function CourtChatScreen({ route, navigation }) {
     return `${hh}:${mm} ${ampm}`;
   };
 
-  // Helpers for date separators
   const isSameDay = (d1, d2) => {
     return (
       d1.getFullYear() === d2.getFullYear() &&
@@ -136,7 +137,7 @@ export default function CourtChatScreen({ route, navigation }) {
     });
   };
 
-  // Load my profile info
+  // Load my profile
   useEffect(() => {
     if (!user) return;
 
@@ -155,11 +156,12 @@ export default function CourtChatScreen({ route, navigation }) {
       .catch((err) => console.log("Error fetching user profile:", err));
   }, [user]);
 
-  // Listen to chat messages
+  // Subscribe to messages for this court
   useEffect(() => {
-    if (!courtId) return;
+    if (!courtId || !user) return;
 
-    const msgsRef = collection(db, "courts", courtId, "messages");
+    const courtRef = doc(db, "courts", courtId);
+    const msgsRef = collection(courtRef, "messages");
     const qMsgs = query(msgsRef, orderBy("ts", "asc"));
 
     const unsub = onSnapshot(qMsgs, (snapshot) => {
@@ -176,6 +178,7 @@ export default function CourtChatScreen({ route, navigation }) {
           reactions: data.reactions || {},
           ts: data.ts,
           mine: data.userId === user.uid,
+          replyTo: data.replyTo || null,
         });
       });
 
@@ -190,18 +193,28 @@ export default function CourtChatScreen({ route, navigation }) {
         setHasNewMessage(true);
       }
 
-        setMessagesLoaded(true);
+      setMessagesLoaded(true);
+
+      // on initial load, jump to bottom once messages exist
+      if (!initialScrollDoneRef.current && chatArr.length > 0) {
+        initialScrollDoneRef.current = true;
+        chatScrollRef.current?.scrollToEnd({ animated: false });
+        setInitialRenderDone(true);
+      }
     });
 
     return () => unsub();
   }, [courtId, user]);
 
-  // Typing indicator
+  // Typing indicator subscription for this court
   useEffect(() => {
     if (!courtId || !user) return;
 
-    const typingRef = collection(db, "courts", courtId, "typing");
-    const unsub = onSnapshot(typingRef, (snap) => {
+    const courtRef = doc(db, "courts", courtId);
+    const typingRef = collection(courtRef, "typing");
+    const qTyping = query(typingRef);
+
+    const unsub = onSnapshot(qTyping, (snap) => {
       const currentTyping = [];
       snap.forEach((docSnap) => {
         const data = docSnap.data();
@@ -218,19 +231,22 @@ export default function CourtChatScreen({ route, navigation }) {
   // Update my typing status
   const setTypingStatus = async (isTyping) => {
     if (!courtId || !user) return;
-    const typingDoc = doc(db, "courts", courtId, "typing", user.uid);
+
     try {
+      const courtRef = doc(db, "courts", courtId);
+      const typingDoc = doc(courtRef, "typing", user.uid);
       await setDoc(
         typingDoc,
         {
+          userId: user.uid,
+          username: myProfile.name,
           isTyping,
-          username: myProfile.name || user.email.split("@")[0],
           updatedAt: serverTimestamp(),
         },
         { merge: true }
       );
     } catch (err) {
-      console.log("Error setting typing status:", err);
+      console.log("Error updating typing status:", err);
     }
   };
 
@@ -254,12 +270,23 @@ export default function CourtChatScreen({ route, navigation }) {
       gifUrl: null,
       ts: serverTimestamp(),
       reactions: {},
+      replyTo: replyingTo
+        ? {
+            id: replyingTo.id,
+            user: replyingTo.user,
+            text: replyingTo.text || "",
+            type: replyingTo.type,
+            gifUrl: replyingTo.gifUrl || null,
+          }
+        : null,
     };
 
     try {
       await addDoc(msgsRef, messageObj);
       setDraftMessage("");
       setTypingStatus(false);
+      setReplyingTo
+(null);
       scrollToBottom();
     } catch (err) {
       console.log("Error sending message:", err);
@@ -281,6 +308,15 @@ export default function CourtChatScreen({ route, navigation }) {
       gifUrl,
       ts: serverTimestamp(),
       reactions: {},
+      replyTo: replyingTo
+        ? {
+            id: replyingTo.id,
+            user: replyingTo.user,
+            text: replyingTo.text || "",
+            type: replyingTo.type,
+            gifUrl: replyingTo.gifUrl || null,
+          }
+        : null,
     };
 
     try {
@@ -288,20 +324,82 @@ export default function CourtChatScreen({ route, navigation }) {
       setGifPickerVisible(false);
       setGifSearch("");
       setGifResults([]);
+      setReplyingTo(null);
       scrollToBottom();
     } catch (err) {
       console.log("Error sending GIF message:", err);
     }
   };
 
-  // Reaction toggling per user
-  const toggleReaction = async (messageId, emoji) => {
-    if (!courtId || !user) return;
-    const msgRef = doc(db, "courts", courtId, "messages", messageId);
+  // Tenor GIF search
+  const searchGifs = async () => {
+    if (!gifSearch.trim()) {
+      setGifResults([]);
+      return;
+    }
+
+    setGifLoading(true);
 
     try {
+      const queryStr = encodeURIComponent(gifSearch.trim());
+      const url = `https://tenor.googleapis.com/v2/search?q=${queryStr}&key=${TENOR_API_KEY}&client_key=OpenCourt&limit=25`;
+
+      const res = await fetch(url);
+      const json = await res.json();
+
+      const results = (json.results || []).map((r) => {
+        const media = r.media_formats?.tinygif || r.media_formats?.gif;
+        return {
+          id: r.id,
+          url: media?.url,
+        };
+      });
+
+      setGifResults(results.filter((g) => !!g.url));
+    } catch (err) {
+      console.log("Error fetching GIFs:", err);
+    } finally {
+      setGifLoading(false);
+    }
+  };
+
+  // Typing label text
+  let typingLabel = "";
+  if (typingUsers.length === 1) {
+    typingLabel = `${typingUsers[0]} is typing...`;
+  } else if (typingUsers.length === 2) {
+    typingLabel = `${typingUsers[0]} and ${typingUsers[1]} are typing...`;
+  } else if (typingUsers.length > 2) {
+    typingLabel = `${typingUsers[0]} and ${
+      typingUsers.length - 1
+    } others are typing...`;
+  }
+
+  const handlePressUser = (userId) => {
+    if (!userId) return;
+    navigation.navigate("UserProfile", { userId });
+  };
+
+  // Double-tap to heart
+  const handleMessagePress = (msgId) => {
+    const now = Date.now();
+    const { time, msgId: lastId } = lastTapRef.current;
+
+    if (lastId === msgId && now - time < 250) {
+      toggleReaction(msgId, "❤️");
+    }
+
+    lastTapRef.current = { time: now, msgId };
+  };
+
+  const toggleReaction = async (msgId, emoji) => {
+    if (!courtId || !user || !msgId || !emoji) return;
+
+    try {
+      const msgRef = doc(db, "courts", courtId, "messages", msgId);
       const snap = await getDoc(msgRef);
       if (!snap.exists()) return;
+
       const data = snap.data();
       const reactions = data.reactions || {};
 
@@ -329,6 +427,23 @@ export default function CourtChatScreen({ route, navigation }) {
     setReactionPickerFor(null);
   };
 
+  // Start replying to a specific message
+  const startReplyToMessage = (message) => {
+    if (!message) return;
+    setReplyingTo({
+      id: message.id,
+      user: message.user,
+      text: message.text || "",
+      type: message.type || (message.gifUrl ? "gif" : "text"),
+      gifUrl: message.gifUrl || null,
+    });
+    closeReactionPicker();
+  };
+
+  const cancelReply = () => {
+    setReplyingTo(null);
+  };
+
   // 🔴 Delete / unsend message (only for your own messages in UI)
   const handleDeleteMessage = async (messageId) => {
     if (!courtId || !user || !messageId) return;
@@ -342,67 +457,9 @@ export default function CourtChatScreen({ route, navigation }) {
   };
 
   // Tenor GIF search
-  const searchGifs = async () => {
-    if (!gifSearch.trim()) {
-      setGifResults([]);
-      return;
-    }
-    setGifLoading(true);
-    try {
-      const queryStr = encodeURIComponent(gifSearch.trim());
-      const url = `https://tenor.googleapis.com/v2/search?q=${queryStr}&key=${TENOR_API_KEY}&client_key=OpenCourt&limit=25`;
+  // (already defined above)
 
-      const res = await fetch(url);
-      const json = await res.json();
-
-      const results = (json.results || []).map((r) => {
-        const media = r.media_formats?.tinygif || r.media_formats?.gif;
-        return {
-          id: r.id,
-          url: media?.url,
-        };
-      });
-
-      setGifResults(results.filter((g) => !!g.url));
-    } catch (err) {
-      console.log("Error fetching GIFs:", err);
-    } finally {
-      setGifLoading(false);
-    }
-  };
-
-  // Typing label
-  let typingLabel = "";
-  if (typingUsers.length === 1) {
-    typingLabel = `${typingUsers[0]} is typing...`;
-  } else if (typingUsers.length === 2) {
-    typingLabel = `${typingUsers[0]} and ${typingUsers[1]} are typing...`;
-  } else if (typingUsers.length > 2) {
-    typingLabel = `${typingUsers[0]} and ${
-      typingUsers.length - 1
-    } others are typing...`;
-  }
-
-  // 👤 Tap username in chat -> go to profile
-  const handlePressUser = (userId) => {
-    if (!userId) return;
-    navigation.navigate("UserProfile", { userId });
-  };
-
-  // ❤️ Double-tap on message bubble to toggle heart reaction
-  const handleMessagePress = (msgId) => {
-    const now = Date.now();
-    const { time, msgId: lastId } = lastTapRef.current;
-
-    if (lastId === msgId && now - time < 250) {
-      // double tap detected -> toggle heart
-      toggleReaction(msgId, "❤️");
-    }
-
-    lastTapRef.current = { time: now, msgId };
-  };
-
-  // 🧑‍🤝‍🧑 Open reaction details modal: "who reacted with what"
+  // Reaction details ("who reacted with what")
   const openReactionDetails = async (message) => {
     const reactions = message.reactions || {};
     const entries = Object.entries(reactions).filter(
@@ -456,7 +513,8 @@ export default function CourtChatScreen({ route, navigation }) {
   return (
     <View style={{ flex: 1, backgroundColor: "#020617" }}>
       <StatusBar barStyle="light-content" />
-      {/* HEADER BAR */}
+
+      {/* HEADER */}
       <View
         style={{
           flexDirection: "row",
@@ -485,58 +543,125 @@ export default function CourtChatScreen({ route, navigation }) {
           <Ionicons name="chevron-back" size={22} color="#e5e7eb" />
         </TouchableOpacity>
 
-        <View style={{ marginLeft: 12, flex: 1 }}>
-          <Text
-            style={{
-              color: "#f9fafb",
-              fontSize: 16,
-              fontWeight: "700",
-            }}
-            numberOfLines={1}
-          >
-            {marker?.name || "Court"}
-          </Text>
-          <Text
-            style={{
-              color: "#9ca3af",
-              fontSize: 12,
-              marginTop: 2,
-            }}
-          >
-            Court chat • Open run updates
-          </Text>
-        </View>
-
         <View
           style={{
-            paddingHorizontal: 10,
-            paddingVertical: 6,
-            borderRadius: 999,
-            backgroundColor: "#0f172a",
-            borderWidth: 1,
-            borderColor: "rgba(148,163,184,0.6)",
+            marginLeft: 12,
             flexDirection: "row",
             alignItems: "center",
+            flex: 1,
           }}
         >
-          <Ionicons name="people" size={14} color="#e5f3ff" />
-          <Text
+          {/* court image / initials */}
+          <View
             style={{
-              color: "#e5f3ff",
-              fontSize: 12,
-              marginLeft: 4,
-              fontWeight: "600",
+              width: 32,
+              height: 32,
+              borderRadius: 16,
+              overflow: "hidden",
+              borderWidth: 1,
+              borderColor: "rgba(148,163,184,0.6)",
+              backgroundColor: "#020617",
+              marginRight: 8,
             }}
           >
-            Live
-          </Text>
+            {courtImage ? (
+              <Image
+                source={{ uri: courtImage }}
+                style={{ width: "100%", height: "100%" }}
+              />
+            ) : (
+              <View
+                style={{
+                  flex: 1,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: "#0f172a",
+                }}
+              >
+                <Text
+                  style={{
+                    color: "#e5f3ff",
+                    fontWeight: "700",
+                  }}
+                >
+                  {courtName?.[0]?.toUpperCase() || "C"}
+                </Text>
+              </View>
+            )}
+          </View>
+
+          <View style={{ flex: 1 }}>
+            <Text
+              style={{
+                color: "#e5f3ff",
+                fontSize: 16,
+                fontWeight: "700",
+              }}
+              numberOfLines={1}
+            >
+              {courtName || "Court Chat"}
+            </Text>
+            {courtAddress ? (
+              <Text
+                style={{
+                  color: "#9ca3af",
+                  fontSize: 12,
+                  marginTop: 2,
+                }}
+                numberOfLines={1}
+              >
+                {courtAddress}
+              </Text>
+            ) : (
+              <Text
+                style={{
+                  color: "#9ca3af",
+                  fontSize: 12,
+                  marginTop: 2,
+                }}
+                numberOfLines={1}
+              >
+                Live court chat
+              </Text>
+            )}
+          </View>
+
+          <View
+            style={{
+              paddingHorizontal: 10,
+              paddingVertical: 4,
+              borderRadius: 999,
+              borderWidth: 1,
+              borderColor: "rgba(148,163,184,0.7)",
+              backgroundColor: "rgba(15,23,42,0.96)",
+              flexDirection: "row",
+              alignItems: "center",
+            }}
+          >
+            <Ionicons
+              name="basketball-outline"
+              size={14}
+              color="#93c5fd"
+              style={{ marginRight: 4 }}
+            />
+            <Text
+              style={{
+                color: "#93c5fd",
+                fontSize: 11,
+                fontWeight: "600",
+                textTransform: "uppercase",
+              }}
+            >
+              Court chat
+            </Text>
+          </View>
         </View>
       </View>
 
-      {/* CHAT + INPUT */}
+      {/* CHAT BODY */}
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
         keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
       >
         <View style={{ flex: 1 }}>
@@ -553,9 +678,9 @@ export default function CourtChatScreen({ route, navigation }) {
             }}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
-            keyboardDismissMode="on-drag" // dismiss keyboard when you scroll
+            keyboardDismissMode="on-drag"
             onContentSizeChange={() => {
-              // First load: jump to bottom without animation
+              // First load: jump to bottom without animation, then fade in
               if (!initialScrollDoneRef.current) {
                 if (messages.length === 0) return;
                 initialScrollDoneRef.current = true;
@@ -563,7 +688,7 @@ export default function CourtChatScreen({ route, navigation }) {
                 setInitialRenderDone(true);
                 return;
               }
-              // After that, only auto-scroll if user is at bottom
+              // After that, only auto-scroll if the user is already at the bottom
               if (isAtBottomRef.current) {
                 scrollToBottom();
               }
@@ -585,20 +710,18 @@ export default function CourtChatScreen({ route, navigation }) {
             scrollEventThrottle={16}
           >
             {messagesLoaded && messages.length === 0 ? (
-                <View
-                    style={{
-                    alignItems: "center",
-                    marginTop: 40,
-                    }}
-                >
-                    <Text style={{ color: "#64748b" }}>
-                    No messages yet. Start the conversation!
-                    </Text>
-                </View>
+              <View
+                style={{
+                  alignItems: "center",
+                  marginTop: 40,
+                }}
+              >
+                <Text style={{ color: "#64748b" }}>
+                  No messages yet. Start the conversation!
+                </Text>
+              </View>
             ) : null}
 
-
-            {/* 🔹 Messages with date separators */}
             {(() => {
               let lastDateKey = null;
               return messages.map((m) => {
@@ -635,7 +758,6 @@ export default function CourtChatScreen({ route, navigation }) {
                           position: "relative",
                         }}
                       >
-                        {/* faint horizontal divider line */}
                         <View
                           style={{
                             position: "absolute",
@@ -646,7 +768,6 @@ export default function CourtChatScreen({ route, navigation }) {
                             backgroundColor: "rgba(148,163,184,0.25)",
                           }}
                         />
-                        {/* floating date chip */}
                         <View
                           style={{
                             paddingHorizontal: 14,
@@ -680,7 +801,7 @@ export default function CourtChatScreen({ route, navigation }) {
                       <TouchableOpacity
                         activeOpacity={0.85}
                         onLongPress={() => openReactionPicker(m.id)}
-                        onPress={() => handleMessagePress(m.id)} // 👈 double-tap support lives here
+                        onPress={() => handleMessagePress(m.id)} // double-tap support
                         style={{
                           paddingHorizontal: 10,
                           paddingVertical: 6,
@@ -708,6 +829,43 @@ export default function CourtChatScreen({ route, navigation }) {
                           </Text>
                         </TouchableOpacity>
 
+                        {/* replied-to snippet */}
+                        {m.replyTo && (
+                          <View
+                            style={{
+                              marginBottom: 4,
+                              paddingVertical: 4,
+                              paddingHorizontal: 8,
+                              borderLeftWidth: 2,
+                              borderLeftColor: "rgba(96,165,250,0.9)",
+                              backgroundColor: "rgba(15,23,42,0.9)",
+                              borderRadius: 8,
+                            }}
+                          >
+                            <Text
+                              style={{
+                                fontSize: 11,
+                                fontWeight: "600",
+                                color: "#bfdbfe",
+                                marginBottom: 2,
+                              }}
+                              numberOfLines={1}
+                            >
+                              {m.replyTo.user === myProfile.name
+                                ? "You"
+                                : m.replyTo.user}
+                            </Text>
+                            <Text
+                              style={{ fontSize: 12, color: "#e5e7eb" }}
+                              numberOfLines={1}
+                            >
+                              {m.replyTo.type === "gif"
+                                ? "[GIF]"
+                                : m.replyTo.text || ""}
+                            </Text>
+                          </View>
+                        )}
+
                         {m.type === "gif" && m.gifUrl ? (
                           <Image
                             source={{ uri: m.gifUrl }}
@@ -731,20 +889,22 @@ export default function CourtChatScreen({ route, navigation }) {
                           </Text>
                         )}
 
+                        {/* time + reactions row */}
                         <View
                           style={{
                             flexDirection: "row",
-                            justifyContent: "flex-end",
-                            marginTop: 6,
+                            justifyContent: "space-between",
                             alignItems: "center",
+                            marginTop: 6,
                           }}
                         >
+                          {/* reactions summary */}
                           {reactionEntries.length > 0 && (
                             <View
                               style={{
                                 flexDirection: "row",
                                 alignItems: "center",
-                                marginRight: 6,
+                                marginRight: 4,
                                 paddingHorizontal: 6,
                                 paddingVertical: 2,
                                 borderRadius: 999,
@@ -757,8 +917,14 @@ export default function CourtChatScreen({ route, navigation }) {
                                 ([emoji, users], idx) => (
                                   <TouchableOpacity
                                     key={`${m.id}-${emoji}-${idx}`}
-                                    onPress={() => toggleReaction(m.id, emoji)} // 👈 tap existing reaction to add/remove
-                                    style={{ flexDirection: "row", alignItems: "center", marginRight: 4 }}
+                                    onPress={() =>
+                                      toggleReaction(m.id, emoji)
+                                    }
+                                    style={{
+                                      flexDirection: "row",
+                                      alignItems: "center",
+                                      marginRight: 4,
+                                    }}
                                   >
                                     <Text
                                       style={{
@@ -800,7 +966,7 @@ export default function CourtChatScreen({ route, navigation }) {
                         </View>
                       </TouchableOpacity>
 
-                      {/* Inline reaction + delete picker */}
+                      {/* Inline reaction + reply + delete picker */}
                       {reactionPickerFor === m.id && (
                         <View
                           style={{
@@ -834,6 +1000,38 @@ export default function CourtChatScreen({ route, navigation }) {
                               </Text>
                             </TouchableOpacity>
                           ))}
+
+                          {/* 💬 reply button */}
+                          <TouchableOpacity
+                            style={{
+                              marginRight: 8,
+                              paddingHorizontal: 10,
+                              paddingVertical: 4,
+                              borderRadius: 999,
+                              backgroundColor: "#0f172a",
+                              borderWidth: 1,
+                              borderColor: "rgba(96,165,250,0.8)",
+                              flexDirection: "row",
+                              alignItems: "center",
+                            }}
+                            onPress={() => startReplyToMessage(m)}
+                          >
+                            <Ionicons
+                              name="return-down-back"
+                              size={14}
+                              color="#bfdbfe"
+                              style={{ marginRight: 4 }}
+                            />
+                            <Text
+                              style={{
+                                color: "#bfdbfe",
+                                fontSize: 12,
+                                fontWeight: "600",
+                              }}
+                            >
+                              Reply
+                            </Text>
+                          </TouchableOpacity>
 
                           {/* 🗑 delete button only for your own messages */}
                           {isMine && (
@@ -902,8 +1100,8 @@ export default function CourtChatScreen({ route, navigation }) {
               <Ionicons name="chevron-down" size={16} color="#bfdbfe" />
               <Text
                 style={{
-                  color: "#bfdbfe",
                   marginLeft: 6,
+                  color: "#e5f3ff",
                   fontSize: 12,
                   fontWeight: "600",
                 }}
@@ -933,6 +1131,65 @@ export default function CourtChatScreen({ route, navigation }) {
               </Text>
             </View>
           ) : null}
+
+          {/* Replying bar */}
+          {replyingTo && (
+            <View
+              style={{
+                paddingHorizontal: 16,
+                paddingVertical: 6,
+                backgroundColor: "#020617",
+                borderTopWidth: 1,
+                borderTopColor: "#1f2937",
+              }}
+            >
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                }}
+              >
+                <View
+                  style={{
+                    flex: 1,
+                    paddingVertical: 4,
+                    paddingHorizontal: 10,
+                    borderLeftWidth: 3,
+                    borderLeftColor: "#60a5fa",
+                    backgroundColor: "#020617",
+                    borderRadius: 8,
+                  }}
+                >
+                  <Text
+                    style={{
+                      color: "#9ca3af",
+                      fontSize: 11,
+                      marginBottom: 2,
+                    }}
+                    numberOfLines={1}
+                  >
+                    Replying to{" "}
+                    {replyingTo.user === myProfile.name ? "you" : replyingTo.user}
+                  </Text>
+                  <Text
+                    style={{ color: "#e5e7eb", fontSize: 13 }}
+                    numberOfLines={1}
+                  >
+                    {replyingTo.type === "gif"
+                      ? "[GIF]"
+                      : replyingTo.text || ""}
+                  </Text>
+                </View>
+
+                <TouchableOpacity
+                  onPress={cancelReply}
+                  style={{ marginLeft: 8, padding: 4 }}
+                >
+                  <Ionicons name="close" size={18} color="#9ca3af" />
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
 
           {/* INPUT BAR */}
           <View
@@ -984,7 +1241,7 @@ export default function CourtChatScreen({ route, navigation }) {
                   fontSize: 15,
                   paddingVertical: 6,
                 }}
-                placeholder="Message This Court…"
+                placeholder="Message this court…"
                 placeholderTextColor="#6b7280"
                 value={draftMessage}
                 onChangeText={handleChangeText}
@@ -1191,7 +1448,7 @@ export default function CourtChatScreen({ route, navigation }) {
         </View>
       </Modal>
 
-      {/* 🎭 REACTION DETAILS MODAL (who reacted with what) */}
+      {/* REACTION DETAILS MODAL */}
       <Modal
         visible={!!reactionDetail}
         transparent
@@ -1201,87 +1458,58 @@ export default function CourtChatScreen({ route, navigation }) {
         <View
           style={{
             flex: 1,
-            backgroundColor: "rgba(15,23,42,0.75)",
+            backgroundColor: "rgba(15,23,42,0.8)",
             justifyContent: "center",
             alignItems: "center",
-            paddingHorizontal: 24,
           }}
         >
           <View
             style={{
-              width: "100%",
-              maxWidth: 360,
               backgroundColor: "#020617",
               borderRadius: 16,
               padding: 16,
               borderWidth: 1,
-              borderColor: "rgba(148,163,184,0.7)",
+              borderColor: "rgba(148,163,184,0.8)",
+              width: "80%",
+              maxHeight: "70%",
             }}
           >
             <View
               style={{
                 flexDirection: "row",
+                justifyContent: "space-between",
                 alignItems: "center",
-                marginBottom: 10,
+                marginBottom: 8,
               }}
             >
               <Text
                 style={{
-                  flex: 1,
                   color: "#e5f3ff",
-                  fontSize: 16,
-                  fontWeight: "700",
+                  fontSize: 15,
+                  fontWeight: "600",
                 }}
               >
                 Reactions
               </Text>
               <TouchableOpacity onPress={closeReactionDetails}>
-                <Ionicons
-                  name="close-circle-outline"
-                  size={24}
-                  color="#9ca3af"
-                />
+                <Ionicons name="close" size={20} color="#e5e7eb" />
               </TouchableOpacity>
             </View>
 
             {reactionDetailLoading ? (
               <View
                 style={{
-                  alignItems: "center",
+                  flex: 1,
                   justifyContent: "center",
-                  paddingVertical: 12,
+                  alignItems: "center",
                 }}
               >
                 <ActivityIndicator size="small" color="#60a5fa" />
-                <Text
-                  style={{
-                    marginTop: 8,
-                    color: "#9ca3af",
-                    fontSize: 13,
-                  }}
-                >
-                  Loading reactions...
-                </Text>
               </View>
-            ) : !reactionDetail || !reactionDetail.entries.length ? (
-              <Text
-                style={{
-                  color: "#9ca3af",
-                  fontSize: 13,
-                }}
-              >
-                No reactions yet.
-              </Text>
-            ) : (
-              <ScrollView
-                style={{ maxHeight: 260 }}
-                contentContainerStyle={{ paddingVertical: 4 }}
-              >
+            ) : reactionDetail && reactionDetail.entries.length > 0 ? (
+              <ScrollView>
                 {reactionDetail.entries.map((entry) => (
-                  <View
-                    key={entry.emoji}
-                    style={{ marginBottom: 10 }}
-                  >
+                  <View key={entry.emoji} style={{ marginBottom: 10 }}>
                     <View
                       style={{
                         flexDirection: "row",
@@ -1289,17 +1517,12 @@ export default function CourtChatScreen({ route, navigation }) {
                         marginBottom: 4,
                       }}
                     >
-                      <Text
-                        style={{
-                          fontSize: 18,
-                          marginRight: 6,
-                        }}
-                      >
+                      <Text style={{ fontSize: 18, marginRight: 6 }}>
                         {entry.emoji}
                       </Text>
                       <Text
                         style={{
-                          color: "#e5e7eb",
+                          color: "#e5f3ff",
                           fontSize: 13,
                           fontWeight: "600",
                         }}
@@ -1309,21 +1532,33 @@ export default function CourtChatScreen({ route, navigation }) {
                       </Text>
                     </View>
                     {entry.users.map((u) => (
-                      <Text
+                      <TouchableOpacity
                         key={u.id}
+                        onPress={() => {
+                          closeReactionDetails();
+                          handlePressUser(u.id);
+                        }}
                         style={{
-                          marginLeft: 4,
-                          color: "#cbd5f5",
-                          fontSize: 13,
-                          marginBottom: 2,
+                          paddingVertical: 4,
                         }}
                       >
-                        • {u.name}
-                      </Text>
+                        <Text
+                          style={{
+                            color: "#cbd5f5",
+                            fontSize: 13,
+                          }}
+                        >
+                          {u.name}
+                        </Text>
+                      </TouchableOpacity>
                     ))}
                   </View>
                 ))}
               </ScrollView>
+            ) : (
+              <Text style={{ color: "#9ca3af", fontSize: 13 }}>
+                No reactions yet.
+              </Text>
             )}
           </View>
         </View>
