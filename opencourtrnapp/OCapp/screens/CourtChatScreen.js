@@ -30,9 +30,8 @@ import {
   updateDoc,
   deleteDoc,
 } from "firebase/firestore";
-
-const TENOR_API_KEY = "AIzaSyDYgE5Z7qvK2PDPY8sg1GiqGcC_AVxFdho";
-const REACTION_EMOJIS = ["👍", "🔥", "😂", "💪", "❤️"];
+import { searchGifs, REACTION_EMOJIS } from "../services/gifService";
+import { formatTime, formatDateLabel, getDateKey } from "../utils/dateUtils";
 
 export default function CourtChatScreen({ route, navigation }) {
   const { courtId, courtName, courtAddress, courtImage } = route.params || {};
@@ -100,42 +99,7 @@ export default function CourtChatScreen({ route, navigation }) {
     setInitialRenderDone(false);
   }, [courtId]);
 
-  // Format Firestore timestamp -> "4:33 PM"
-  const renderTime = (ts) => {
-    if (!ts || typeof ts.toDate !== "function") return "now";
-    const dateObj = ts.toDate();
-    const hours = dateObj.getHours();
-    const mins = dateObj.getMinutes();
-    const ampm = hours >= 12 ? "PM" : "AM";
-    const hh = hours % 12 === 0 ? 12 : hours % 12;
-    const mm = mins < 10 ? `0${mins}` : mins;
-    return `${hh}:${mm} ${ampm}`;
-  };
-
-  const isSameDay = (d1, d2) => {
-    return (
-      d1.getFullYear() === d2.getFullYear() &&
-      d1.getMonth() === d2.getMonth() &&
-      d1.getDate() === d2.getDate()
-    );
-  };
-
-  const formatDateLabel = (ts) => {
-    if (!ts || typeof ts.toDate !== "function") return "";
-    const date = ts.toDate();
-    const today = new Date();
-    const yesterday = new Date();
-    yesterday.setDate(today.getDate() - 1);
-
-    if (isSameDay(date, today)) return "Today";
-    if (isSameDay(date, yesterday)) return "Yesterday";
-
-    return date.toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
-  };
+  // Time and date formatting now handled by imported utilities
 
   // Load my profile
   useEffect(() => {
@@ -331,31 +295,16 @@ export default function CourtChatScreen({ route, navigation }) {
     }
   };
 
-  // Tenor GIF search
-  const searchGifs = async () => {
+  // Tenor GIF search using centralized service
+  const handleSearchGifs = async () => {
     if (!gifSearch.trim()) {
       setGifResults([]);
       return;
     }
-
     setGifLoading(true);
-
     try {
-      const queryStr = encodeURIComponent(gifSearch.trim());
-      const url = `https://tenor.googleapis.com/v2/search?q=${queryStr}&key=${TENOR_API_KEY}&client_key=OpenCourt&limit=25`;
-
-      const res = await fetch(url);
-      const json = await res.json();
-
-      const results = (json.results || []).map((r) => {
-        const media = r.media_formats?.tinygif || r.media_formats?.gif;
-        return {
-          id: r.id,
-          url: media?.url,
-        };
-      });
-
-      setGifResults(results.filter((g) => !!g.url));
+      const results = await searchGifs(gifSearch.trim(), 25);
+      setGifResults(results);
     } catch (err) {
       console.log("Error fetching GIFs:", err);
     } finally {
@@ -740,8 +689,7 @@ export default function CourtChatScreen({ route, navigation }) {
                 // figure out if we need a date header before this message
                 let dateLabel = "";
                 if (m.ts && typeof m.ts.toDate === "function") {
-                  const d = m.ts.toDate();
-                  const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+                  const key = getDateKey(m.ts);
                   if (key !== lastDateKey) {
                     lastDateKey = key;
                     dateLabel = formatDateLabel(m.ts);
@@ -961,7 +909,7 @@ export default function CourtChatScreen({ route, navigation }) {
                               color: "#9ca3af",
                             }}
                           >
-                            {renderTime(m.ts)}
+                            {formatTime(m.ts)}
                           </Text>
                         </View>
                       </TouchableOpacity>
@@ -1360,10 +1308,10 @@ export default function CourtChatScreen({ route, navigation }) {
                 placeholderTextColor="#9ca3af"
                 value={gifSearch}
                 onChangeText={setGifSearch}
-                onSubmitEditing={searchGifs}
+                onSubmitEditing={handleSearchGifs}
                 returnKeyType="search"
               />
-              <TouchableOpacity onPress={searchGifs}>
+              <TouchableOpacity onPress={handleSearchGifs}>
                 <Ionicons
                   name="arrow-forward-circle"
                   size={22}
