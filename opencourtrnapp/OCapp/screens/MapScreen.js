@@ -514,24 +514,7 @@ export default function MapScreen({ navigation }) {
                     justifyContent: "space-between",
                   }}
                 >
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      backgroundColor: "rgba(15,23,42,0.9)",
-                      borderRadius: 9999,
-                      borderWidth: 1,
-                      borderColor: "rgba(148,163,184,0.7)",
-                      paddingHorizontal: 8,
-                      paddingVertical: 4,
-                      alignItems: "center",
-                    }}
-                  >
-                    <Ionicons
-                      name="people-outline"
-                      size={14}
-                      color="#e5f3ff"
-                      style={{ marginRight: 4 }}
-                    />
+                  <View>
                     <Text
                       style={{
                         color: "#e5f3ff",
@@ -539,7 +522,6 @@ export default function MapScreen({ navigation }) {
                         fontWeight: "600",
                       }}
                     >
-                      active now
                     </Text>
                   </View>
 
