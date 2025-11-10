@@ -20,19 +20,16 @@ import { auth, db } from "../firebaseConfig";
 import {
   collection,
   doc,
-  onSnapshot,
   getDoc,
-  query,
-  orderBy,
   addDoc,
   serverTimestamp,
-  setDoc,
   updateDoc,
   deleteDoc,
 } from "firebase/firestore";
-
-const TENOR_API_KEY = "AIzaSyDYgE5Z7qvK2PDPY8sg1GiqGcC_AVxFdho";
-const REACTION_EMOJIS = ["👍", "🔥", "😂", "💪", "❤️"];
+import { searchGifs, REACTION_EMOJIS } from "../services/gifService";
+import { formatTime, formatDateLabel, getDateKey } from "../utils/dateUtils";
+import { useMessages } from "../hooks/useMessages";
+import { useTypingIndicator } from "../hooks/useTypingIndicator";
 
 export default function CourtChatScreen({ route, navigation }) {
   const { courtId, courtName, courtAddress, courtImage } = route.params || {};
@@ -43,16 +40,27 @@ export default function CourtChatScreen({ route, navigation }) {
     name: user?.email ? user.email.split("@")[0] : "you",
   });
 
-  const [messages, setMessages] = useState([]);
+  // Use custom hooks for messages and typing
+  const { messages, loading: messagesLoading } = useMessages(
+    courtId,
+    user?.uid,
+    "court"
+  );
+  const { typingLabel, setTypingStatus } = useTypingIndicator(
+    courtId,
+    user?.uid,
+    myProfile.name,
+    "court"
+  );
   const [draftMessage, setDraftMessage] = useState("");
   const chatScrollRef = useRef(null);
+  const messageInputRef = useRef(null);
 
   const [gifPickerVisible, setGifPickerVisible] = useState(false);
   const [gifSearch, setGifSearch] = useState("");
   const [gifResults, setGifResults] = useState([]);
   const [gifLoading, setGifLoading] = useState(false);
 
-  const [typingUsers, setTypingUsers] = useState([]);
   const [reactionPickerFor, setReactionPickerFor] = useState(null); // msg.id or null
 
   // reply-to state
@@ -100,42 +108,7 @@ export default function CourtChatScreen({ route, navigation }) {
     setInitialRenderDone(false);
   }, [courtId]);
 
-  // Format Firestore timestamp -> "4:33 PM"
-  const renderTime = (ts) => {
-    if (!ts || typeof ts.toDate !== "function") return "now";
-    const dateObj = ts.toDate();
-    const hours = dateObj.getHours();
-    const mins = dateObj.getMinutes();
-    const ampm = hours >= 12 ? "PM" : "AM";
-    const hh = hours % 12 === 0 ? 12 : hours % 12;
-    const mm = mins < 10 ? `0${mins}` : mins;
-    return `${hh}:${mm} ${ampm}`;
-  };
-
-  const isSameDay = (d1, d2) => {
-    return (
-      d1.getFullYear() === d2.getFullYear() &&
-      d1.getMonth() === d2.getMonth() &&
-      d1.getDate() === d2.getDate()
-    );
-  };
-
-  const formatDateLabel = (ts) => {
-    if (!ts || typeof ts.toDate !== "function") return "";
-    const date = ts.toDate();
-    const today = new Date();
-    const yesterday = new Date();
-    yesterday.setDate(today.getDate() - 1);
-
-    if (isSameDay(date, today)) return "Today";
-    if (isSameDay(date, yesterday)) return "Yesterday";
-
-    return date.toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
-  };
+  // Time and date formatting now handled by imported utilities
 
   // Load my profile
   useEffect(() => {
@@ -156,99 +129,27 @@ export default function CourtChatScreen({ route, navigation }) {
       .catch((err) => console.log("Error fetching user profile:", err));
   }, [user]);
 
-  // Subscribe to messages for this court
+  // Messages are now handled by useMessages hook
+  // Detect new messages for "jump to latest" pill and handle initial scroll
   useEffect(() => {
-    if (!courtId || !user) return;
+    const prevCount = prevMsgCountRef.current;
+    const newCount = messages.length;
+    const gotNewMessage = newCount > prevCount;
+    prevMsgCountRef.current = newCount;
 
-    const courtRef = doc(db, "courts", courtId);
-    const msgsRef = collection(courtRef, "messages");
-    const qMsgs = query(msgsRef, orderBy("ts", "asc"));
-
-    const unsub = onSnapshot(qMsgs, (snapshot) => {
-      const chatArr = [];
-      snapshot.forEach((d) => {
-        const data = d.data();
-        chatArr.push({
-          id: d.id,
-          userId: data.userId,
-          user: data.username || "player",
-          text: data.text || "",
-          type: data.type || (data.gifUrl ? "gif" : "text"),
-          gifUrl: data.gifUrl || null,
-          reactions: data.reactions || {},
-          ts: data.ts,
-          mine: data.userId === user.uid,
-          replyTo: data.replyTo || null,
-        });
-      });
-
-      const prevCount = prevMsgCountRef.current;
-      const newCount = chatArr.length;
-      const gotNewMessage = newCount > prevCount;
-      prevMsgCountRef.current = newCount;
-
-      setMessages(chatArr);
-
-      if (!isAtBottomRef.current && gotNewMessage) {
-        setHasNewMessage(true);
-      }
-
-      setMessagesLoaded(true);
-
-      // on initial load, jump to bottom once messages exist
-      if (!initialScrollDoneRef.current && chatArr.length > 0) {
-        initialScrollDoneRef.current = true;
-        chatScrollRef.current?.scrollToEnd({ animated: false });
-        setInitialRenderDone(true);
-      }
-    });
-
-    return () => unsub();
-  }, [courtId, user]);
-
-  // Typing indicator subscription for this court
-  useEffect(() => {
-    if (!courtId || !user) return;
-
-    const courtRef = doc(db, "courts", courtId);
-    const typingRef = collection(courtRef, "typing");
-    const qTyping = query(typingRef);
-
-    const unsub = onSnapshot(qTyping, (snap) => {
-      const currentTyping = [];
-      snap.forEach((docSnap) => {
-        const data = docSnap.data();
-        if (docSnap.id !== user.uid && data.isTyping) {
-          currentTyping.push(data.username || "Someone");
-        }
-      });
-      setTypingUsers(currentTyping);
-    });
-
-    return () => unsub();
-  }, [courtId, user]);
-
-  // Update my typing status
-  const setTypingStatus = async (isTyping) => {
-    if (!courtId || !user) return;
-
-    try {
-      const courtRef = doc(db, "courts", courtId);
-      const typingDoc = doc(courtRef, "typing", user.uid);
-      await setDoc(
-        typingDoc,
-        {
-          userId: user.uid,
-          username: myProfile.name,
-          isTyping,
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true }
-      );
-    } catch (err) {
-      console.log("Error updating typing status:", err);
+    if (!isAtBottomRef.current && gotNewMessage) {
+      setHasNewMessage(true);
     }
-  };
+
+    // on initial load, jump to bottom once messages exist
+    if (!initialScrollDoneRef.current && messages.length > 0) {
+      initialScrollDoneRef.current = true;
+      chatScrollRef.current?.scrollToEnd({ animated: false });
+      setInitialRenderDone(true);
+    }
+  }, [messages.length]);
+
+  // Typing indicator now handled by useTypingIndicator hook
 
   const handleChangeText = (text) => {
     setDraftMessage(text);
@@ -331,31 +232,16 @@ export default function CourtChatScreen({ route, navigation }) {
     }
   };
 
-  // Tenor GIF search
-  const searchGifs = async () => {
+  // Tenor GIF search using centralized service
+  const handleSearchGifs = async () => {
     if (!gifSearch.trim()) {
       setGifResults([]);
       return;
     }
-
     setGifLoading(true);
-
     try {
-      const queryStr = encodeURIComponent(gifSearch.trim());
-      const url = `https://tenor.googleapis.com/v2/search?q=${queryStr}&key=${TENOR_API_KEY}&client_key=OpenCourt&limit=25`;
-
-      const res = await fetch(url);
-      const json = await res.json();
-
-      const results = (json.results || []).map((r) => {
-        const media = r.media_formats?.tinygif || r.media_formats?.gif;
-        return {
-          id: r.id,
-          url: media?.url,
-        };
-      });
-
-      setGifResults(results.filter((g) => !!g.url));
+      const results = await searchGifs(gifSearch.trim(), 25);
+      setGifResults(results);
     } catch (err) {
       console.log("Error fetching GIFs:", err);
     } finally {
@@ -363,17 +249,7 @@ export default function CourtChatScreen({ route, navigation }) {
     }
   };
 
-  // Typing label text
-  let typingLabel = "";
-  if (typingUsers.length === 1) {
-    typingLabel = `${typingUsers[0]} is typing...`;
-  } else if (typingUsers.length === 2) {
-    typingLabel = `${typingUsers[0]} and ${typingUsers[1]} are typing...`;
-  } else if (typingUsers.length > 2) {
-    typingLabel = `${typingUsers[0]} and ${
-      typingUsers.length - 1
-    } others are typing...`;
-  }
+  // Typing label now provided by useTypingIndicator hook
 
   const handlePressUser = (userId) => {
     if (!userId) return;
@@ -403,15 +279,23 @@ export default function CourtChatScreen({ route, navigation }) {
       const data = snap.data();
       const reactions = data.reactions || {};
 
-      const currentUsers = reactions[emoji] || [];
-      const updatedUsers = currentUsers.includes(user.uid)
-        ? currentUsers.filter((u) => u !== user.uid)
-        : [...currentUsers, user.uid];
+      // First, remove user from all other emojis (one reaction per user)
+      const updatedReactions = {};
+      Object.keys(reactions).forEach((key) => {
+        updatedReactions[key] = reactions[key].filter((u) => u !== user.uid);
+      });
 
-      const updatedReactions = {
-        ...reactions,
-        [emoji]: updatedUsers,
-      };
+      // Then toggle the selected emoji
+      const currentUsers = updatedReactions[emoji] || [];
+      const wasAlreadyReacted = reactions[emoji]?.includes(user.uid);
+
+      if (wasAlreadyReacted) {
+        // Remove reaction (already filtered above)
+        updatedReactions[emoji] = currentUsers;
+      } else {
+        // Add new reaction
+        updatedReactions[emoji] = [...currentUsers, user.uid];
+      }
 
       await updateDoc(msgRef, { reactions: updatedReactions });
     } catch (err) {
@@ -438,6 +322,10 @@ export default function CourtChatScreen({ route, navigation }) {
       gifUrl: message.gifUrl || null,
     });
     closeReactionPicker();
+    // Auto-focus the input to bring up the keyboard
+    setTimeout(() => {
+      messageInputRef.current?.focus();
+    }, 100);
   };
 
   const cancelReply = () => {
@@ -666,19 +554,19 @@ export default function CourtChatScreen({ route, navigation }) {
       >
         <View style={{ flex: 1 }}>
           <ScrollView
-            ref={chatScrollRef}
-            style={{
-              flex: 1,
-              paddingHorizontal: 12,
-              paddingTop: 12,
-              opacity: initialRenderDone || messages.length === 0 ? 1 : 0,
-            }}
-            contentContainerStyle={{
-              paddingBottom: 16,
-            }}
-            showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-            keyboardDismissMode="on-drag"
+              ref={chatScrollRef}
+              style={{
+                flex: 1,
+                paddingHorizontal: 12,
+                paddingTop: 12,
+                opacity: initialRenderDone || messages.length === 0 ? 1 : 0,
+              }}
+              contentContainerStyle={{
+                paddingBottom: 16,
+              }}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="on-drag"
             onContentSizeChange={() => {
               // First load: jump to bottom without animation, then fade in
               if (!initialScrollDoneRef.current) {
@@ -732,16 +620,14 @@ export default function CourtChatScreen({ route, navigation }) {
 
                 const isMine = m.mine;
                 const bubbleAlign = isMine ? "flex-end" : "flex-start";
-                const bgColor = isMine ? "#0f172a" : "#020617";
-                const borderColor = isMine
-                  ? "rgba(96,165,250,0.7)"
-                  : "rgba(148,163,184,0.6)";
+                const bgColor = isMine
+                  ? "rgba(59,130,246,0.15)"
+                  : "rgba(30,41,59,0.6)";
 
                 // figure out if we need a date header before this message
                 let dateLabel = "";
                 if (m.ts && typeof m.ts.toDate === "function") {
-                  const d = m.ts.toDate();
-                  const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+                  const key = getDateKey(m.ts);
                   if (key !== lastDateKey) {
                     lastDateKey = key;
                     dateLabel = formatDateLabel(m.ts);
@@ -798,18 +684,65 @@ export default function CourtChatScreen({ route, navigation }) {
                         alignItems: bubbleAlign,
                       }}
                     >
+                      {/* Emoji reactions row - ABOVE message bubble */}
+                      {reactionPickerFor === m.id && (
+                        <View
+                          style={{
+                            flexDirection: "row",
+                            paddingHorizontal: 12,
+                            paddingVertical: 6,
+                            alignItems: "center",
+                            backgroundColor: "rgba(15,23,42,0.95)",
+                            borderRadius: 20,
+                            borderWidth: 1,
+                            borderColor: "rgba(148,163,184,0.3)",
+                            marginBottom: 6,
+                            shadowColor: "#000",
+                            shadowOffset: { width: 0, height: 2 },
+                            shadowOpacity: 0.25,
+                            shadowRadius: 4,
+                            elevation: 5,
+                          }}
+                        >
+                          {REACTION_EMOJIS.map((emoji, idx) => (
+                            <TouchableOpacity
+                              key={emoji}
+                              activeOpacity={0.6}
+                              style={{
+                                marginRight: idx === REACTION_EMOJIS.length - 1 ? 0 : 6,
+                                width: 36,
+                                height: 36,
+                                borderRadius: 18,
+                                alignItems: "center",
+                                justifyContent: "center",
+                                backgroundColor: "rgba(30,41,59,0.8)",
+                              }}
+                              onPress={() => {
+                                toggleReaction(m.id, emoji);
+                                closeReactionPicker();
+                              }}
+                            >
+                              <Text style={{ fontSize: 20 }}>{emoji}</Text>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+                      )}
+
                       <TouchableOpacity
                         activeOpacity={0.85}
                         onLongPress={() => openReactionPicker(m.id)}
                         onPress={() => handleMessagePress(m.id)} // double-tap support
                         style={{
-                          paddingHorizontal: 10,
-                          paddingVertical: 6,
-                          borderRadius: 12,
+                          paddingHorizontal: 14,
+                          paddingVertical: 10,
+                          borderRadius: 18,
                           maxWidth: "78%",
                           backgroundColor: bgColor,
-                          borderWidth: 1,
-                          borderColor,
+                          shadowColor: "#000",
+                          shadowOffset: { width: 0, height: 1 },
+                          shadowOpacity: 0.1,
+                          shadowRadius: 2,
+                          elevation: 2,
                         }}
                       >
                         {/* username -> tap to open profile */}
@@ -819,10 +752,10 @@ export default function CourtChatScreen({ route, navigation }) {
                         >
                           <Text
                             style={{
-                              fontSize: 11,
-                              fontWeight: "700",
-                              marginBottom: 2,
-                              color: isMine ? "#e5f3ff" : "#cbd5f5",
+                              fontSize: 12,
+                              fontWeight: "600",
+                              marginBottom: 4,
+                              color: isMine ? "#93c5fd" : "#cbd5e1",
                             }}
                           >
                             {isMine ? "You" : m.user}
@@ -855,14 +788,25 @@ export default function CourtChatScreen({ route, navigation }) {
                                 ? "You"
                                 : m.replyTo.user}
                             </Text>
-                            <Text
-                              style={{ fontSize: 12, color: "#e5e7eb" }}
-                              numberOfLines={1}
-                            >
-                              {m.replyTo.type === "gif"
-                                ? "[GIF]"
-                                : m.replyTo.text || ""}
-                            </Text>
+                            {m.replyTo.type === "gif" && m.replyTo.gifUrl ? (
+                              <Image
+                                source={{ uri: m.replyTo.gifUrl }}
+                                style={{
+                                  width: 80,
+                                  height: 80,
+                                  borderRadius: 6,
+                                  backgroundColor: "#020617",
+                                }}
+                                resizeMode="cover"
+                              />
+                            ) : (
+                              <Text
+                                style={{ fontSize: 12, color: "#e5e7eb" }}
+                                numberOfLines={1}
+                              >
+                                {m.replyTo.text || ""}
+                              </Text>
+                            )}
                           </View>
                         )}
 
@@ -880,9 +824,9 @@ export default function CourtChatScreen({ route, navigation }) {
                         ) : (
                           <Text
                             style={{
-                              color: "#e5e7eb",
+                              color: "#f1f5f9",
                               fontSize: 15,
-                              lineHeight: 20,
+                              lineHeight: 21,
                             }}
                           >
                             {m.text}
@@ -905,37 +849,53 @@ export default function CourtChatScreen({ route, navigation }) {
                                 flexDirection: "row",
                                 alignItems: "center",
                                 marginRight: 4,
-                                paddingHorizontal: 6,
-                                paddingVertical: 2,
-                                borderRadius: 999,
-                                backgroundColor: "rgba(15,23,42,0.9)",
-                                borderWidth: 1,
-                                borderColor: "rgba(148,163,184,0.7)",
+                                gap: 4,
                               }}
                             >
                               {reactionEntries.map(
-                                ([emoji, users], idx) => (
-                                  <TouchableOpacity
-                                    key={`${m.id}-${emoji}-${idx}`}
-                                    onPress={() =>
-                                      toggleReaction(m.id, emoji)
-                                    }
-                                    style={{
-                                      flexDirection: "row",
-                                      alignItems: "center",
-                                      marginRight: 4,
-                                    }}
-                                  >
-                                    <Text
+                                ([emoji, users], idx) => {
+                                  const hasReacted = users.includes(user.uid);
+                                  return (
+                                    <TouchableOpacity
+                                      key={`${m.id}-${emoji}-${idx}`}
+                                      onPress={() =>
+                                        toggleReaction(m.id, emoji)
+                                      }
                                       style={{
-                                        fontSize: 12,
-                                        color: "#e5e7eb",
+                                        flexDirection: "row",
+                                        alignItems: "center",
+                                        paddingHorizontal: 8,
+                                        paddingVertical: 4,
+                                        borderRadius: 12,
+                                        backgroundColor: hasReacted
+                                          ? "rgba(59,130,246,0.2)"
+                                          : "rgba(15,23,42,0.6)",
+                                        borderWidth: 1,
+                                        borderColor: hasReacted
+                                          ? "rgba(59,130,246,0.5)"
+                                          : "rgba(148,163,184,0.3)",
                                       }}
                                     >
-                                      {emoji} {users.length}
-                                    </Text>
-                                  </TouchableOpacity>
-                                )
+                                      <Text
+                                        style={{
+                                          fontSize: 14,
+                                          marginRight: 4,
+                                        }}
+                                      >
+                                        {emoji}
+                                      </Text>
+                                      <Text
+                                        style={{
+                                          fontSize: 12,
+                                          color: hasReacted ? "#93c5fd" : "#9ca3af",
+                                          fontWeight: hasReacted ? "600" : "400",
+                                        }}
+                                      >
+                                        {users.length}
+                                      </Text>
+                                    </TouchableOpacity>
+                                  );
+                                }
                               )}
 
                               {/* info button -> opens "who reacted" details */}
@@ -961,71 +921,51 @@ export default function CourtChatScreen({ route, navigation }) {
                               color: "#9ca3af",
                             }}
                           >
-                            {renderTime(m.ts)}
+                            {formatTime(m.ts)}
                           </Text>
                         </View>
                       </TouchableOpacity>
 
-                      {/* Inline reaction + reply + delete picker */}
+                      {/* Action buttons row - BELOW message bubble */}
                       {reactionPickerFor === m.id && (
                         <View
                           style={{
+                            marginTop: 6,
                             flexDirection: "row",
-                            marginTop: 4,
-                            paddingHorizontal: 8,
                             alignItems: "center",
+                            gap: 8,
                           }}
                         >
-                          {REACTION_EMOJIS.map((emoji) => (
-                            <TouchableOpacity
-                              key={emoji}
-                              style={{
-                                marginRight: 8,
-                                width: 32,
-                                height: 32,
-                                borderRadius: 16,
-                                alignItems: "center",
-                                justifyContent: "center",
-                                backgroundColor: "#0f172a",
-                                borderWidth: 1,
-                                borderColor: "rgba(148,163,184,0.8)",
-                              }}
-                              onPress={() => {
-                                toggleReaction(m.id, emoji);
-                                closeReactionPicker();
-                              }}
-                            >
-                              <Text style={{ fontSize: 18 }}>
-                                {emoji}
-                              </Text>
-                            </TouchableOpacity>
-                          ))}
-
-                          {/* 💬 reply button */}
+                          {/* Reply button */}
                           <TouchableOpacity
+                            activeOpacity={0.7}
                             style={{
-                              marginRight: 8,
-                              paddingHorizontal: 10,
-                              paddingVertical: 4,
-                              borderRadius: 999,
-                              backgroundColor: "#0f172a",
+                              paddingHorizontal: 16,
+                              paddingVertical: 8,
+                              borderRadius: 16,
+                              backgroundColor: "rgba(15,23,42,0.95)",
                               borderWidth: 1,
-                              borderColor: "rgba(96,165,250,0.8)",
+                              borderColor: "rgba(59,130,246,0.4)",
                               flexDirection: "row",
                               alignItems: "center",
+                              shadowColor: "#000",
+                              shadowOffset: { width: 0, height: 2 },
+                              shadowOpacity: 0.2,
+                              shadowRadius: 3,
+                              elevation: 3,
                             }}
                             onPress={() => startReplyToMessage(m)}
                           >
                             <Ionicons
-                              name="return-down-back"
-                              size={14}
-                              color="#bfdbfe"
-                              style={{ marginRight: 4 }}
+                              name="arrow-undo-outline"
+                              size={16}
+                              color="#93c5fd"
+                              style={{ marginRight: 6 }}
                             />
                             <Text
                               style={{
-                                color: "#bfdbfe",
-                                fontSize: 12,
+                                color: "#93c5fd",
+                                fontSize: 14,
                                 fontWeight: "600",
                               }}
                             >
@@ -1033,40 +973,68 @@ export default function CourtChatScreen({ route, navigation }) {
                             </Text>
                           </TouchableOpacity>
 
-                          {/* 🗑 delete button only for your own messages */}
+                          {/* Delete button only for your own messages */}
                           {isMine && (
                             <TouchableOpacity
+                              activeOpacity={0.7}
                               style={{
-                                marginRight: 8,
-                                width: 32,
-                                height: 32,
+                                paddingHorizontal: 16,
+                                paddingVertical: 8,
                                 borderRadius: 16,
-                                alignItems: "center",
-                                justifyContent: "center",
-                                backgroundColor: "#1f2937",
+                                backgroundColor: "rgba(15,23,42,0.95)",
                                 borderWidth: 1,
-                                borderColor: "rgba(248,113,113,0.7)",
+                                borderColor: "rgba(239,68,68,0.4)",
+                                flexDirection: "row",
+                                alignItems: "center",
+                                shadowColor: "#000",
+                                shadowOffset: { width: 0, height: 2 },
+                                shadowOpacity: 0.2,
+                                shadowRadius: 3,
+                                elevation: 3,
                               }}
                               onPress={() => handleDeleteMessage(m.id)}
                             >
                               <Ionicons
                                 name="trash-outline"
-                                size={18}
+                                size={16}
                                 color="#fca5a5"
+                                style={{ marginRight: 6 }}
                               />
+                              <Text
+                                style={{
+                                  color: "#fca5a5",
+                                  fontSize: 14,
+                                  fontWeight: "600",
+                                }}
+                              >
+                                Delete
+                              </Text>
                             </TouchableOpacity>
                           )}
 
+                          {/* Close button */}
                           <TouchableOpacity
+                            activeOpacity={0.7}
                             style={{
+                              paddingHorizontal: 12,
+                              paddingVertical: 8,
+                              borderRadius: 16,
+                              backgroundColor: "rgba(15,23,42,0.95)",
+                              borderWidth: 1,
+                              borderColor: "rgba(148,163,184,0.3)",
                               alignItems: "center",
                               justifyContent: "center",
+                              shadowColor: "#000",
+                              shadowOffset: { width: 0, height: 2 },
+                              shadowOpacity: 0.2,
+                              shadowRadius: 3,
+                              elevation: 3,
                             }}
                             onPress={closeReactionPicker}
                           >
                             <Ionicons
-                              name="close-circle-outline"
-                              size={22}
+                              name="close"
+                              size={18}
                               color="#9ca3af"
                             />
                           </TouchableOpacity>
@@ -1171,14 +1139,26 @@ export default function CourtChatScreen({ route, navigation }) {
                     Replying to{" "}
                     {replyingTo.user === myProfile.name ? "you" : replyingTo.user}
                   </Text>
-                  <Text
-                    style={{ color: "#e5e7eb", fontSize: 13 }}
-                    numberOfLines={1}
-                  >
-                    {replyingTo.type === "gif"
-                      ? "[GIF]"
-                      : replyingTo.text || ""}
-                  </Text>
+                  {replyingTo.type === "gif" && replyingTo.gifUrl ? (
+                    <Image
+                      source={{ uri: replyingTo.gifUrl }}
+                      style={{
+                        width: 60,
+                        height: 60,
+                        borderRadius: 6,
+                        backgroundColor: "#020617",
+                        marginTop: 2,
+                      }}
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <Text
+                      style={{ color: "#e5e7eb", fontSize: 13 }}
+                      numberOfLines={1}
+                    >
+                      {replyingTo.text || ""}
+                    </Text>
+                  )}
                 </View>
 
                 <TouchableOpacity
@@ -1235,6 +1215,7 @@ export default function CourtChatScreen({ route, navigation }) {
               }}
             >
               <TextInput
+                ref={messageInputRef}
                 style={{
                   flex: 1,
                   color: "#e5e7eb",
@@ -1247,6 +1228,7 @@ export default function CourtChatScreen({ route, navigation }) {
                 onChangeText={handleChangeText}
                 returnKeyType="send"
                 onSubmitEditing={handleSend}
+                blurOnSubmit={false}
               />
               <TouchableOpacity
                 onPress={handleSend}
@@ -1360,10 +1342,10 @@ export default function CourtChatScreen({ route, navigation }) {
                 placeholderTextColor="#9ca3af"
                 value={gifSearch}
                 onChangeText={setGifSearch}
-                onSubmitEditing={searchGifs}
+                onSubmitEditing={handleSearchGifs}
                 returnKeyType="search"
               />
-              <TouchableOpacity onPress={searchGifs}>
+              <TouchableOpacity onPress={handleSearchGifs}>
                 <Ionicons
                   name="arrow-forward-circle"
                   size={22}

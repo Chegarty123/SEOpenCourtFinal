@@ -31,40 +31,9 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { db, auth } from "../firebaseConfig";
 import { styles as globalStyles } from "../styles/globalStyles";
+import { NBA_TEAM_LOGOS } from "../utils/profileUtils";
 
-// 🏀 team logos for favorite team display
-const teamLogos = {
-  Hawks: require("../images/hawks.png"),
-  Raptors: require("../images/raptors.png"),
-  Nets: require("../images/nets.png"),
-  Heat: require("../images/heat.png"),
-  Sixers: require("../images/sixers.png"),
-  Knicks: require("../images/knicks.png"),
-  Magic: require("../images/magic.webp"),
-  Celtics: require("../images/celtics.png"),
-  Bulls: require("../images/bulls.png"),
-  Cavaliers: require("../images/cavs.png"),
-  Pistons: require("../images/pistons.png"),
-  Bucks: require("../images/bucks.png"),
-  Wizards: require("../images/wizards.webp"),
-  Hornets: require("../images/hornets.png"),
-  Pacers: require("../images/pacers.png"),
-  Nuggets: require("../images/nuggets.png"),
-  Suns: require("../images/suns.png"),
-  Clippers: require("../images/clippers.png"),
-  Lakers: require("../images/lakers.png"),
-  Trailblazers: require("../images/trailblazers.png"),
-  Thunder: require("../images/thunder.png"),
-  Timberwolves: require("../images/timberwolves.png"),
-  Rockets: require("../images/rockets.png"),
-  Pelicans: require("../images/pelicans.png"),
-  Grizzlies: require("../images/grizzlies.png"),
-  Mavericks: require("../images/mavericks.png"),
-  Spurs: require("../images/spurs.png"),
-  Warriors: require("../images/warriors.png"),
-  Jazz: require("../images/jazz.png"),
-  Kings: require("../images/kings.png"),
-};
+// Team logos now imported from centralized utility
 
 export default function UserProfileScreen({ route, navigation }) {
   const { userId } = route.params || {};
@@ -435,7 +404,7 @@ export default function UserProfileScreen({ route, navigation }) {
 
   const favoriteTeam = profile.favoriteTeam || "None";
   const hasTeamLogo =
-    favoriteTeam && favoriteTeam !== "None" && teamLogos[favoriteTeam];
+    favoriteTeam && favoriteTeam !== "None" && NBA_TEAM_LOGOS[favoriteTeam];
 
   return (
     <View style={ui.screen}>
@@ -590,7 +559,7 @@ export default function UserProfileScreen({ route, navigation }) {
             <View style={{ flexDirection: "row", alignItems: "center" }}>
               {hasTeamLogo && (
                 <Image
-                  source={teamLogos[favoriteTeam]}
+                  source={NBA_TEAM_LOGOS[favoriteTeam]}
                   style={ui.infoTeamLogo}
                 />
               )}
