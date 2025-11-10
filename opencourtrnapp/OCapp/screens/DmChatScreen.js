@@ -101,6 +101,7 @@ export default function DmChatScreen({ route, navigation }) {
   const [participants, setParticipants] = useState([]);
   const [participantInfo, setParticipantInfo] = useState({});
   const [showGroupMembers, setShowGroupMembers] = useState(false);
+  const [liveUserProfiles, setLiveUserProfiles] = useState({});
 
   const scrollToBottom = () => {
     setTimeout(() => {
@@ -181,6 +182,50 @@ export default function DmChatScreen({ route, navigation }) {
 
     return () => unsub();
   }, [conversationId]);
+
+  // Load live user profiles for group chat avatars
+  useEffect(() => {
+    if (!isGroup || participants.length === 0) {
+      setLiveUserProfiles({});
+      return;
+    }
+
+    const fetchProfiles = async () => {
+      try {
+        const otherMembers = participants.filter((p) => p !== user?.uid).slice(0, 2);
+        const profiles = await Promise.all(
+          otherMembers.map(async (uid) => {
+            try {
+              const snap = await getDoc(doc(db, "users", uid));
+              if (!snap.exists()) return null;
+              const data = snap.data();
+              return [uid, {
+                username: data.username || (data.email ? data.email.split("@")[0] : "Player"),
+                profilePic: data.profilePic || null,
+              }];
+            } catch (err) {
+              console.log("Error fetching profile for group avatar:", err);
+              return null;
+            }
+          })
+        );
+
+        const profileMap = {};
+        profiles.forEach((entry) => {
+          if (entry) {
+            const [uid, profile] = entry;
+            profileMap[uid] = profile;
+          }
+        });
+
+        setLiveUserProfiles(profileMap);
+      } catch (err) {
+        console.log("Error loading group member profiles:", err);
+      }
+    };
+
+    fetchProfiles();
+  }, [isGroup, participants, user]);
 
 
   // Mark conversation read for me
@@ -542,43 +587,214 @@ export default function DmChatScreen({ route, navigation }) {
             flex: 1,
           }}
         >
-          <View
-            style={{
-              width: 32,
-              height: 32,
-              borderRadius: 16,
-              overflow: "hidden",
-              borderWidth: 1,
-              borderColor: "rgba(148,163,184,0.6)",
-              backgroundColor: "#020617",
-              marginRight: 8,
-            }}
-          >
-            {otherProfilePic ? (
-              <Image
-                source={{ uri: otherProfilePic }}
-                style={{ width: "100%", height: "100%" }}
-              />
-            ) : (
-              <View
-                style={{
-                  flex: 1,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  backgroundColor: "#0f172a",
-                }}
-              >
-                <Text
+          {/* Avatar section */}
+          {isGroup ? (
+            // Group chat: show stacked avatars
+            <View
+              style={{
+                width: 32,
+                height: 32,
+                marginRight: 8,
+                position: "relative",
+              }}
+            >
+              {(() => {
+                const otherMembers = participants.filter((p) => p !== user?.uid).slice(0, 2);
+                const groupAvatars = otherMembers.map((memberId) => {
+                  const profile = liveUserProfiles[memberId] || participantInfo[memberId] || {};
+                  return {
+                    id: memberId,
+                    profilePic: profile.profilePic,
+                    username: profile.username || "U",
+                  };
+                });
+
+                if (groupAvatars.length >= 2) {
+                  return (
+                    <>
+                      {/* First avatar (back) */}
+                      {groupAvatars[1].profilePic ? (
+                        <Image
+                          source={{ uri: groupAvatars[1].profilePic }}
+                          style={{
+                            width: 22,
+                            height: 22,
+                            borderRadius: 11,
+                            borderWidth: 2,
+                            borderColor: "#020617",
+                            position: "absolute",
+                            top: 0,
+                            right: 0,
+                          }}
+                        />
+                      ) : (
+                        <View
+                          style={{
+                            width: 22,
+                            height: 22,
+                            borderRadius: 11,
+                            borderWidth: 2,
+                            borderColor: "#020617",
+                            backgroundColor: "#0f172a",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            position: "absolute",
+                            top: 0,
+                            right: 0,
+                          }}
+                        >
+                          <Text
+                            style={{
+                              color: "#e5f3ff",
+                              fontWeight: "700",
+                              fontSize: 9,
+                            }}
+                          >
+                            {groupAvatars[1].username[0]?.toUpperCase()}
+                          </Text>
+                        </View>
+                      )}
+                      {/* Second avatar (front) */}
+                      {groupAvatars[0].profilePic ? (
+                        <Image
+                          source={{ uri: groupAvatars[0].profilePic }}
+                          style={{
+                            width: 22,
+                            height: 22,
+                            borderRadius: 11,
+                            borderWidth: 2,
+                            borderColor: "#020617",
+                            position: "absolute",
+                            bottom: 0,
+                            left: 0,
+                          }}
+                        />
+                      ) : (
+                        <View
+                          style={{
+                            width: 22,
+                            height: 22,
+                            borderRadius: 11,
+                            borderWidth: 2,
+                            borderColor: "#020617",
+                            backgroundColor: "#0f172a",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            position: "absolute",
+                            bottom: 0,
+                            left: 0,
+                          }}
+                        >
+                          <Text
+                            style={{
+                              color: "#e5f3ff",
+                              fontWeight: "700",
+                              fontSize: 9,
+                            }}
+                          >
+                            {groupAvatars[0].username[0]?.toUpperCase()}
+                          </Text>
+                        </View>
+                      )}
+                    </>
+                  );
+                } else if (groupAvatars.length === 1) {
+                  // Only one other member - show single avatar
+                  return groupAvatars[0].profilePic ? (
+                    <Image
+                      source={{ uri: groupAvatars[0].profilePic }}
+                      style={{
+                        width: 32,
+                        height: 32,
+                        borderRadius: 16,
+                        borderWidth: 1,
+                        borderColor: "rgba(148,163,184,0.6)",
+                      }}
+                    />
+                  ) : (
+                    <View
+                      style={{
+                        width: 32,
+                        height: 32,
+                        borderRadius: 16,
+                        borderWidth: 1,
+                        borderColor: "rgba(148,163,184,0.6)",
+                        backgroundColor: "#0f172a",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      <Text
+                        style={{
+                          color: "#e5f3ff",
+                          fontWeight: "700",
+                        }}
+                      >
+                        {groupAvatars[0].username[0]?.toUpperCase()}
+                      </Text>
+                    </View>
+                  );
+                } else {
+                  // Fallback to icon
+                  return (
+                    <View
+                      style={{
+                        width: 32,
+                        height: 32,
+                        borderRadius: 16,
+                        borderWidth: 1,
+                        borderColor: "rgba(148,163,184,0.6)",
+                        backgroundColor: "#0f172a",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      <Ionicons name="people-outline" size={16} color="#93c5fd" />
+                    </View>
+                  );
+                }
+              })()}
+            </View>
+          ) : (
+            // 1:1 DM: show single avatar
+            <View
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: 16,
+                overflow: "hidden",
+                borderWidth: 1,
+                borderColor: "rgba(148,163,184,0.6)",
+                backgroundColor: "#020617",
+                marginRight: 8,
+              }}
+            >
+              {otherProfilePic ? (
+                <Image
+                  source={{ uri: otherProfilePic }}
+                  style={{ width: "100%", height: "100%" }}
+                />
+              ) : (
+                <View
                   style={{
-                    color: "#e5f3ff",
-                    fontWeight: "700",
+                    flex: 1,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    backgroundColor: "#0f172a",
                   }}
                 >
-                  {displayTitle?.[0]?.toUpperCase() || "C"}
-                </Text>
-              </View>
-            )}
-          </View>
+                  <Text
+                    style={{
+                      color: "#e5f3ff",
+                      fontWeight: "700",
+                    }}
+                  >
+                    {displayTitle?.[0]?.toUpperCase() || "C"}
+                  </Text>
+                </View>
+              )}
+            </View>
+          )}
 
           <View style={{ flex: 1 }}>
             <Text

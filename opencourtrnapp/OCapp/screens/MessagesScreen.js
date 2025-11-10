@@ -604,6 +604,25 @@ export default function MessagesScreen({ navigation }) {
 
     const avatarUri = liveProfile?.profilePic || item.otherProfilePic || null;
 
+    // For group chats, get profile pictures of other members
+    const getGroupAvatars = () => {
+      if (!item.isGroup) return [];
+      const otherMembers = (item.participants || [])
+        .filter((p) => p !== currentUser?.uid)
+        .slice(0, 2); // Get first 2 members (excluding current user)
+
+      return otherMembers.map((memberId) => {
+        const profile = userProfiles[memberId];
+        return {
+          id: memberId,
+          profilePic: profile?.profilePic,
+          username: profile?.username || item.participantInfo?.[memberId]?.username || "U",
+        };
+      });
+    };
+
+    const groupAvatars = item.isGroup ? getGroupAvatars() : [];
+
     return (
       <TouchableOpacity
         style={ui.convRow}
@@ -614,13 +633,61 @@ export default function MessagesScreen({ navigation }) {
       >
         <View style={ui.avatarWrap}>
           {item.isGroup ? (
-            <View style={[ui.avatarPlaceholder, { backgroundColor: "#020617" }]}>
-              <Ionicons
-                name="people-outline"
-                size={18}
-                color="#93c5fd"
-                style={{ marginBottom: 1 }}
-              />
+            <View style={ui.groupAvatarContainer}>
+              {groupAvatars.length >= 2 ? (
+                <>
+                  {/* First avatar (back) */}
+                  {groupAvatars[1].profilePic ? (
+                    <Image
+                      source={{ uri: groupAvatars[1].profilePic }}
+                      style={[ui.groupAvatar, ui.groupAvatarBack]}
+                    />
+                  ) : (
+                    <View style={[ui.groupAvatarPlaceholder, ui.groupAvatarBack]}>
+                      <Text style={ui.groupAvatarInitial}>
+                        {groupAvatars[1].username[0]?.toUpperCase()}
+                      </Text>
+                    </View>
+                  )}
+                  {/* Second avatar (front) */}
+                  {groupAvatars[0].profilePic ? (
+                    <Image
+                      source={{ uri: groupAvatars[0].profilePic }}
+                      style={[ui.groupAvatar, ui.groupAvatarFront]}
+                    />
+                  ) : (
+                    <View style={[ui.groupAvatarPlaceholder, ui.groupAvatarFront]}>
+                      <Text style={ui.groupAvatarInitial}>
+                        {groupAvatars[0].username[0]?.toUpperCase()}
+                      </Text>
+                    </View>
+                  )}
+                </>
+              ) : groupAvatars.length === 1 ? (
+                // Only one other member
+                groupAvatars[0].profilePic ? (
+                  <Image
+                    source={{ uri: groupAvatars[0].profilePic }}
+                    style={ui.avatar}
+                  />
+                ) : (
+                  <View style={ui.avatarPlaceholder}>
+                    <Text style={ui.avatarInitial}>
+                      {groupAvatars[0].username[0]?.toUpperCase()}
+                    </Text>
+                  </View>
+                )
+              ) : (
+                // Fallback to icon if no members found
+                <View style={[ui.avatarPlaceholder, { backgroundColor: "#020617" }]}>
+                  <Ionicons
+                    name="people-outline"
+                    size={18}
+                    color="#93c5fd"
+                    style={{ marginBottom: 1 }}
+                  />
+                </View>
+              )}
             </View>
           ) : avatarUri ? (
             <Image source={{ uri: avatarUri }} style={ui.avatar} />
@@ -662,8 +729,14 @@ export default function MessagesScreen({ navigation }) {
         </View>
 
         <View style={ui.timeWrap}>
-          <Text style={ui.convTime}>{formatTime(item.updatedAt)}</Text>
-          <Ionicons name="chevron-forward" size={16} color="#6b7280" />
+          <Text style={[ui.convTime, unread && ui.convTimeUnread]}>
+            {formatTime(item.updatedAt)}
+          </Text>
+          {unread ? (
+            <View style={ui.unreadDot} />
+          ) : (
+            <Ionicons name="chevron-forward" size={16} color="#6b7280" />
+          )}
         </View>
       </TouchableOpacity>
     );
@@ -970,6 +1043,43 @@ const ui = StyleSheet.create({
     fontWeight: "700",
     fontSize: 16,
   },
+  groupAvatarContainer: {
+    width: 40,
+    height: 40,
+    position: "relative",
+  },
+  groupAvatar: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 2,
+    borderColor: "#020617",
+    position: "absolute",
+  },
+  groupAvatarBack: {
+    top: 0,
+    right: 0,
+  },
+  groupAvatarFront: {
+    bottom: 0,
+    left: 0,
+  },
+  groupAvatarPlaceholder: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 2,
+    borderColor: "#020617",
+    backgroundColor: "#0f172a",
+    alignItems: "center",
+    justifyContent: "center",
+    position: "absolute",
+  },
+  groupAvatarInitial: {
+    color: "#e5f3ff",
+    fontWeight: "700",
+    fontSize: 11,
+  },
   convTextWrap: {
     flex: 1,
   },
@@ -981,6 +1091,7 @@ const ui = StyleSheet.create({
   },
   convNameUnread: {
     color: "#f9fafb",
+    fontWeight: "700",
   },
   convPreview: {
     fontSize: 13,
@@ -989,7 +1100,7 @@ const ui = StyleSheet.create({
   },
   convPreviewUnread: {
     color: "#e5e7eb",
-    fontWeight: "500",
+    fontWeight: "600",
   },
   timeWrap: {
     alignItems: "flex-end",
@@ -1000,6 +1111,17 @@ const ui = StyleSheet.create({
     fontSize: 11,
     color: "#6b7280",
     marginBottom: 4,
+  },
+  convTimeUnread: {
+    color: "#60a5fa",
+    fontWeight: "600",
+  },
+  unreadDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: "#60a5fa",
+    marginTop: 2,
   },
   groupChip: {
     marginLeft: 6,
