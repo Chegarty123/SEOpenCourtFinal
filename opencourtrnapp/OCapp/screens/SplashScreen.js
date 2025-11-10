@@ -8,8 +8,9 @@ import {
   Easing,
   StatusBar,
 } from "react-native";
-import { auth } from "../firebaseConfig";
+import { auth, db } from "../firebaseConfig";
 import { onAuthStateChanged, signOut } from "firebase/auth";
+import { doc, getDoc } from "firebase/firestore";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const SplashScreen = ({ navigation }) => {
@@ -33,10 +34,36 @@ const SplashScreen = ({ navigation }) => {
           setTimeout(async () => {
             if (user && wantsRemember) {
               // User signed in AND wants to stay signed in
-              navigation.reset({
-                index: 0,
-                routes: [{ name: "MainTabs" }],
-              });
+              // Check if profile is complete
+              try {
+                const userDocRef = doc(db, "users", user.uid);
+                const userDoc = await getDoc(userDocRef);
+
+                if (userDoc.exists()) {
+                  const userData = userDoc.data();
+                  if (userData.profileComplete === false) {
+                    // Profile not complete, send to onboarding
+                    navigation.reset({
+                      index: 0,
+                      routes: [{ name: "ProfileOnboarding" }],
+                    });
+                    return;
+                  }
+                }
+
+                // Profile complete or doesn't exist yet (existing users), go to MainTabs
+                navigation.reset({
+                  index: 0,
+                  routes: [{ name: "MainTabs" }],
+                });
+              } catch (error) {
+                console.log("Error checking profile completion:", error);
+                // Fallback to MainTabs on error
+                navigation.reset({
+                  index: 0,
+                  routes: [{ name: "MainTabs" }],
+                });
+              }
             } else {
               // Either no user, or user but "remember me" was off
               if (user && !wantsRemember) {

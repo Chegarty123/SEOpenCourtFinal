@@ -8,6 +8,7 @@ import { StatusBar } from "expo-status-bar";
 import SplashScreen from "./screens/SplashScreen";
 import LoginScreen from "./screens/LoginScreen";
 import SignupScreen from "./screens/SignupScreen";
+import ProfileOnboardingScreen from "./screens/ProfileOnboardingScreen";
 import MainTabs from "./screens/MainTabs";
 import MapScreen from "./screens/MapScreen";
 import CourtDetailScreen from "./screens/CourtDetailScreen";
@@ -46,6 +47,13 @@ export default function App() {
         <Stack.Screen
           name="Signup"
           component={SignupScreen}
+        />
+
+        {/* Profile onboarding after signup */}
+        <Stack.Screen
+          name="ProfileOnboarding"
+          component={ProfileOnboardingScreen}
+          options={{ animation: "slide_from_right" }}
         />
 
         {/* Splash -> MainTabs (home) will also fade */}

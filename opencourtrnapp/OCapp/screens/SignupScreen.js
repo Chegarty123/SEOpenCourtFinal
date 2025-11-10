@@ -51,7 +51,7 @@ export default function SignupScreen({ navigation }) {
     setLoading(true);
     try {
       await createUserWithEmailAndPassword(auth, trimmedEmail, password);
-      navigation.replace("MainTabs");
+      navigation.replace("ProfileOnboarding");
     } catch (err) {
       console.log("Signup error:", err);
       let msg = "Unable to create your account. Please try again.";

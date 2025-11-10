@@ -24,6 +24,8 @@ import { NBA_TEAM_LOGOS } from "../utils/profileUtils";
 export default function ProfileScreen({ navigation }) {
   const user = auth.currentUser;
 
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [username, setUsername] = useState(user?.email?.split("@")[0] || "");
   const [profilePic, setProfilePic] = useState(null);
   const [position, setPosition] = useState("Point Guard");
@@ -32,7 +34,7 @@ export default function ProfileScreen({ navigation }) {
   );
   const [gradeLevel, setGradeLevel] = useState("Freshman");
   const [favoriteTeam, setFavoriteTeam] = useState("None");
-  const [bio, setBio] = useState(""); 
+  const [bio, setBio] = useState("");
   const [saveStatus, setSaveStatus] = useState("All changes saved");
 
   const BIO_MAX_LENGTH = 75; // max characters for bio
@@ -97,6 +99,8 @@ export default function ProfileScreen({ navigation }) {
 
         if (snapshot.exists()) {
           const data = snapshot.data();
+          setFirstName(data.firstName || "");
+          setLastName(data.lastName || "");
           setUsername(data.username || username);
           setProfilePic(data.profilePic || null);
           setPosition(data.position || "Point Guard");
@@ -114,6 +118,8 @@ export default function ProfileScreen({ navigation }) {
             favoriteTeam: "None",
             memberSince,
             bio: "",
+            firstName: "",
+            lastName: "",
           };
           await setDoc(userDocRef, payload);
         }
@@ -136,8 +142,15 @@ export default function ProfileScreen({ navigation }) {
     const timeout = setTimeout(async () => {
       try {
         const userDocRef = doc(db, "users", user.uid);
+        // Update username from first and last name if both are present
+        const updatedUsername = (firstName.trim() && lastName.trim())
+          ? `${firstName.trim()} ${lastName.trim()}`
+          : username;
+
         const payload = {
-          username,
+          firstName,
+          lastName,
+          username: updatedUsername,
           profilePic,
           position,
           gradeLevel,
@@ -154,7 +167,7 @@ export default function ProfileScreen({ navigation }) {
     }, 800);
 
     return () => clearTimeout(timeout);
-  }, [username, profilePic, position, gradeLevel, favoriteTeam, memberSince, bio, user]);
+  }, [firstName, lastName, username, profilePic, position, gradeLevel, favoriteTeam, memberSince, bio, user]);
 
   // Pick image
   const pickImage = async () => {
@@ -242,6 +255,11 @@ export default function ProfileScreen({ navigation }) {
     }
   };
 
+  // Display name - use firstName + lastName if available, otherwise fall back to username
+  const displayName = (firstName.trim() && lastName.trim())
+    ? `${firstName.trim()} ${lastName.trim()}`
+    : username || "Add name";
+
   const taglinePieces = [];
   if (position) taglinePieces.push(position);
   if (gradeLevel) taglinePieces.push(gradeLevel);
@@ -288,14 +306,16 @@ export default function ProfileScreen({ navigation }) {
                   <Image source={{ uri: profilePic }} style={styles.profileImage} />
                 ) : (
                   <View style={styles.avatarPlaceholder}>
-                    <Text style={styles.avatarInitial}>{username?.[0]?.toUpperCase() || "U"}</Text>
+                    <Text style={styles.avatarInitial}>
+                      {firstName?.[0]?.toUpperCase() || username?.[0]?.toUpperCase() || "U"}
+                    </Text>
                   </View>
                 )}
               </View>
             </TouchableOpacity>
 
             <View style={styles.playerTextArea}>
-              <Text style={styles.usernameText}>{username || "Add username"}</Text>
+              <Text style={styles.usernameText}>{displayName}</Text>
               {bio ? <Text style={styles.bioPreview}>{bio}</Text> : null}
               <Text style={styles.taglineText}>{tagline || "Tap tags below to update your profile"}</Text>
               {memberSince ? <Text style={styles.memberSinceText}>Member since {memberSince}</Text> : null}
@@ -305,6 +325,38 @@ export default function ProfileScreen({ navigation }) {
           <View style={styles.saveStatusRow}>
             <Text style={styles.saveStatusText}>{saveStatus}</Text>
           </View>
+        </View>
+
+        {/* NAME CARD */}
+        <View style={styles.card}>
+          <View style={styles.cardHeaderRow}>
+            <Text style={styles.cardTitle}>Name</Text>
+            <Text style={styles.cardSubtitle}>
+              Your display name on OpenCourt.
+            </Text>
+          </View>
+
+          <Text style={styles.fieldLabel}>First Name</Text>
+          <TextInput
+            style={styles.nameInput}
+            placeholder="Enter your first name"
+            placeholderTextColor="#9ca3af"
+            value={firstName}
+            onChangeText={setFirstName}
+            autoCapitalize="words"
+            autoCorrect={false}
+          />
+
+          <Text style={[styles.fieldLabel, { marginTop: 12 }]}>Last Name</Text>
+          <TextInput
+            style={styles.nameInput}
+            placeholder="Enter your last name"
+            placeholderTextColor="#9ca3af"
+            value={lastName}
+            onChangeText={setLastName}
+            autoCapitalize="words"
+            autoCorrect={false}
+          />
         </View>
 
         {/* BIO CARD */}
@@ -468,6 +520,7 @@ const styles = StyleSheet.create({
   accountEmail: { marginTop: 4, fontSize: 13, color: "#9ca3af", marginBottom: 14 },
   logoutBtn: { marginTop: 4, backgroundColor: "#ef4444", paddingVertical: 10, borderRadius: 999, alignItems: "center" },
   logoutText: { color: "#fff", fontWeight: "700", fontSize: 15 },
+  nameInput: { backgroundColor: "rgba(15,23,42,0.9)", borderRadius: 16, borderWidth: 1, borderColor: "rgba(148,163,184,0.6)", padding: 12, color: "#e5f3ff", fontSize: 14 },
   bioInput: { backgroundColor: "rgba(15,23,42,0.9)", borderRadius: 16, borderWidth: 1, borderColor: "rgba(148,163,184,0.6)", padding: 10, color: "#e5f3ff", fontSize: 13, textAlignVertical: "center" },
   bioCharCount: { fontSize: 11, color: "#9ca3af", marginTop: 4, textAlign: "right" },
 });
