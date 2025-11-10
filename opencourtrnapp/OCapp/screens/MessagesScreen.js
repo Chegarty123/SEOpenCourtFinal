@@ -788,7 +788,7 @@ export default function MessagesScreen({ navigation }) {
               ? "Selected for group chat"
               : anySelected
               ? "Tap to toggle selection"
-              : "Tap to start a DM • long-press for group"}
+              : "Tap to start a DM"}
           </Text>
         </View>
         {creatingFor === friend.id && !anySelected ? (
