@@ -8,6 +8,7 @@ import {
   ScrollView,
   StatusBar,
   Platform,
+  Modal,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -41,6 +42,7 @@ export default function CourtDetailScreen({ route, navigation }) {
   const [playerProfiles, setPlayerProfiles] = useState({}); // 🔵 live user docs
   const [checkedIn, setCheckedIn] = useState(false);
   const [messages, setMessages] = useState([]);
+  const [showAllPlayers, setShowAllPlayers] = useState(false);
 
   // format Firestore timestamp -> "4:33 PM"
   const renderTime = (ts) => {
@@ -236,6 +238,10 @@ export default function CourtDetailScreen({ route, navigation }) {
       ? messages[messages.length - 1]
       : null;
 
+  const MAX_VISIBLE_PLAYERS = 5;
+  const visiblePlayers = playersHere.slice(0, MAX_VISIBLE_PLAYERS);
+  const remainingCount = playersHere.length - MAX_VISIBLE_PLAYERS;
+
   return (
     <SafeAreaView
       style={{
@@ -344,7 +350,7 @@ export default function CourtDetailScreen({ route, navigation }) {
                 </Text>
               )}
 
-              {playersHere.map((p) => {
+              {visiblePlayers.map((p) => {
                 const liveProfile = playerProfiles[p.id] || null;
                 const avatarUri =
                   liveProfile?.profilePic || p.avatar || null;
@@ -377,6 +383,19 @@ export default function CourtDetailScreen({ route, navigation }) {
                   </TouchableOpacity>
                 );
               })}
+
+              {remainingCount > 0 && (
+                <TouchableOpacity
+                  style={ui.morePlayersPill}
+                  onPress={() => setShowAllPlayers(true)}
+                  activeOpacity={0.9}
+                >
+                  <Ionicons name="add-circle-outline" size={20} color="#60a5fa" />
+                  <Text style={ui.morePlayersText}>
+                    {remainingCount} more
+                  </Text>
+                </TouchableOpacity>
+              )}
             </ScrollView>
 
             {/* Check in / out button */}
@@ -403,18 +422,23 @@ export default function CourtDetailScreen({ route, navigation }) {
           <View style={ui.card}>
             <View style={ui.cardHeaderRow}>
               <Text style={ui.cardHeaderText}>Court chat</Text>
+              {messages.length > 0 && (
+                <View style={ui.messageBadge}>
+                  <Text style={ui.messageBadgeText}>{messages.length}</Text>
+                </View>
+              )}
             </View>
 
             {lastMessage ? (
               <View style={ui.chatPreviewWrap}>
-                <Text
-                  style={[
-                    ui.chatMetaText,
-                    { marginBottom: 4 },
-                  ]}
-                >
-                  Last message · {renderTime(lastMessage.ts)}
-                </Text>
+                <View style={ui.chatPreviewHeader}>
+                  <View style={ui.chatMetaRow}>
+                    <Ionicons name="time-outline" size={12} color="#9ca3af" />
+                    <Text style={ui.chatMetaText}>
+                      {renderTime(lastMessage.ts)}
+                    </Text>
+                  </View>
+                </View>
                 <View
                   style={[
                     ui.chatBubble,
@@ -441,13 +465,16 @@ export default function CourtDetailScreen({ route, navigation }) {
                 </View>
               </View>
             ) : (
-              <Text style={ui.chatHintText}>
-                No messages yet. Start the first conversation for this court.
-              </Text>
+              <View style={ui.emptyMessageState}>
+                <Ionicons name="chatbubbles-outline" size={32} color="#64748b" />
+                <Text style={ui.chatHintText}>
+                  No messages yet. Start the conversation.
+                </Text>
+              </View>
             )}
 
             <TouchableOpacity
-              style={[ui.checkInBtn, { backgroundColor: "#1f6fb2", marginTop: 6 }]}
+              style={ui.modernChatButton}
               activeOpacity={0.9}
               onPress={() =>
                 navigation.navigate("CourtChat", {
@@ -457,15 +484,80 @@ export default function CourtDetailScreen({ route, navigation }) {
               }
             >
               <Ionicons
-                name="chatbubble-ellipses-outline"
+                name="chatbubble-ellipses"
                 size={18}
-                color="#fff"
+                color="#e5f3ff"
               />
-              <Text style={ui.checkInBtnText}>Open court chat</Text>
+              <Text style={ui.modernChatButtonText}>Open court chat</Text>
+              <Ionicons name="arrow-forward" size={16} color="#e5f3ff" />
             </TouchableOpacity>
           </View>
         </ScrollView>
       </View>
+
+      {/* ALL PLAYERS MODAL */}
+      <Modal
+        visible={showAllPlayers}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowAllPlayers(false)}
+      >
+        <View style={ui.modalBackdrop}>
+          <View style={ui.modalContainer}>
+            <View style={ui.modalHeader}>
+              <Text style={ui.modalTitle}>
+                All players ({playersHere.length})
+              </Text>
+              <TouchableOpacity onPress={() => setShowAllPlayers(false)}>
+                <Ionicons name="close" size={24} color="#e5e7eb" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={ui.modalPlayerList}
+            >
+              {playersHere.map((p) => {
+                const liveProfile = playerProfiles[p.id] || null;
+                const avatarUri =
+                  liveProfile?.profilePic || p.avatar || null;
+                const displayName =
+                  liveProfile?.username || p.name || "player";
+
+                return (
+                  <TouchableOpacity
+                    key={p.id}
+                    style={ui.modalPlayerRow}
+                    onPress={() => {
+                      setShowAllPlayers(false);
+                      navigation.navigate("UserProfile", { userId: p.id });
+                    }}
+                    activeOpacity={0.9}
+                  >
+                    <Image
+                      source={
+                        avatarUri
+                          ? { uri: avatarUri }
+                          : require("../images/defaultProfile.png")
+                      }
+                      style={ui.modalPlayerAvatar}
+                    />
+                    <View style={ui.modalPlayerInfo}>
+                      <Text style={ui.modalPlayerName}>{displayName}</Text>
+                      <Text style={ui.modalPlayerNote}>{p.note}</Text>
+                    </View>
+                    <Ionicons
+                      name="chevron-forward"
+                      size={20}
+                      color="#6b7280"
+                    />
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -635,70 +727,214 @@ const ui = {
   },
   checkInBtn: {
     marginTop: 14,
-    backgroundColor: "#1f6fb2",
+    backgroundColor: "#2563eb",
     borderRadius: 999,
-    paddingVertical: 11,
+    paddingVertical: 12,
     alignItems: "center",
     flexDirection: "row",
     justifyContent: "center",
     gap: 8,
+    shadowColor: "#2563eb",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
   },
   checkOutBtn: {
     backgroundColor: "#ef4444",
+    shadowColor: "#ef4444",
   },
   checkInBtnText: {
-    color: "#fff",
+    color: "#e5f3ff",
     fontSize: 15,
     fontWeight: "700",
   },
-  chatHintText: {
+  morePlayersPill: {
+    width: 96,
+    marginRight: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(37,99,235,0.1)",
+    borderRadius: 16,
+    paddingVertical: 18,
+    paddingHorizontal: 8,
+    borderWidth: 1,
+    borderColor: "rgba(96,165,250,0.4)",
+    borderStyle: "dashed",
+  },
+  morePlayersText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#60a5fa",
     marginTop: 4,
+    textAlign: "center",
+  },
+  chatHintText: {
     color: "#9ca3af",
-    fontSize: 12,
-    fontWeight: "400",
+    fontSize: 13,
+    textAlign: "center",
   },
   chatPreviewWrap: {
-    marginTop: 4,
+    marginTop: 8,
+  },
+  chatPreviewHeader: {
+    marginBottom: 6,
+  },
+  chatMetaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
   },
   chatMetaText: {
     color: "#9ca3af",
     fontSize: 11,
+    fontWeight: "500",
+  },
+  emptyMessageState: {
+    alignItems: "center",
+    paddingVertical: 20,
+    gap: 8,
+  },
+  messageBadge: {
+    backgroundColor: "#2563eb",
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    minWidth: 24,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  messageBadgeText: {
+    color: "#e5f3ff",
+    fontSize: 11,
+    fontWeight: "700",
   },
   chatBubble: {
     maxWidth: "100%",
-    borderRadius: 14,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    marginTop: 6,
+    borderRadius: 16,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
   },
   chatBubbleMine: {
     alignSelf: "flex-end",
-    backgroundColor: "#1f6fb2",
+    backgroundColor: "rgba(37,99,235,0.15)",
+    borderWidth: 1,
+    borderColor: "rgba(96,165,250,0.3)",
   },
   chatBubbleOther: {
     alignSelf: "flex-start",
-    backgroundColor: "#020617",
+    backgroundColor: "rgba(15,23,42,0.6)",
     borderWidth: 1,
-    borderColor: "rgba(148,163,184,0.5)",
+    borderColor: "rgba(148,163,184,0.4)",
   },
   chatUserMine: {
-    color: "#fff",
-    fontSize: 11,
+    color: "#93c5fd",
+    fontSize: 12,
     fontWeight: "700",
-    marginBottom: 2,
+    marginBottom: 3,
   },
   chatUserOther: {
-    color: "#e5f3ff",
-    fontSize: 11,
+    color: "#cbd5e1",
+    fontSize: 12,
     fontWeight: "700",
-    marginBottom: 2,
+    marginBottom: 3,
   },
   chatTextMine: {
-    color: "#e5f3ff",
-    fontSize: 13,
+    color: "#f1f5f9",
+    fontSize: 14,
+    lineHeight: 20,
   },
   chatTextOther: {
+    color: "#f1f5f9",
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  modernChatButton: {
+    marginTop: 12,
+    backgroundColor: "#2563eb",
+    borderRadius: 999,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 8,
+    shadowColor: "#2563eb",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  modernChatButtonText: {
     color: "#e5f3ff",
-    fontSize: 13,
+    fontSize: 15,
+    fontWeight: "700",
+    flex: 1,
+    textAlign: "center",
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(2,6,23,0.85)",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 20,
+  },
+  modalContainer: {
+    backgroundColor: "rgba(15,23,42,0.98)",
+    borderRadius: 20,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: "rgba(148,163,184,0.5)",
+    width: "100%",
+    maxHeight: "70%",
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(148,163,184,0.3)",
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: "#e5f3ff",
+  },
+  modalPlayerList: {
+    paddingTop: 8,
+  },
+  modalPlayerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    borderRadius: 12,
+    backgroundColor: "rgba(2,6,23,0.5)",
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: "rgba(148,163,184,0.3)",
+  },
+  modalPlayerAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 2,
+    borderColor: "#60a5fa",
+    marginRight: 12,
+  },
+  modalPlayerInfo: {
+    flex: 1,
+  },
+  modalPlayerName: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#e5f3ff",
+    marginBottom: 2,
+  },
+  modalPlayerNote: {
+    fontSize: 12,
+    color: "#9ca3af",
   },
 };
