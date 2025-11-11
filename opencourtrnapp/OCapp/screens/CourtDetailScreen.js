@@ -1,4 +1,5 @@
 // screens/CourtDetailScreen.js
+import markers from "../assets/markers"; // make sure this is imported at the top if not already
 import React, { useState, useEffect } from "react";
 import {
   View,
@@ -9,6 +10,7 @@ import {
   StatusBar,
   Platform,
   Modal,
+  Alert
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -23,6 +25,7 @@ import {
   query,
   orderBy,
   getDoc,
+  getDocs
 } from "firebase/firestore";
 
 export default function CourtDetailScreen({ route, navigation }) {
@@ -43,6 +46,9 @@ export default function CourtDetailScreen({ route, navigation }) {
   const [checkedIn, setCheckedIn] = useState(false);
   const [messages, setMessages] = useState([]);
   const [showAllPlayers, setShowAllPlayers] = useState(false);
+  const [showCheckInWarning, setShowCheckInWarning] = useState(false);
+  const [checkedInCourtName, setCheckedInCourtName] = useState("");
+  const [checkInLoading, setCheckInLoading] = useState(false);
 
   // format Firestore timestamp -> "4:33 PM"
   const renderTime = (ts) => {
@@ -205,33 +211,64 @@ export default function CourtDetailScreen({ route, navigation }) {
 
   // toggle check-in / check-out
   const handleCheckInToggle = async () => {
-    if (!user || !courtId) return;
+  if (!user || !courtId || checkInLoading) return;
+  setCheckInLoading(true);
 
-    const myCheckinRef = doc(db, "courts", courtId, "checkins", user.uid);
+  const myCheckinRef = doc(db, "courts", courtId, "checkins", user.uid);
 
-    if (!checkedIn) {
-      // check in
-      try {
-        await setDoc(myCheckinRef, {
-          username: myProfile.name || "player",
-          avatar:
-            myProfile.avatar ||
-            "https://i.pravatar.cc/100?img=68",
-          note: myProfile.note || "hooping now",
-          ts: serverTimestamp(),
-        });
-      } catch (err) {
-        console.warn("check-in failed", err);
+  if (!checkedIn) {
+    try {
+      // ✅ Check if user is already checked in elsewhere
+      let alreadyCourt = null;
+
+      for (const marker of markers) {
+        const otherCourtId = String(marker.id);
+        if (otherCourtId === courtId) continue;
+
+        const otherCheckinRef = doc(db, "courts", otherCourtId, "checkins", user.uid);
+        const otherSnap = await getDoc(otherCheckinRef);
+
+        if (otherSnap.exists()) {
+          alreadyCourt = marker.name || "another court";
+          break;
+        }
       }
-    } else {
-      // check out
-      try {
-        await deleteDoc(myCheckinRef);
-      } catch (err) {
-        console.warn("check-out failed", err);
+
+      if (alreadyCourt) {
+        Alert.alert(
+          "Already Checked In",
+          `You're already checked into ${alreadyCourt}.\nTo check in here, please check out of that court first.`,
+          [{ text: "OK", style: "cancel" }]
+        );
+        return;
       }
+
+      // ✅ Safe to check in
+      await setDoc(myCheckinRef, {
+        username: myProfile.name || "player",
+        avatar: myProfile.avatar || "https://i.pravatar.cc/100?img=68",
+        note: myProfile.note || "hooping now",
+        ts: serverTimestamp(),
+      });
+    } catch (err) {
+      console.warn("check-in failed", err);
+    } finally {
+      setCheckInLoading(false);
     }
-  };
+  } else {
+    // Check out
+    try {
+      await deleteDoc(myCheckinRef);
+    } catch (err) {
+      console.warn("check-out failed", err);
+    } finally {
+      setCheckInLoading(false);
+    }
+  }
+};
+
+
+
 
   const lastMessage =
     messages && messages.length > 0
@@ -412,9 +449,19 @@ export default function CourtDetailScreen({ route, navigation }) {
                 size={18}
                 color="#fff"
               />
-              <Text style={ui.checkInBtnText}>
-                {checkedIn ? "Check Out" : "Check In"}
-              </Text>
+              <Text style={[
+      ui.buttonText,
+      { color: "#ffffff", fontWeight: "700" }, // ✅ ensures text stays white
+    ]}>
+  {checkInLoading
+    ? checkedIn
+      ? "Checking out..."
+      : "Checking in..."
+    : checkedIn
+      ? "Check Out"
+      : "Check In"}
+</Text>
+
             </TouchableOpacity>
           </View>
 
@@ -558,6 +605,33 @@ export default function CourtDetailScreen({ route, navigation }) {
           </View>
         </View>
       </Modal>
+      {/* CHECK-IN WARNING MODAL */}
+<Modal
+  visible={showCheckInWarning}
+  transparent
+  animationType="fade"
+  onRequestClose={() => setShowCheckInWarning(false)}
+>
+  <View style={ui.modalBackdrop}>
+    <View style={ui.modalContainer}>
+      <Text style={ui.modalTitle}>Already Checked In</Text>
+      <Text style={{ color: "#e5e7eb", fontSize: 14, marginBottom: 16 }}>
+        You’re already checked into <Text style={{ fontWeight: "bold" }}>{checkedInCourtName}</Text>.
+        To check in here, please check out of that court first.
+      </Text>
+      <TouchableOpacity
+        style={[ui.modernChatButton, { backgroundColor: "#ef4444" }]}
+        onPress={() => setShowCheckInWarning(false)}
+      >
+        <Ionicons name="close" size={18} color="#fff" />
+        <Text style={[ui.modernChatButtonText, { color: "#fff" }]}>
+          OK
+        </Text>
+      </TouchableOpacity>
+    </View>
+  </View>
+</Modal>
+
     </SafeAreaView>
   );
 }

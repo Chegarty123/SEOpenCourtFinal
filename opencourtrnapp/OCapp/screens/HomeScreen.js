@@ -26,6 +26,7 @@ import {
 import markers from "../assets/markers";
 import { styles } from "../styles/globalStyles";
 import { useSafeAreaInsets } from "react-native-safe-area-context"; // 👈 NEW
+import { FontAwesome5 } from '@expo/vector-icons'; // for the walking icon
 
 // 🔵 OC logo (adjust path if needed)
 const OCLogo = require("../images/OCLogo.png");
@@ -45,6 +46,17 @@ function haversineDistanceKm(lat1, lon1, lat2, lon2) {
       Math.sin(dLon / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
+}
+
+// Convert kilometers to miles
+function kmToMiles(km) {
+  return km * 0.621371;
+}
+
+// Estimate walking time (minutes) assuming 5 km/h
+function walkingTimeMinutes(km) {
+  if (!km || km <= 0) return 0;
+  return Math.round((km / 5) * 60);
 }
 
 // time-of-day greeting
@@ -632,17 +644,34 @@ export default function HomeScreen({ navigation }) {
               </Text>
             </>
           )}
-          {distanceLabel && (
-            <Text
-              style={{
-                marginLeft: amICheckedIn ? 8 : 0,
-                fontSize: 10,
-                color: "#94a3b8",
-              }}
-            >
-              {distanceLabel}
-            </Text>
-          )}
+          {distanceKm != null && (
+  <View style={{ flexDirection: "row", alignItems: "center", marginLeft: amICheckedIn ? 8 : 0 }}>
+    <Text
+      style={{
+        fontSize: 10,
+        color: "#94a3b8",
+      }}
+    >
+      {kmToMiles(distanceKm).toFixed(1)} mi
+    </Text>
+
+    <FontAwesome5
+      name="walking"
+      size={10}
+      color="#94a3b8"
+      style={{ marginLeft: 6, marginRight: 3 }}
+    />
+
+    <Text
+      style={{
+        fontSize: 10,
+        color: "#94a3b8",
+      }}
+    >
+      {walkingTimeMinutes(distanceKm)} min
+    </Text>
+  </View>
+)}
         </View>
       </TouchableOpacity>
     );
