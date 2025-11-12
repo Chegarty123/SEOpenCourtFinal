@@ -11,7 +11,7 @@ import {
   Modal,
 } from "react-native";
 import * as Location from "expo-location";
-import MapView, { Marker } from "react-native-maps";
+import MapView, { Marker, Callout } from "react-native-maps";
 import { Ionicons } from "@expo/vector-icons";
 import markers from "../assets/markers";
 import { styles } from "../styles/globalStyles";
@@ -197,20 +197,46 @@ export default function MapScreen({ navigation }) {
           {markers.map((marker) => (
             <Marker
               key={marker.id}
-              title={marker.name}
               coordinate={marker.coordinates}
               onPress={() => flyTo(marker.coordinates, mapRef)}
-            />
+            >
+            <Callout tooltip>
+            <View style={{
+              backgroundColor: "#0b1221",
+              borderRadius: 10,
+              borderWidth: 1,
+              borderColor: "#93c5fd",
+              padding: 8,
+            }}>
+          <Text style={{ color: "#ffffff", fontWeight: "600" }}>
+          {marker.name}
+      </Text>
+    </View>
+  </Callout>
+</Marker>
           ))}
 
           {/* User location marker */}
           {userLocation && (
             <Marker
-              coordinate={userLocation}
-              title="You"
-              pinColor="dodgerblue"
-              onPress={() => flyTo(userLocation, mapRef)}
-            />
+            coordinate={userLocation}
+            pinColor="dodgerblue"
+            onPress={() => flyTo(userLocation, mapRef)}
+            >
+            <Callout tooltip>
+            <View style={{
+              backgroundColor: "#0b1221",
+              borderRadius: 10,
+              borderWidth: 1,
+              borderColor: "#93c5fd",
+              padding: 8,
+            }}>
+      <Text style={{ color: "#ffffff", fontWeight: "600" }}>
+        You
+      </Text>
+    </View>
+  </Callout>
+</Marker>
           )}
         </MapView>
 
@@ -295,20 +321,46 @@ export default function MapScreen({ navigation }) {
           >
             {markers.map((marker) => (
               <Marker
-                key={marker.id}
-                title={marker.name}
-                coordinate={marker.coordinates}
-                onPress={() => flyTo(marker.coordinates, fullscreenMapRef)}
-              />
+              key={marker.id}
+              coordinate={marker.coordinates}
+              onPress={() => flyTo(marker.coordinates, mapRef)}
+              >
+              <Callout tooltip>
+              <View style={{
+                backgroundColor: "#0b1221",
+                borderRadius: 10,
+                borderWidth: 1,
+                borderColor: "#93c5fd",
+                padding: 8,
+              }}>
+      <Text style={{ color: "#ffffff", fontWeight: "600" }}>
+        {marker.name}
+      </Text>
+    </View>
+  </Callout>
+</Marker>
             ))}
 
             {userLocation && (
               <Marker
-                coordinate={userLocation}
-                title="You"
-                pinColor="dodgerblue"
-                onPress={() => flyTo(userLocation, fullscreenMapRef)}
-              />
+              coordinate={userLocation}
+              pinColor="dodgerblue"
+              onPress={() => flyTo(userLocation, mapRef)}
+              >
+              <Callout tooltip>
+              <View style={{
+                backgroundColor: "#0b1221",
+                borderRadius: 10,
+                borderWidth: 1,
+                borderColor: "#93c5fd",
+                padding: 8,
+              }}>
+      <Text style={{ color: "#ffffff", fontWeight: "600" }}>
+        You
+      </Text>
+    </View>
+  </Callout>
+</Marker>
             )}
           </MapView>
 
