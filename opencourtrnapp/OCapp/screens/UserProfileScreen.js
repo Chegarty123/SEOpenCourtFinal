@@ -50,6 +50,21 @@ export default function UserProfileScreen({ route, navigation }) {
   const [outgoingRequests, setOutgoingRequests] = useState([]);
   const [myProfile, setMyProfile] = useState(null);
 
+  const [badgeModalVisible, setBadgeModalVisible] = useState(false);
+  const badgeDescriptions = {
+  "Rookie": "Awarded for a user's first court check-in.",
+  // "MVP": "Awarded for being voted MVP in a run.",
+  // "Sniper": "Awarded for being voted the best shooter in a run.",
+  "Co-Founder": "Verified Co-Founder of OpenCourt",
+  "Alpha": "OG Alpha Tester for OpenCourt"
+};
+const BADGE_IMAGES = {
+  "Co-Founder": require("../assets/co-founder.png"),
+  "Alpha": require("../assets/alpha.png"),
+  "Rookie": require("../assets/rookie.png"),
+};
+
+
   useEffect(() => {
     if (!userId) {
       setLoading(false);
@@ -472,7 +487,14 @@ export default function UserProfileScreen({ route, navigation }) {
           />
         </TouchableOpacity>
 
-        <Text style={ui.username}>{profile.username || "Hooper"}</Text>
+        <View style={{ flexDirection: "row", alignItems: "center" }}>
+  <Text style={ui.username}>{profile.username || "Hooper"}</Text>
+  {profile.selectedBadge && (
+    <TouchableOpacity onPress={() => setBadgeModalVisible(true)}>
+      <Image source={BADGE_IMAGES[profile.selectedBadge]} style={{ width: 26, height: 26, marginLeft: 6, marginTop: 10}} />
+    </TouchableOpacity>
+  )}
+</View>
 
         {/* BIO */}
         <Text style={ui.bioText}>
@@ -720,6 +742,23 @@ export default function UserProfileScreen({ route, navigation }) {
           </View>
         </View>
       </Modal>
+      <Modal visible={badgeModalVisible} transparent animationType="fade">
+  <View style={ui.modalBackdrop}>
+    <View style={ui.modalContent}>
+      <Text style={ui.modalTitle}>{profile.selectedBadge}</Text>
+      <Image
+  source={BADGE_IMAGES[profile.selectedBadge]}
+  style={{ width: 48, height: 48, marginVertical: 12 }}
+/>
+      <Text style={ui.modalDescription}>
+        {badgeDescriptions[profile.selectedBadge] || "No description available."}
+      </Text>
+      <TouchableOpacity onPress={() => setBadgeModalVisible(false)}>
+        <Text style={ui.modalCloseText}>Close</Text>
+      </TouchableOpacity>
+    </View>
+  </View>
+</Modal>
     </View>
   );
 }
@@ -1075,4 +1114,6 @@ const ui = StyleSheet.create({
     color: "#9ca3af",
     marginTop: 2,
   },
+  modalDescription: { fontSize: 13, color: "#e5e7eb", marginTop: 8, textAlign: "center" },
+modalCloseText: { fontSize: 14, color: "#60a5fa", marginTop: 12, fontWeight: "600" },
 });

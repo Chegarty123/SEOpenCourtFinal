@@ -11,6 +11,7 @@ import {
   Platform,
   StyleSheet,
   TextInput,
+  Modal
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as ImagePicker from "expo-image-picker";
@@ -42,6 +43,10 @@ export default function ProfileScreen({ navigation }) {
 
   const [hasMediaPermission, setHasMediaPermission] = useState(null);
 
+  const [badges, setBadges] = useState([]);
+  const [selectedBadge, setSelectedBadge] = useState(null);
+
+
   const POSITION_OPTIONS = [
     "Point Guard",
     "Shooting Guard",
@@ -51,6 +56,19 @@ export default function ProfileScreen({ navigation }) {
   ];
 
   const GRADE_OPTIONS = ["Freshman", "Sophomore", "Junior", "Senior", "Other"];
+
+  const BADGE_IMAGES = {
+  "Co-Founder": require("../assets/co-founder.png"),
+  "Alpha": require("../assets/alpha.png"),
+  "Rookie": require("../assets/rookie.png"),
+};
+const [badgeModalVisible, setBadgeModalVisible] = useState(false);
+  const badgeDescriptions = {
+  "Rookie": "Awarded for a user's first court check-in.",
+  // "MVP": "Awarded for being voted MVP in a run.",
+  // "Sniper": "Awarded for being voted the best shooter in a run.",
+  "Co-Founder": "Verified Co-Founder of OpenCourt",
+  "Alpha": "OG Alpha Tester for OpenCourt"}
 
   // Team logos now imported from centralized utility
 
@@ -109,6 +127,21 @@ export default function ProfileScreen({ navigation }) {
           setMemberSince(data.memberSince || memberSince);
           setBio(data.bio || "");
           setBioCharsLeft(BIO_MAX_LENGTH - (data.bio?.length || 0));
+          const earnedBadges = data.badges || [];
+const joinDate = new Date(data.memberSince || memberSince);
+
+if (joinDate <= new Date("2025-10-12") && !earnedBadges.includes("Co-Founder")) {
+  earnedBadges.push("Co-Founder");
+}
+if (joinDate <= new Date("2025-11-12") && !earnedBadges.includes("Alpha")) {
+  earnedBadges.push("Alpha");
+}
+
+setBadges(earnedBadges);
+setSelectedBadge(data.selectedBadge || null);
+
+// Save back if new badges added
+await setDoc(userDocRef, { badges: earnedBadges }, { merge: true }); 
         } else {
           const payload = {
             username,
@@ -123,6 +156,24 @@ export default function ProfileScreen({ navigation }) {
           };
           await setDoc(userDocRef, payload);
         }
+        const earnedBadges = data.badges || [];
+const joinDate = new Date(data.memberSince || memberSince);
+
+// Co-Founder badge
+if (joinDate <= new Date("2025-09-12") && !earnedBadges.includes("Co-Founder")) {
+  earnedBadges.push("Co-Founder");
+}
+
+// Alpha badge
+if (joinDate <= new Date("2025-11-12") && !earnedBadges.includes("Alpha")) {
+  earnedBadges.push("Alpha");
+}
+
+setBadges(earnedBadges);
+setSelectedBadge(data.selectedBadge || null);
+
+// Save back to Firestore if new badges were added
+await setDoc(userDocRef, { badges: earnedBadges }, { merge: true });
         setSaveStatus("All changes saved");
       } catch (err) {
         console.log("Error loading profile:", err);
@@ -157,6 +208,8 @@ export default function ProfileScreen({ navigation }) {
           favoriteTeam,
           memberSince,
           bio,
+          badges,
+          selectedBadge
         };
         await setDoc(userDocRef, payload, { merge: true });
         setSaveStatus("All changes saved");
@@ -314,8 +367,17 @@ export default function ProfileScreen({ navigation }) {
               </View>
             </TouchableOpacity>
 
-            <View style={styles.playerTextArea}>
-              <Text style={styles.usernameText}>{displayName}</Text>
+            <View style={styles.playerTextArea}> 
+              
+<View style={{ flexDirection: "row", alignItems: "center" }}>
+  <Text style={styles.usernameText}>{displayName}</Text>
+  {selectedBadge && (
+    <TouchableOpacity onPress={() => setBadgeModalVisible(true)}>
+          <Image source={BADGE_IMAGES[selectedBadge]} style={{ width: 24, height: 24, marginLeft: 6}} />
+        </TouchableOpacity>
+  )}
+</View>
+
               {bio ? <Text style={styles.bioPreview}>{bio}</Text> : null}
               <Text style={styles.taglineText}>{tagline || "Tap tags below to update your profile"}</Text>
               {memberSince ? <Text style={styles.memberSinceText}>Member since {memberSince}</Text> : null}
@@ -463,6 +525,37 @@ export default function ProfileScreen({ navigation }) {
           )}
         </View>
 
+        {/* BADGES CARD */}
+<View style={styles.card}>
+  <View style={styles.cardHeaderRow}>
+    <Text style={styles.cardTitle}>Badges Earned</Text>
+    <Text style={styles.cardSubtitle}>Select a badge to display on your profile.</Text>
+  </View>
+  {badges.length === 0 ? (
+    <Text style={styles.emptyText}>No badges earned. Earn badges by hooping and unlocking achievements.</Text>
+  ) : (
+    <View style={styles.badgeGrid}>
+      {badges.map(badge => (
+        <TouchableOpacity
+          key={badge}
+          style={[styles.badgeItem, selectedBadge === badge && styles.badgeSelected]}
+          onPress={async () => {
+            setSelectedBadge(badge);
+            await setDoc(doc(db, "users", user.uid), { selectedBadge: badge }, { merge: true });
+          }}
+        >
+          <Image
+  source={BADGE_IMAGES[badge]}
+  style={styles.badgeImage}
+/>
+
+          <Text style={styles.badgeText}>{badge}</Text>
+        </TouchableOpacity>
+      ))}
+    </View>
+  )}
+</View>
+
         {/* ACCOUNT CARD */}
         <View style={[styles.card, { marginBottom: 24 }]}>
           <Text style={styles.fieldLabel}>Account</Text>
@@ -473,6 +566,23 @@ export default function ProfileScreen({ navigation }) {
           </TouchableOpacity>
         </View>
 
+<Modal visible={badgeModalVisible} transparent animationType="fade">
+  <View style={styles.modalBackdrop}>
+    <View style={styles.modalContent}>
+      <Text style={styles.modalTitle}>{selectedBadge}</Text>
+      <Image
+  source={BADGE_IMAGES[selectedBadge]}
+  style={{ width: 48, height: 48, marginVertical: 12 }}
+/>
+      <Text style={styles.modalDescription}>
+        {badgeDescriptions[selectedBadge] || "No description available."}
+      </Text>
+      <TouchableOpacity onPress={() => setBadgeModalVisible(false)}>
+        <Text style={styles.modalCloseText}>Close</Text>
+      </TouchableOpacity>
+    </View>
+  </View>
+</Modal>
       </ScrollView>
     </SafeAreaView>
   );
@@ -523,4 +633,109 @@ const styles = StyleSheet.create({
   nameInput: { backgroundColor: "rgba(15,23,42,0.9)", borderRadius: 16, borderWidth: 1, borderColor: "rgba(148,163,184,0.6)", padding: 12, color: "#e5f3ff", fontSize: 14 },
   bioInput: { backgroundColor: "rgba(15,23,42,0.9)", borderRadius: 16, borderWidth: 1, borderColor: "rgba(148,163,184,0.6)", padding: 10, color: "#e5f3ff", fontSize: 13, textAlignVertical: "center" },
   bioCharCount: { fontSize: 11, color: "#9ca3af", marginTop: 4, textAlign: "right" },
+  
+badgeGrid: {
+  flexDirection: "row",
+  flexWrap: "wrap",
+  marginTop: 8,
+  justifyContent: "flex-start",
+},
+badgeItem: {
+  width: "22%", // fits 4 per row
+  alignItems: "center",
+  marginBottom: 12,
+},
+badgeImage: {
+  width: 40, // smaller size
+  height: 40,
+  marginBottom: 4,
+},
+
+badgeSelected: { borderColor: "#38bdf8", backgroundColor: "rgba(37,99,235,0.22)" },
+
+badgeText: {
+  fontSize: 12,
+  color: "#e5e7eb",
+  textAlign: "center",
+},
+emptyText: { fontSize: 13, color: "#9ca3af", marginTop: 4 },
+
+modalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(15,23,42,0.8)",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 24,
+  },
+  modalImageWrapper: {
+    width: "100%",
+    maxWidth: 360,
+    backgroundColor: "#020617",
+    borderRadius: 16,
+    padding: 16,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "rgba(148,163,184,0.8)",
+  },
+  modalImage: {
+    width: "100%",
+    height: 260,
+    borderRadius: 12,
+    resizeMode: "cover",
+    
+  },
+  modalClose: {
+    position: "absolute",
+    top: 50,
+    right: 30,
+  },
+  modalContent: {
+    width: "100%",
+    maxWidth: 420,
+    maxHeight: "75%",
+    backgroundColor: "#020617",
+    borderRadius: 18,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "rgba(148,163,184,0.9)",
+  },
+  modalHeaderRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#e5f3ff",
+  },
+  modalSeparator: {
+    height: 1,
+    backgroundColor: "rgba(15,23,42,0.9)",
+    marginVertical: 8,
+  },
+  modalFriendRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 6,
+  },
+  modalFriendAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginRight: 10,
+  },
+  modalFriendName: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#e5e7eb",
+  },
+  modalFriendMeta: {
+    fontSize: 12,
+    color: "#9ca3af",
+    marginTop: 2,
+  },
+  modalDescription: { fontSize: 13, color: "#e5e7eb", marginTop: 8, textAlign: "center" },
+modalCloseText: { fontSize: 14, color: "#60a5fa", marginTop: 12, fontWeight: "600" },
 });

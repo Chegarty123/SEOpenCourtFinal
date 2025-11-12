@@ -250,6 +250,18 @@ export default function CourtDetailScreen({ route, navigation }) {
         note: myProfile.note || "hooping now",
         ts: serverTimestamp(),
       });
+      
+// ✅ Award Rookie badge if first check-in
+    const userRef = doc(db, "users", user.uid);
+    const userSnap = await getDoc(userRef);
+    if (userSnap.exists()) {
+      const data = userSnap.data();
+      const earnedBadges = data.badges || [];
+      if (!earnedBadges.includes("Rookie")) {
+        earnedBadges.push("Rookie");
+        await setDoc(userRef, { badges: earnedBadges }, { merge: true });
+      }
+    }
     } catch (err) {
       console.warn("check-in failed", err);
     } finally {
