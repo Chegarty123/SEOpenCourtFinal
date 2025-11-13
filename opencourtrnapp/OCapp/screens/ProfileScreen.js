@@ -1,5 +1,5 @@
 // screens/ProfileScreen.js
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -14,6 +14,7 @@ import {
   Modal
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useFocusEffect } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { auth, db, storage } from "../firebaseConfig";
@@ -25,6 +26,7 @@ import { NBA_TEAM_LOGOS } from "../utils/profileUtils";
 
 export default function ProfileScreen({ navigation }) {
   const user = auth.currentUser;
+  const scrollViewRef = useRef(null);
 
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -47,6 +49,7 @@ export default function ProfileScreen({ navigation }) {
   const [badges, setBadges] = useState([]);
   const [selectedBadge, setSelectedBadge] = useState(null);
   const [isEditMode, setIsEditMode] = useState(false);
+  const [friendsCount, setFriendsCount] = useState(0);
 
 
   const POSITION_OPTIONS = [
@@ -73,6 +76,13 @@ const [badgeModalVisible, setBadgeModalVisible] = useState(false);
   "Alpha": "OG Alpha Tester for OpenCourt"}
 
   // Team logos now imported from centralized utility
+
+  // Reset scroll position when screen comes into focus
+  useFocusEffect(
+    React.useCallback(() => {
+      scrollViewRef.current?.scrollTo({ y: 0, animated: false });
+    }, [])
+  );
 
   // Media permission
   useEffect(() => {
@@ -129,6 +139,11 @@ const [badgeModalVisible, setBadgeModalVisible] = useState(false);
           setMemberSince(data.memberSince || memberSince);
           setBio(data.bio || "");
           setBioCharsLeft(BIO_MAX_LENGTH - (data.bio?.length || 0));
+
+          // Get friends count
+          const friends = data.friends || [];
+          setFriendsCount(friends.length);
+
           const earnedBadges = data.badges || [];
 const joinDate = new Date(data.memberSince || memberSince);
 
@@ -337,6 +352,7 @@ await setDoc(userDocRef, { badges: earnedBadges }, { merge: true });
       <View pointerEvents="none" style={styles.blobTop} />
       <View pointerEvents="none" style={styles.blobBottom} />
       <ScrollView
+        ref={scrollViewRef}
         showsVerticalScrollIndicator={false}
         style={{ flex: 1 }}
         contentContainerStyle={[
@@ -394,7 +410,7 @@ await setDoc(userDocRef, { badges: earnedBadges }, { merge: true });
             {/* Stats Row */}
             <View style={styles.statsRow}>
               <View style={styles.statItem}>
-                <Text style={styles.statNumber}>0</Text>
+                <Text style={styles.statNumber}>{friendsCount}</Text>
                 <Text style={styles.statLabel}>Friends</Text>
               </View>
               <View style={[styles.statItem, { marginHorizontal: 40 }]}>
