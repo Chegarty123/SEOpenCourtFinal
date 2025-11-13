@@ -16,7 +16,9 @@ import {
   StatusBar,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useIsFocused } from "@react-navigation/native";
 import { auth, db } from "../firebaseConfig";
+import { useNavigationContext } from "../contexts/NavigationContext";
 import {
   collection,
   doc,
@@ -25,6 +27,7 @@ import {
   serverTimestamp,
   updateDoc,
   deleteDoc,
+  setDoc,
 } from "firebase/firestore";
 import { searchGifs, REACTION_EMOJIS } from "../services/gifService";
 import { formatTime, formatDateLabel, getDateKey } from "../utils/dateUtils";
@@ -41,6 +44,8 @@ const BADGE_IMAGES = {
 export default function CourtChatScreen({ route, navigation }) {
   const { courtId, courtName, courtAddress, courtImage } = route.params || {};
   const user = auth.currentUser;
+  const isFocused = useIsFocused();
+  const { setCurrentCourtId } = useNavigationContext();
 
   const [myProfile, setMyProfile] = useState({
     uid: user?.uid || "me",
@@ -115,6 +120,15 @@ export default function CourtChatScreen({ route, navigation }) {
     initialScrollDoneRef.current = false;
     setInitialRenderDone(false);
   }, [courtId]);
+
+  // Track when user is viewing this court for notification suppression
+  useEffect(() => {
+    if (isFocused && courtId) {
+      setCurrentCourtId(courtId);
+    } else if (!isFocused) {
+      setCurrentCourtId(null);
+    }
+  }, [isFocused, courtId, setCurrentCourtId]);
 
   // Time and date formatting now handled by imported utilities
 
@@ -196,6 +210,35 @@ export default function CourtChatScreen({ route, navigation }) {
     setTypingStatus(text.length > 0);
   };
 
+  // Update court metadata for notifications
+  const updateCourtMeta = async (messageType, textForPreview) => {
+    if (!courtId || !user) return;
+    try {
+      const courtRef = doc(db, "courts", courtId);
+      const courtSnap = await getDoc(courtRef);
+      const currentParticipants = courtSnap.exists() ? (courtSnap.data().participants || []) : [];
+
+      // Add current user to participants if not already there
+      const updatedParticipants = currentParticipants.includes(user.uid)
+        ? currentParticipants
+        : [...currentParticipants, user.uid];
+
+      const preview = messageType === "gif" ? "[GIF]" : (textForPreview || "").slice(0, 300);
+
+      await setDoc(courtRef, {
+        name: courtName || "Court Chat",
+        lastMessage: preview,
+        lastMessageType: messageType,
+        lastMessageSenderId: user.uid,
+        lastMessageSenderName: myProfile.name,
+        updatedAt: serverTimestamp(),
+        participants: updatedParticipants,
+      }, { merge: true });
+    } catch (err) {
+      console.log("Error updating court metadata:", err);
+    }
+  };
+
   // Send text message
   const handleSend = async () => {
     if (!draftMessage.trim() || !courtId || !user) return;
@@ -226,9 +269,9 @@ export default function CourtChatScreen({ route, navigation }) {
       await addDoc(msgsRef, messageObj);
       setDraftMessage("");
       setTypingStatus(false);
-      setReplyingTo
-(null);
+      setReplyingTo(null);
       scrollToBottom();
+      await updateCourtMeta("text", draftMessage.trim());
     } catch (err) {
       console.log("Error sending message:", err);
     }
@@ -267,6 +310,7 @@ export default function CourtChatScreen({ route, navigation }) {
       setGifResults([]);
       setReplyingTo(null);
       scrollToBottom();
+      await updateCourtMeta("gif", "");
     } catch (err) {
       console.log("Error sending GIF message:", err);
     }
@@ -335,6 +379,40 @@ export default function CourtChatScreen({ route, navigation }) {
       } else {
         // Add new reaction
         updatedReactions[emoji] = [...currentUsers, user.uid];
+
+        // Create notification if reacting to someone else's message
+        if (data.userId && data.userId !== user.uid) {
+          try {
+            // Fetch reactor's profile pic
+            let reactorProfilePic = null;
+            try {
+              const reactorSnap = await getDoc(doc(db, "users", user.uid));
+              if (reactorSnap.exists()) {
+                reactorProfilePic = reactorSnap.data().profilePic || null;
+              }
+            } catch (err) {
+              console.log("Error fetching reactor profile pic:", err);
+            }
+
+            const notificationRef = collection(db, "users", data.userId, "notifications");
+            await addDoc(notificationRef, {
+              type: "reaction",
+              emoji,
+              reactorId: user.uid,
+              reactorName: myProfile.name,
+              reactorProfilePic,
+              messageId: msgId,
+              messagePreview: data.text?.slice(0, 50) || (data.gifUrl ? "[GIF]" : ""),
+              chatType: "court",
+              chatId: courtId,
+              courtName: courtName || "Court Chat",
+              timestamp: serverTimestamp(),
+              read: false,
+            });
+          } catch (notifErr) {
+            console.log("Error creating reaction notification:", notifErr);
+          }
+        }
       }
 
       await updateDoc(msgRef, { reactions: updatedReactions });

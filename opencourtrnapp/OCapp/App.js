@@ -3,6 +3,8 @@ import React from "react";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { StatusBar } from "expo-status-bar";
+import { NavigationProvider } from "./contexts/NavigationContext";
+import NotificationBanner from "./components/NotificationBanner";
 
 // screens
 import SplashScreen from "./screens/SplashScreen";
@@ -22,9 +24,10 @@ const Stack = createNativeStackNavigator();
 
 export default function App() {
   return (
-    <NavigationContainer>
-      <StatusBar style="light" />
-      <Stack.Navigator
+    <NavigationProvider>
+      <NavigationContainer>
+        <StatusBar style="light" />
+        <Stack.Navigator
         initialRouteName="Splash"
         screenOptions={{
           headerShown: false,
@@ -72,6 +75,8 @@ export default function App() {
         <Stack.Screen name="DirectMessage" component={DmChatScreen} />
         <Stack.Screen name="GroupChatSettings" component={GroupChatSettingsScreen} />
       </Stack.Navigator>
-    </NavigationContainer>
+      <NotificationBanner />
+      </NavigationContainer>
+    </NavigationProvider>
   );
 }

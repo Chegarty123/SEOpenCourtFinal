@@ -19,7 +19,8 @@ import SettingsScreen from "./SettingsScreen"; // Friends
 import MessagesScreen from "./MessagesScreen";
 
 import { auth, db } from "../firebaseConfig";
-import { collection, onSnapshot, doc } from "firebase/firestore";
+import { collection, onSnapshot, doc, query, where, updateDoc, deleteDoc } from "firebase/firestore";
+import { useNavigationContext } from "../contexts/NavigationContext";
 
 const Tab = createBottomTabNavigator();
 
@@ -133,15 +134,26 @@ function FriendsTabIcon({ color, size }) {
 /* ----------------- MainTabs with DM Notification Banner ----------------- */
 
 export default function MainTabs({ navigation }) {
-  const [dmBanner, setDmBanner] = useState(null); // { fromName, textPreview, conversationId, otherUserId, otherProfilePic }
+  const { currentConversationId, currentCourtId } = useNavigationContext();
+  const [dmBanner, setDmBanner] = useState(null); // { type, fromName, textPreview, conversationId, courtId, otherUserId, otherProfilePic, isGroup, groupTitle, courtName }
   const bannerAnim = useRef(new Animated.Value(-40)).current;
   const hideTimeoutRef = useRef(null);
 
   const lastConvTimestampsRef = useRef({}); // convId -> last updatedAt ms
   const initialLoadedRef = useRef(false);
+  const lastCourtTimestampsRef = useRef({}); // courtId -> last updatedAt ms
+  const courtInitialLoadedRef = useRef(false);
 
   // Helper to show banner
   const showDmBanner = (payload) => {
+    // Don't show notification if user is currently in that chat
+    if (payload.type === "dm" && payload.conversationId === currentConversationId) {
+      return;
+    }
+    if (payload.type === "court" && payload.courtId === currentCourtId) {
+      return;
+    }
+
     // Clear any previous timer
     if (hideTimeoutRef.current) {
       clearTimeout(hideTimeoutRef.current);
@@ -178,19 +190,30 @@ export default function MainTabs({ navigation }) {
     if (!dmBanner) return;
     hideDmBanner();
 
-    const isGroup = !!dmBanner.isGroup;
-    const title = isGroup
-      ? dmBanner.groupTitle || dmBanner.fromName || "Group chat"
-      : dmBanner.fromName;
+    if (dmBanner.type === "court") {
+      // Navigate to court chat
+      navigation.navigate("CourtChat", {
+        courtId: dmBanner.courtId,
+        courtName: dmBanner.courtName,
+        courtAddress: dmBanner.courtAddress || "",
+        courtImage: dmBanner.courtImage || null,
+      });
+    } else {
+      // Navigate to DM
+      const isGroup = !!dmBanner.isGroup;
+      const title = isGroup
+        ? dmBanner.groupTitle || dmBanner.fromName || "Group chat"
+        : dmBanner.fromName;
 
-    navigation.navigate("DirectMessage", {
-      conversationId: dmBanner.conversationId,
-      otherUserId: isGroup ? null : dmBanner.otherUserId,
-      otherUsername: isGroup ? null : dmBanner.fromName,
-      otherProfilePic: isGroup ? null : dmBanner.otherProfilePic || null,
-      isGroup,
-      title,
-    });
+      navigation.navigate("DirectMessage", {
+        conversationId: dmBanner.conversationId,
+        otherUserId: isGroup ? null : dmBanner.otherUserId,
+        otherUsername: isGroup ? null : dmBanner.fromName,
+        otherProfilePic: isGroup ? null : dmBanner.otherProfilePic || null,
+        isGroup,
+        title,
+      });
+    }
   };
 
 
@@ -276,6 +299,7 @@ export default function MainTabs({ navigation }) {
         if (!textPreview) textPreview = "New message";
 
         showDmBanner({
+          type: "dm",
           fromName,
           textPreview,
           conversationId: d.id,
@@ -295,6 +319,134 @@ export default function MainTabs({ navigation }) {
         clearTimeout(hideTimeoutRef.current);
       }
     };
+  }, []);
+
+  // Listen globally to courts for *new* messages
+  useEffect(() => {
+    const user = auth.currentUser;
+    if (!user) return;
+
+    const courtsRef = collection(db, "courts");
+    const q = query(courtsRef, where("participants", "array-contains", user.uid));
+
+    const unsub = onSnapshot(q, (snap) => {
+      const currentUser = auth.currentUser;
+      if (!currentUser) return;
+
+      // First snapshot: seed timestamps
+      if (!courtInitialLoadedRef.current) {
+        const base = {};
+        snap.forEach((d) => {
+          const data = d.data();
+          const ts = data.updatedAt;
+          if (ts && typeof ts.toMillis === "function") {
+            base[d.id] = ts.toMillis();
+          }
+        });
+        lastCourtTimestampsRef.current = base;
+        courtInitialLoadedRef.current = true;
+        return;
+      }
+
+      // Subsequent updates: look at docChanges for new messages
+      snap.docChanges().forEach((change) => {
+        if (change.type !== "added" && change.type !== "modified") return;
+
+        const d = change.doc;
+        const data = d.data();
+
+        const ts = data.updatedAt;
+        if (!ts || typeof ts.toMillis !== "function") return;
+        const updatedMs = ts.toMillis();
+
+        const prevMs = lastCourtTimestampsRef.current[d.id] || 0;
+        lastCourtTimestampsRef.current[d.id] = updatedMs;
+
+        if (updatedMs <= prevMs) return;
+
+        const lastSender = data.lastMessageSenderId;
+        if (!lastSender || lastSender === currentUser.uid) {
+          return; // ignore own messages
+        }
+
+        const senderName = data.lastMessageSenderName || "Player";
+        const courtName = data.name || "Court Chat";
+
+        let textPreview = data.lastMessage || "";
+        if (!textPreview && data.lastMessageType === "gif") {
+          textPreview = "GIF";
+        }
+        if (!textPreview) textPreview = "New message";
+
+        showDmBanner({
+          type: "court",
+          fromName: senderName,
+          textPreview,
+          courtId: d.id,
+          courtName,
+          courtAddress: data.address || "",
+          courtImage: data.image || null,
+        });
+      });
+    });
+
+    return () => unsub();
+  }, []);
+
+  // Listen for reaction notifications
+  useEffect(() => {
+    const user = auth.currentUser;
+    if (!user) return;
+
+    const notifRef = collection(db, "users", user.uid, "notifications");
+    const q = query(notifRef, where("read", "==", false));
+
+    const unsub = onSnapshot(q, async (snap) => {
+      snap.docChanges().forEach(async (change) => {
+        if (change.type !== "added") return;
+
+        const d = change.doc;
+        const data = d.data();
+
+        if (data.type !== "reaction") return;
+
+        // Build notification message
+        const chatLocation = data.chatType === "court"
+          ? ` in ${data.courtName}`
+          : data.isGroup
+          ? ` in ${data.chatName}`
+          : "";
+
+        showDmBanner({
+          type: "reaction",
+          fromName: data.reactorName,
+          textPreview: `${data.emoji} ${data.messagePreview}`,
+          conversationId: data.chatType === "dm" ? data.chatId : null,
+          courtId: data.chatType === "court" ? data.chatId : null,
+          courtName: data.chatType === "court" ? data.courtName : null,
+          isGroup: data.isGroup || false,
+          groupTitle: data.chatName || null,
+          emoji: data.emoji,
+          chatLocation,
+        });
+
+        // Mark as read and delete after showing
+        try {
+          await updateDoc(doc(db, "users", user.uid, "notifications", d.id), { read: true });
+          // Auto-delete old notifications (older than 7 days)
+          if (data.timestamp && typeof data.timestamp.toMillis === "function") {
+            const age = Date.now() - data.timestamp.toMillis();
+            if (age > 7 * 24 * 60 * 60 * 1000) {
+              await deleteDoc(doc(db, "users", user.uid, "notifications", d.id));
+            }
+          }
+        } catch (err) {
+          console.log("Error updating notification:", err);
+        }
+      });
+    });
+
+    return () => unsub();
   }, []);
 
   return (
@@ -382,7 +534,13 @@ export default function MainTabs({ navigation }) {
             </View>
             <View style={{ flex: 1, marginLeft: 10 }}>
               <Text style={styles.dmBannerTitle}>
-                Message from {dmBanner.fromName}
+                {dmBanner.type === "reaction"
+                  ? `${dmBanner.fromName} reacted${dmBanner.chatLocation || ""}`
+                  : dmBanner.type === "court"
+                  ? `${dmBanner.fromName} in ${dmBanner.courtName}`
+                  : dmBanner.isGroup
+                  ? `${dmBanner.fromName} in ${dmBanner.groupTitle}`
+                  : `Message from ${dmBanner.fromName}`}
               </Text>
               <Text
                 style={styles.dmBannerPreview}

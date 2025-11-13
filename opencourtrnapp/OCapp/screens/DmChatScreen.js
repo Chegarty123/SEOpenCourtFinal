@@ -16,7 +16,9 @@ import {
   StatusBar,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useIsFocused } from "@react-navigation/native";
 import { auth, db } from "../firebaseConfig";
+import { useNavigationContext } from "../contexts/NavigationContext";
 import {
   collection,
   doc,
@@ -49,6 +51,8 @@ export default function DmChatScreen({ route, navigation }) {
     title,
   } = route.params || {};
   const user = auth.currentUser;
+  const isFocused = useIsFocused();
+  const { setCurrentConversationId } = useNavigationContext();
 
   const [myProfile, setMyProfile] = useState({
     uid: user?.uid || "me",
@@ -131,6 +135,15 @@ export default function DmChatScreen({ route, navigation }) {
     initialScrollDoneRef.current = false;
     setInitialRenderDone(false);
   }, [conversationId]);
+
+  // Track when user is viewing this conversation for notification suppression
+  useEffect(() => {
+    if (isFocused && conversationId) {
+      setCurrentConversationId(conversationId);
+    } else if (!isFocused) {
+      setCurrentConversationId(null);
+    }
+  }, [isFocused, conversationId, setCurrentConversationId]);
 
   // Time and date formatting now handled by imported utilities
 
@@ -464,6 +477,41 @@ export default function DmChatScreen({ route, navigation }) {
       } else {
         // Add new reaction
         updatedReactions[emoji] = [...currentUsers, user.uid];
+
+        // Create notification if reacting to someone else's message
+        if (data.userId && data.userId !== user.uid) {
+          try {
+            // Fetch reactor's profile pic
+            let reactorProfilePic = null;
+            try {
+              const reactorSnap = await getDoc(doc(db, "users", user.uid));
+              if (reactorSnap.exists()) {
+                reactorProfilePic = reactorSnap.data().profilePic || null;
+              }
+            } catch (err) {
+              console.log("Error fetching reactor profile pic:", err);
+            }
+
+            const notificationRef = collection(db, "users", data.userId, "notifications");
+            await addDoc(notificationRef, {
+              type: "reaction",
+              emoji,
+              reactorId: user.uid,
+              reactorName: myProfile.name,
+              reactorProfilePic,
+              messageId: msgId,
+              messagePreview: data.text?.slice(0, 50) || (data.gifUrl ? "[GIF]" : ""),
+              chatType: "dm",
+              chatId: conversationId,
+              chatName: isGroup ? (participantInfo[conversationId]?.name || "Group chat") : null,
+              isGroup,
+              timestamp: serverTimestamp(),
+              read: false,
+            });
+          } catch (notifErr) {
+            console.log("Error creating reaction notification:", notifErr);
+          }
+        }
       }
 
       await updateDoc(msgRef, { reactions: updatedReactions });
