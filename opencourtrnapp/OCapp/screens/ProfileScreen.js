@@ -14,6 +14,7 @@ import {
   Modal
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { auth, db, storage } from "../firebaseConfig";
 import { doc, getDoc, setDoc } from "firebase/firestore";
@@ -45,6 +46,7 @@ export default function ProfileScreen({ navigation }) {
 
   const [badges, setBadges] = useState([]);
   const [selectedBadge, setSelectedBadge] = useState(null);
+  const [isEditMode, setIsEditMode] = useState(false);
 
 
   const POSITION_OPTIONS = [
@@ -344,13 +346,101 @@ await setDoc(userDocRef, { badges: earnedBadges }, { merge: true });
       >
 
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>Your profile</Text>
-          <Text style={styles.headerSubtitle}>
-            Set up your hooper card so friends know who's pulling up.
-          </Text>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.headerTitle}>Your profile</Text>
+            <Text style={styles.headerSubtitle}>
+              Set up your hooper card so friends know who's pulling up.
+            </Text>
+          </View>
+          <TouchableOpacity
+            style={styles.editButton}
+            onPress={() => setIsEditMode(!isEditMode)}
+          >
+            <Text style={styles.editButtonText}>
+              {isEditMode ? "Done" : "Edit Profile"}
+            </Text>
+          </TouchableOpacity>
         </View>
 
-        {/* PLAYER CARD */}
+        {/* PLAYER CARD - View Mode */}
+        {!isEditMode && (
+          <View style={{ alignItems: "center", marginTop: 20 }}>
+            <TouchableOpacity activeOpacity={0.9}>
+              <View style={styles.avatarWrapLarge}>
+                {profilePic ? (
+                  <Image source={{ uri: profilePic }} style={styles.profileImage} />
+                ) : (
+                  <View style={styles.avatarPlaceholder}>
+                    <Text style={[styles.avatarInitial, { fontSize: 42 }]}>
+                      {firstName?.[0]?.toUpperCase() || username?.[0]?.toUpperCase() || "U"}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            </TouchableOpacity>
+
+            <View style={{ flexDirection: "row", alignItems: "center", marginTop: 16 }}>
+              <Text style={styles.usernameTextLarge}>{displayName}</Text>
+              {selectedBadge && (
+                <TouchableOpacity onPress={() => setBadgeModalVisible(true)}>
+                  <Image source={BADGE_IMAGES[selectedBadge]} style={{ width: 26, height: 26, marginLeft: 8}} />
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {bio ? <Text style={styles.bioTextLarge}>{bio}</Text> : <Text style={styles.bioTextLarge}>No bio provided.</Text>}
+            {memberSince ? <Text style={styles.memberSinceTextLarge}>Member since {memberSince}</Text> : null}
+
+            {/* Stats Row */}
+            <View style={styles.statsRow}>
+              <View style={styles.statItem}>
+                <Text style={styles.statNumber}>0</Text>
+                <Text style={styles.statLabel}>Friends</Text>
+              </View>
+              <View style={[styles.statItem, { marginHorizontal: 40 }]}>
+                <Text style={styles.statNumber}>0</Text>
+                <Text style={styles.statLabel}>Runs Logged</Text>
+              </View>
+              <View style={styles.statItem}>
+                <Text style={styles.statNumber}>0</Text>
+                <Text style={styles.statLabel}>Check-ins</Text>
+              </View>
+            </View>
+
+            {/* Info Card */}
+            <View style={styles.infoCard}>
+              <View style={styles.infoHeaderRow}>
+                <Ionicons name="basketball-outline" size={18} color="#f97316" />
+                <Text style={styles.infoHeaderText}>Hooper profile</Text>
+              </View>
+
+              <View style={styles.infoRow}>
+                <Text style={styles.infoLabel}>Position</Text>
+                <Text style={styles.infoValue}>{position || "Not set"}</Text>
+              </View>
+
+              <View style={styles.infoRow}>
+                <Text style={styles.infoLabel}>Grade</Text>
+                <Text style={styles.infoValue}>{gradeLevel || "Not set"}</Text>
+              </View>
+
+              <View style={[styles.infoRow, { alignItems: "flex-start" }]}>
+                <Text style={styles.infoLabel}>Favorite team</Text>
+                <View style={{ flexDirection: "row", alignItems: "center" }}>
+                  {favoriteTeamLogo && (
+                    <Image source={favoriteTeamLogo} style={styles.infoTeamLogo} />
+                  )}
+                  <Text style={styles.infoValue}>
+                    {favoriteTeam && favoriteTeam !== "None" ? favoriteTeam : "Not set"}
+                  </Text>
+                </View>
+              </View>
+            </View>
+          </View>
+        )}
+
+        {/* PLAYER CARD - Edit Mode */}
+        {isEditMode && (
         <View style={[styles.card, { marginTop: 8 }]}>
           <View style={styles.playerRow}>
             <TouchableOpacity onPress={pickImage} activeOpacity={0.9}>
@@ -367,8 +457,8 @@ await setDoc(userDocRef, { badges: earnedBadges }, { merge: true });
               </View>
             </TouchableOpacity>
 
-            <View style={styles.playerTextArea}> 
-              
+            <View style={styles.playerTextArea}>
+
 <View style={{ flexDirection: "row", alignItems: "center" }}>
   <Text style={styles.usernameText}>{displayName}</Text>
   {selectedBadge && (
@@ -388,8 +478,10 @@ await setDoc(userDocRef, { badges: earnedBadges }, { merge: true });
             <Text style={styles.saveStatusText}>{saveStatus}</Text>
           </View>
         </View>
+        )}
 
         {/* NAME CARD */}
+        {isEditMode && (
         <View style={styles.card}>
           <View style={styles.cardHeaderRow}>
             <Text style={styles.cardTitle}>Name</Text>
@@ -407,6 +499,7 @@ await setDoc(userDocRef, { badges: earnedBadges }, { merge: true });
             onChangeText={setFirstName}
             autoCapitalize="words"
             autoCorrect={false}
+            editable={isEditMode}
           />
 
           <Text style={[styles.fieldLabel, { marginTop: 12 }]}>Last Name</Text>
@@ -418,10 +511,13 @@ await setDoc(userDocRef, { badges: earnedBadges }, { merge: true });
             onChangeText={setLastName}
             autoCapitalize="words"
             autoCorrect={false}
+            editable={isEditMode}
           />
         </View>
+        )}
 
         {/* BIO CARD */}
+        {isEditMode && (
         <View style={styles.card}>
           <View style={styles.cardHeaderRow}>
             <Text style={styles.cardTitle}>Bio</Text>
@@ -443,11 +539,14 @@ await setDoc(userDocRef, { badges: earnedBadges }, { merge: true });
               setBio(singleLineText);
               setBioCharsLeft(BIO_MAX_LENGTH - singleLineText.length);
             }}
+            editable={isEditMode}
           />
           <Text style={styles.bioCharCount}>{bioCharsLeft} characters remaining</Text>
         </View>
+        )}
 
         {/* HOOPER PROFILE CARD */}
+        {isEditMode && (
         <View style={styles.card}>
           <View style={styles.cardHeaderRow}>
             <Text style={styles.cardTitle}>Hooper profile</Text>
@@ -488,8 +587,10 @@ await setDoc(userDocRef, { badges: earnedBadges }, { merge: true });
             ))}
           </View>
         </View>
+        )}
 
         {/* FAVORITE TEAM CARD */}
+        {isEditMode && (
         <View style={styles.card}>
           <View style={styles.cardHeaderRow}>
             <Text style={styles.cardTitle}>Favorite team</Text>
@@ -524,8 +625,10 @@ await setDoc(userDocRef, { badges: earnedBadges }, { merge: true });
             </View>
           )}
         </View>
+        )}
 
         {/* BADGES CARD */}
+{isEditMode && (
 <View style={styles.card}>
   <View style={styles.cardHeaderRow}>
     <Text style={styles.cardTitle}>Badges Earned</Text>
@@ -555,6 +658,7 @@ await setDoc(userDocRef, { badges: earnedBadges }, { merge: true });
     </View>
   )}
 </View>
+)}
 
         {/* ACCOUNT CARD */}
         <View style={[styles.card, { marginBottom: 24 }]}>
@@ -593,9 +697,110 @@ const styles = StyleSheet.create({
   blobTop: { position: "absolute", top: -80, right: -80, width: 260, height: 260, borderRadius: 130, backgroundColor: "rgba(56,189,248,0.22)" },
   blobBottom: { position: "absolute", top: 180, left: -100, width: 260, height: 260, borderRadius: 130, backgroundColor: "rgba(251,146,60,0.16)" },
   scrollContent: { paddingHorizontal: 20, paddingBottom: 32 },
-  header: { marginTop: 24, marginBottom: 12 },
+  header: { marginTop: 24, marginBottom: 12, flexDirection: "row", alignItems: "center" },
   headerTitle: { fontSize: 22, fontWeight: "800", color: "#e5f3ff", marginBottom: 4 },
   headerSubtitle: { fontSize: 13, color: "#9ca3af" },
+  editButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: "#38bdf8",
+    borderRadius: 20,
+    marginLeft: 12,
+  },
+  editButtonText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  avatarWrapLarge: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    borderWidth: 2,
+    borderColor: "#38bdf8",
+    overflow: "hidden",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#020617",
+  },
+  usernameTextLarge: {
+    fontSize: 24,
+    fontWeight: "700",
+    color: "#f9fafb",
+  },
+  bioTextLarge: {
+    marginTop: 12,
+    fontSize: 14,
+    color: "#cbd5e1",
+    textAlign: "center",
+    paddingHorizontal: 20,
+  },
+  memberSinceTextLarge: {
+    marginTop: 8,
+    fontSize: 13,
+    color: "#9ca3af",
+  },
+  statsRow: {
+    flexDirection: "row",
+    justifyContent: "center",
+    marginTop: 24,
+    marginBottom: 20,
+  },
+  statItem: {
+    alignItems: "center",
+  },
+  statNumber: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: "#e5f3ff",
+  },
+  statLabel: {
+    fontSize: 12,
+    color: "#9ca3af",
+    marginTop: 4,
+  },
+  infoCard: {
+    width: "100%",
+    borderRadius: 16,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    backgroundColor: "rgba(15,23,42,0.98)",
+    borderWidth: 1,
+    borderColor: "rgba(148,163,184,0.6)",
+    marginTop: 8,
+  },
+  infoHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  infoHeaderText: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#e5f3ff",
+    marginLeft: 8,
+  },
+  infoRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingVertical: 8,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(148,163,184,0.2)",
+  },
+  infoLabel: {
+    fontSize: 14,
+    color: "#9ca3af",
+  },
+  infoValue: {
+    fontSize: 14,
+    color: "#e5f3ff",
+    fontWeight: "600",
+  },
+  infoTeamLogo: {
+    width: 20,
+    height: 20,
+    marginRight: 6,
+  },
   card: { borderRadius: 24, paddingVertical: 18, paddingHorizontal: 16, backgroundColor: "rgba(15,23,42,0.98)", borderWidth: 1, borderColor: "rgba(148,163,184,0.7)", marginTop: 12 },
   playerRow: { flexDirection: "row", alignItems: "center" },
   avatarWrap: { width: 88, height: 88, borderRadius: 44, borderWidth: 2, borderColor: "#38bdf8", overflow: "hidden", alignItems: "center", justifyContent: "center", backgroundColor: "#020617" },

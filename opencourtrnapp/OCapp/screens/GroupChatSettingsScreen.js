@@ -35,13 +35,19 @@ export default function GroupChatSettingsScreen({ navigation, route }) {
   const [loading, setLoading] = useState(true);
   const [isAddingMember, setIsAddingMember] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState([]);
-  const [searching, setSearching] = useState(false);
+  const [friends, setFriends] = useState([]);
+  const [loadingFriends, setLoadingFriends] = useState(false);
   const currentUser = auth.currentUser;
 
   useEffect(() => {
     loadGroupData();
   }, [conversationId]);
+
+  useEffect(() => {
+    if (isAddingMember) {
+      loadFriends();
+    }
+  }, [isAddingMember]);
 
   const loadGroupData = async () => {
     try {
@@ -91,46 +97,41 @@ export default function GroupChatSettingsScreen({ navigation, route }) {
     }
   };
 
-  const handleSearchUsers = async () => {
-    if (!searchQuery.trim()) {
-      setSearchResults([]);
-      return;
-    }
-
+  const loadFriends = async () => {
     try {
-      setSearching(true);
-      const usersRef = collection(db, "users");
-      const q = query(
-        usersRef,
-        where("username", ">=", searchQuery.trim()),
-        where("username", "<=", searchQuery.trim() + "\uf8ff")
-      );
+      setLoadingFriends(true);
+      const userRef = doc(db, "users", currentUser.uid);
+      const userSnap = await getDoc(userRef);
 
-      const snapshot = await getDocs(q);
-      const users = [];
+      if (userSnap.exists()) {
+        const userData = userSnap.data();
+        const friendsList = userData.friends || [];
 
-      snapshot.forEach((doc) => {
-        const data = doc.data();
-        // Don't show users already in the group or current user
-        if (
-          !members.some((m) => m.userId === doc.id) &&
-          doc.id !== currentUser.uid
-        ) {
-          users.push({
-            userId: doc.id,
-            username: data.username || "Unknown",
-            email: data.email || "",
-            profilePic: data.profilePic || null,
-          });
+        // Load friend details
+        const friendsData = [];
+        for (const friendId of friendsList) {
+          // Skip if already in group
+          if (members.some((m) => m.userId === friendId)) continue;
+
+          const friendRef = doc(db, "users", friendId);
+          const friendSnap = await getDoc(friendRef);
+          if (friendSnap.exists()) {
+            const data = friendSnap.data();
+            friendsData.push({
+              userId: friendId,
+              username: data.username || "Unknown",
+              email: data.email || "",
+              profilePic: data.profilePic || null,
+            });
+          }
         }
-      });
-
-      setSearchResults(users);
+        setFriends(friendsData);
+      }
     } catch (error) {
-      console.error("Error searching users:", error);
-      Alert.alert("Error", "Failed to search users");
+      console.error("Error loading friends:", error);
+      Alert.alert("Error", "Failed to load friends");
     } finally {
-      setSearching(false);
+      setLoadingFriends(false);
     }
   };
 
@@ -147,10 +148,8 @@ export default function GroupChatSettingsScreen({ navigation, route }) {
       });
 
       Alert.alert("Success", `${username} has been added to the group`);
-      setSearchQuery("");
-      setSearchResults([]);
-      setIsAddingMember(false);
       loadGroupData();
+      loadFriends(); // Refresh friends list to remove the added member
     } catch (error) {
       console.error("Error adding member:", error);
       Alert.alert("Error", "Failed to add member");
@@ -209,9 +208,9 @@ export default function GroupChatSettingsScreen({ navigation, route }) {
     </View>
   );
 
-  const renderSearchResult = ({ item }) => (
+  const renderFriend = ({ item }) => (
     <TouchableOpacity
-      style={styles.searchResultItem}
+      style={styles.friendItem}
       onPress={() =>
         handleAddMember(item.userId, item.username, item.email, item.profilePic)
       }
@@ -236,6 +235,11 @@ export default function GroupChatSettingsScreen({ navigation, route }) {
       </View>
       <Ionicons name="add-circle" size={24} color="#38bdf8" />
     </TouchableOpacity>
+  );
+
+  // Filter friends based on search query
+  const filteredFriends = friends.filter((friend) =>
+    friend.username.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   if (loading) {
@@ -324,35 +328,46 @@ export default function GroupChatSettingsScreen({ navigation, route }) {
 
           {isAddingMember && (
             <View style={styles.addMemberSection}>
-              <View style={styles.searchContainer}>
-                <TextInput
-                  style={styles.searchInput}
-                  placeholder="Search users by username"
-                  placeholderTextColor="#64748b"
-                  value={searchQuery}
-                  onChangeText={setSearchQuery}
-                  onSubmitEditing={handleSearchUsers}
-                />
-                <TouchableOpacity
-                  style={styles.searchButton}
-                  onPress={handleSearchUsers}
-                >
-                  {searching ? (
-                    <ActivityIndicator size="small" color="#e5f3ff" />
-                  ) : (
-                    <Ionicons name="search" size={20} color="#e5f3ff" />
-                  )}
-                </TouchableOpacity>
-              </View>
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Search your friends..."
+                placeholderTextColor="#64748b"
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+              />
 
-              {searchResults.length > 0 && (
-                <View style={styles.searchResults}>
-                  <FlatList
-                    data={searchResults}
-                    keyExtractor={(item) => item.userId}
-                    renderItem={renderSearchResult}
-                    scrollEnabled={false}
-                  />
+              {loadingFriends ? (
+                <View style={styles.loadingFriends}>
+                  <ActivityIndicator size="small" color="#38bdf8" />
+                  <Text style={styles.loadingText}>Loading friends...</Text>
+                </View>
+              ) : filteredFriends.length > 0 ? (
+                <View style={styles.friendsList}>
+                  <ScrollView
+                    style={{ maxHeight: 300 }}
+                    showsVerticalScrollIndicator={true}
+                    nestedScrollEnabled={true}
+                  >
+                    {filteredFriends.map((item, index) => (
+                      <View key={item.userId}>
+                        {renderFriend({ item })}
+                        {index < filteredFriends.length - 1 && (
+                          <View style={styles.separator} />
+                        )}
+                      </View>
+                    ))}
+                  </ScrollView>
+                </View>
+              ) : (
+                <View style={styles.emptyState}>
+                  <Ionicons name="people-outline" size={48} color="#64748b" />
+                  <Text style={styles.emptyText}>
+                    {searchQuery
+                      ? "No friends match your search"
+                      : friends.length === 0
+                      ? "No friends to add"
+                      : "All your friends are already in this group"}
+                  </Text>
                 </View>
               )}
             </View>
@@ -528,13 +543,7 @@ const styles = StyleSheet.create({
   addMemberSection: {
     marginBottom: 12,
   },
-  searchContainer: {
-    flexDirection: "row",
-    gap: 8,
-    marginBottom: 8,
-  },
   searchInput: {
-    flex: 1,
     backgroundColor: "#0f172a",
     borderWidth: 1,
     borderColor: "#334155",
@@ -542,25 +551,42 @@ const styles = StyleSheet.create({
     padding: 10,
     color: "#e5f3ff",
     fontSize: 14,
+    marginBottom: 12,
   },
-  searchButton: {
-    width: 44,
-    height: 44,
-    backgroundColor: "#38bdf8",
-    borderRadius: 8,
-    justifyContent: "center",
+  loadingFriends: {
+    paddingVertical: 20,
     alignItems: "center",
+    gap: 8,
   },
-  searchResults: {
+  loadingText: {
+    color: "#94a3b8",
+    fontSize: 14,
+  },
+  friendsList: {
     backgroundColor: "#0f172a",
     borderRadius: 8,
     padding: 8,
   },
-  searchResultItem: {
+  friendItem: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 8,
+    paddingVertical: 10,
     gap: 12,
+  },
+  separator: {
+    height: 1,
+    backgroundColor: "rgba(148,163,184,0.2)",
+    marginVertical: 4,
+  },
+  emptyState: {
+    paddingVertical: 32,
+    alignItems: "center",
+    gap: 12,
+  },
+  emptyText: {
+    color: "#94a3b8",
+    fontSize: 14,
+    textAlign: "center",
   },
   leaveButton: {
     flexDirection: "row",
