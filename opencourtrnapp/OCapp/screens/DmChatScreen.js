@@ -32,6 +32,13 @@ import { formatTime, formatDateLabel, getDateKey } from "../utils/dateUtils";
 import { useMessages } from "../hooks/useMessages";
 import { useTypingIndicator } from "../hooks/useTypingIndicator";
 
+// Badge images
+const BADGE_IMAGES = {
+  "Co-Founder": require("../assets/co-founder.png"),
+  "Alpha": require("../assets/alpha.png"),
+  "Rookie": require("../assets/rookie.png"),
+};
+
 export default function DmChatScreen({ route, navigation }) {
   const {
     conversationId,
@@ -100,6 +107,7 @@ export default function DmChatScreen({ route, navigation }) {
   const [participants, setParticipants] = useState([]);
   const [participantInfo, setParticipantInfo] = useState({});
   const [liveUserProfiles, setLiveUserProfiles] = useState({});
+  const [userBadges, setUserBadges] = useState({}); // Store badges for each user
 
   const scrollToBottom = () => {
     setTimeout(() => {
@@ -155,6 +163,38 @@ export default function DmChatScreen({ route, navigation }) {
     }
     prevMsgCountRef.current = messages.length;
   }, [messages.length, initialRenderDone]);
+
+  // Fetch badges for all message senders
+  useEffect(() => {
+    if (!messages.length) return;
+
+    const fetchUserBadges = async () => {
+      const uniqueUserIds = [...new Set(messages.map(m => m.userId))];
+      const badgesMap = { ...userBadges };
+
+      for (const userId of uniqueUserIds) {
+        // Skip if we already have this user's badge info
+        if (badgesMap[userId] !== undefined) continue;
+
+        try {
+          const userSnap = await getDoc(doc(db, "users", userId));
+          if (userSnap.exists()) {
+            const userData = userSnap.data();
+            badgesMap[userId] = userData.selectedBadge || null;
+          } else {
+            badgesMap[userId] = null;
+          }
+        } catch (err) {
+          console.log("Error fetching badge for user:", userId, err);
+          badgesMap[userId] = null;
+        }
+      }
+
+      setUserBadges(badgesMap);
+    };
+
+    fetchUserBadges();
+  }, [messages]);
 
   // Typing indicator now handled by useTypingIndicator hook
 
@@ -1085,16 +1125,23 @@ export default function DmChatScreen({ route, navigation }) {
                           elevation: 2,
                         }}
                       >
-                        <Text
-                          style={{
-                            fontSize: 12,
-                            fontWeight: "600",
-                            marginBottom: 4,
-                            color: isMine ? "#93c5fd" : "#cbd5e1",
-                          }}
-                        >
-                          {isMine ? "You" : m.user}
-                        </Text>
+                        <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 4 }}>
+                          <Text
+                            style={{
+                              fontSize: 12,
+                              fontWeight: "600",
+                              color: isMine ? "#93c5fd" : "#cbd5e1",
+                            }}
+                          >
+                            {isMine ? "You" : m.user}
+                          </Text>
+                          {userBadges[m.userId] && BADGE_IMAGES[userBadges[m.userId]] && (
+                            <Image
+                              source={BADGE_IMAGES[userBadges[m.userId]]}
+                              style={{ width: 16, height: 16, marginLeft: 4 }}
+                            />
+                          )}
+                        </View>
 
                         {/* replied-to snippet */}
                         {m.replyTo && (
