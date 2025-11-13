@@ -672,7 +672,7 @@ await setDoc(userDocRef, { badges: earnedBadges }, { merge: true });
 
 <Modal visible={badgeModalVisible} transparent animationType="fade">
   <View style={styles.modalBackdrop}>
-    <View style={styles.modalContent}>
+    <View style={[styles.modalContent, styles.badgeModalContent]}>
       <Text style={styles.modalTitle}>{selectedBadge}</Text>
       <Image
   source={BADGE_IMAGES[selectedBadge]}
@@ -943,4 +943,12 @@ modalBackdrop: {
   },
   modalDescription: { fontSize: 13, color: "#e5e7eb", marginTop: 8, textAlign: "center" },
 modalCloseText: { fontSize: 14, color: "#60a5fa", marginTop: 12, fontWeight: "600" },
+
+badgeModalContent: {
+  alignItems: "center", // centers horizontally
+  justifyContent: "center", // centers vertically if needed
+  textAlign: "center",
+},
+
+
 });

@@ -744,7 +744,7 @@ const BADGE_IMAGES = {
       </Modal>
       <Modal visible={badgeModalVisible} transparent animationType="fade">
   <View style={ui.modalBackdrop}>
-    <View style={ui.modalContent}>
+    <View style={[ui.modalContent, ui.badgeModalContent]}>
       <Text style={ui.modalTitle}>{profile.selectedBadge}</Text>
       <Image
   source={BADGE_IMAGES[profile.selectedBadge]}
@@ -1116,4 +1116,9 @@ const ui = StyleSheet.create({
   },
   modalDescription: { fontSize: 13, color: "#e5e7eb", marginTop: 8, textAlign: "center" },
 modalCloseText: { fontSize: 14, color: "#60a5fa", marginTop: 12, fontWeight: "600" },
+badgeModalContent: {
+  alignItems: "center", // centers horizontally
+  justifyContent: "center", // centers vertically if needed
+  textAlign: "center",
+},
 });
