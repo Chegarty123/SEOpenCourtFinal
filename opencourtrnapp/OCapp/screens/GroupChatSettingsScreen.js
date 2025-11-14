@@ -30,6 +30,7 @@ import {
 export default function GroupChatSettingsScreen({ navigation, route }) {
   const { conversationId, groupName } = route.params;
   const [isEditingName, setIsEditingName] = useState(false);
+  const [currentGroupName, setCurrentGroupName] = useState(groupName || "");
   const [newGroupName, setNewGroupName] = useState(groupName || "");
   const [members, setMembers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -68,7 +69,9 @@ export default function GroupChatSettingsScreen({ navigation, route }) {
         }));
 
         setMembers(memberList);
-        setNewGroupName(data.groupName || "Group Chat");
+        const loadedGroupName = data.name || "Group Chat";
+        setCurrentGroupName(loadedGroupName);
+        setNewGroupName(loadedGroupName);
       }
     } catch (error) {
       console.error("Error loading group data:", error);
@@ -87,8 +90,9 @@ export default function GroupChatSettingsScreen({ navigation, route }) {
     try {
       const convRef = doc(db, "dmConversations", conversationId);
       await updateDoc(convRef, {
-        groupName: newGroupName.trim(),
+        name: newGroupName.trim(),
       });
+      setCurrentGroupName(newGroupName.trim());
       setIsEditingName(false);
       Alert.alert("Success", "Group name updated");
     } catch (error) {
@@ -183,7 +187,11 @@ export default function GroupChatSettingsScreen({ navigation, route }) {
   };
 
   const renderMember = ({ item }) => (
-    <View style={styles.memberItem}>
+    <TouchableOpacity
+      style={styles.memberItem}
+      onPress={() => navigation.navigate("UserProfile", { userId: item.userId })}
+      activeOpacity={0.7}
+    >
       <View style={styles.memberAvatar}>
         {item.profilePic ? (
           <Image
@@ -205,7 +213,7 @@ export default function GroupChatSettingsScreen({ navigation, route }) {
       {item.userId === currentUser.uid && (
         <Text style={styles.youLabel}>You</Text>
       )}
-    </View>
+    </TouchableOpacity>
   );
 
   const renderFriend = ({ item }) => (
@@ -283,7 +291,7 @@ export default function GroupChatSettingsScreen({ navigation, route }) {
                 <TouchableOpacity
                   style={[styles.button, styles.cancelButton]}
                   onPress={() => {
-                    setNewGroupName(groupName || "");
+                    setNewGroupName(currentGroupName);
                     setIsEditingName(false);
                   }}
                 >
@@ -302,7 +310,7 @@ export default function GroupChatSettingsScreen({ navigation, route }) {
               style={styles.nameDisplay}
               onPress={() => setIsEditingName(true)}
             >
-              <Text style={styles.nameText}>{newGroupName}</Text>
+              <Text style={styles.nameText}>{currentGroupName}</Text>
               <Ionicons name="pencil" size={20} color="#38bdf8" />
             </TouchableOpacity>
           )}
