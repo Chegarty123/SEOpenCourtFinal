@@ -244,6 +244,7 @@ export default function MessagesScreen({ navigation }) {
                     d.username ||
                     (d.email ? d.email.split("@")[0] : "Player"),
                   profilePic: d.profilePic || null,
+                  selectedBadge: d.selectedBadge || null,
                 },
               ];
             } catch (err) {
@@ -604,6 +605,12 @@ export default function MessagesScreen({ navigation }) {
 
     const avatarUri = liveProfile?.profilePic || item.otherProfilePic || null;
 
+    const badgeName = item.isGroup ? null : userProfiles[item.otherId]?.selectedBadge || null;
+const BADGE_IMAGES = {
+  "Co-Founder": require("../assets/co-founder.png"),
+  "Alpha": require("../assets/alpha.png"),
+  "Rookie": require("../assets/rookie.png"),
+};
     // For group chats, get profile pictures of other members
     const getGroupAvatars = () => {
       if (!item.isGroup) return [];
@@ -707,7 +714,21 @@ export default function MessagesScreen({ navigation }) {
               numberOfLines={1}
             >
               {displayName}
+              
             </Text>
+
+            
+{/* Show badge for non-group chats */}
+  {!item.isGroup &&
+    userProfiles[item.otherId]?.selectedBadge &&
+    BADGE_IMAGES[userProfiles[item.otherId].selectedBadge] && (
+      <Image
+        source={BADGE_IMAGES[userProfiles[item.otherId].selectedBadge]}
+        style={{ width: 16, height: 16, marginLeft: -2 }}
+      />
+    )}
+
+            
             {item.isGroup && (
               <View style={ui.groupChip}>
                 <Ionicons

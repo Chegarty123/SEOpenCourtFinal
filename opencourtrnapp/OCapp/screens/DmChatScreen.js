@@ -209,6 +209,25 @@ export default function DmChatScreen({ route, navigation }) {
     fetchUserBadges();
   }, [messages]);
 
+  useEffect(() => {
+  const fetchOtherUserBadge = async () => {
+    if (!otherUserId) return;
+    try {
+      const snap = await getDoc(doc(db, "users", otherUserId));
+      if (snap.exists()) {
+        const data = snap.data();
+        setUserBadges(prev => ({
+          ...prev,
+          [otherUserId]: data.selectedBadge || null, // ✅ Add badge here
+        }));
+      }
+    } catch (err) {
+      console.log("Error fetching other user's badge:", err);
+    }
+  };
+  fetchOtherUserBadge();
+}, [otherUserId]);
+
   // Typing indicator now handled by useTypingIndicator hook
 
   const handleChangeText = (txt) => {
@@ -253,6 +272,7 @@ export default function DmChatScreen({ route, navigation }) {
               return [uid, {
                 username: data.username || (data.email ? data.email.split("@")[0] : "Player"),
                 profilePic: data.profilePic || null,
+                selectedBadge: data.selectedBadge || null,
               }];
             } catch (err) {
               console.log("Error fetching profile for group avatar:", err);
@@ -896,6 +916,7 @@ export default function DmChatScreen({ route, navigation }) {
               }
             }}
           >
+            <View style={{ flexDirection: "row", alignItems: "center", flexWrap: "nowrap" }}>
             <Text
               style={{
                 color: "#e5f3ff",
@@ -906,6 +927,18 @@ export default function DmChatScreen({ route, navigation }) {
             >
               {displayTitle}
             </Text>
+            
+{!isGroup &&
+    userBadges[otherUserId] &&
+    BADGE_IMAGES[userBadges[otherUserId]] && (
+      <Image
+        source={BADGE_IMAGES[userBadges[otherUserId]]}
+        style={{ width: 16, height: 16, marginLeft: 4 }}
+        resizeMode="contain"
+      />
+    )}
+    </View>
+
             <Text
               style={{
                 color: "#9ca3af",

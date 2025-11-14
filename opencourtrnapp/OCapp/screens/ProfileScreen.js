@@ -407,7 +407,7 @@ await setDoc(userDocRef, { badges: earnedBadges }, { merge: true });
               <Text style={styles.usernameTextLarge}>{displayName}</Text>
               {selectedBadge && (
                 <TouchableOpacity onPress={() => setBadgeModalVisible(true)}>
-                  <Image source={BADGE_IMAGES[selectedBadge]} style={{ width: 26, height: 26, marginLeft: 8}} />
+                  <Image source={BADGE_IMAGES[selectedBadge]} style={{ width: 26, height: 26, marginLeft: 4}} />
                 </TouchableOpacity>
               )}
             </View>
@@ -487,7 +487,7 @@ await setDoc(userDocRef, { badges: earnedBadges }, { merge: true });
   <Text style={styles.usernameText}>{displayName}</Text>
   {selectedBadge && (
     <TouchableOpacity onPress={() => setBadgeModalVisible(true)}>
-          <Image source={BADGE_IMAGES[selectedBadge]} style={{ width: 24, height: 24, marginLeft: 6}} />
+          <Image source={BADGE_IMAGES[selectedBadge]} style={{ width: 24, height: 24, marginLeft: 4}} />
         </TouchableOpacity>
   )}
 </View>

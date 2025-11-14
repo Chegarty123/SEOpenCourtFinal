@@ -491,7 +491,7 @@ const BADGE_IMAGES = {
   <Text style={ui.username}>{profile.username || "Hooper"}</Text>
   {profile.selectedBadge && (
     <TouchableOpacity onPress={() => setBadgeModalVisible(true)}>
-      <Image source={BADGE_IMAGES[profile.selectedBadge]} style={{ width: 26, height: 26, marginLeft: 6, marginTop: 10}} />
+      <Image source={BADGE_IMAGES[profile.selectedBadge]} style={{ width: 26, height: 26, marginLeft: 4, marginTop: 10}} />
     </TouchableOpacity>
   )}
 </View>
