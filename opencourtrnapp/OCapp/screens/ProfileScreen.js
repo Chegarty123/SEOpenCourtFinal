@@ -150,7 +150,7 @@ const joinDate = new Date(data.memberSince || memberSince);
 if (joinDate <= new Date("2025-10-12") && !earnedBadges.includes("Co-Founder")) {
   earnedBadges.push("Co-Founder");
 }
-if (joinDate <= new Date("2025-11-13") && !earnedBadges.includes("Alpha")) {
+if (joinDate <= new Date("2025-11-14") && !earnedBadges.includes("Alpha")) {
   earnedBadges.push("Alpha");
 }
 
