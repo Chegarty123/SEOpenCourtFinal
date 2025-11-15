@@ -44,7 +44,10 @@ export default function FriendScreen({ navigation }) {
     incoming: true,
     pending: false,
     friends: true,
+    suggestions: true,
   });
+
+  const [friendSuggestions, setFriendSuggestions] = useState([]);
 
   // Track auth state
   useEffect(() => {
@@ -62,6 +65,7 @@ export default function FriendScreen({ navigation }) {
       try {
         const usersSnapshot = await getDocs(collection(db, "users"));
         const list = [];
+
         usersSnapshot.forEach((docSnap) => {
           if (docSnap.id !== currentUser.uid) {
             const data = docSnap.data();
@@ -69,9 +73,11 @@ export default function FriendScreen({ navigation }) {
               uid: docSnap.id,
               username: data.username || "Unnamed",
               avatar: data.profilePic ? { uri: data.profilePic } : defaultAvatar,
+              friends: data.friends || [],
             });
           }
         });
+
         setAllUsers(list);
       } catch (err) {
         console.error("Error loading users:", err);
@@ -98,6 +104,27 @@ export default function FriendScreen({ navigation }) {
     return unsubSnap;
   }, [currentUser]);
 
+  // Build "Users You May Know"
+  useEffect(() => {
+    if (!currentUser || allUsers.length === 0) return;
+
+    const suggestions = allUsers
+      .filter(
+        (u) =>
+          !friends.includes(u.uid) &&
+          !incomingRequests.includes(u.uid) &&
+          !outgoingRequests.includes(u.uid)
+      )
+      .map((u) => {
+        const mutual = u.friends.filter((f) => friends.includes(f)).length;
+        return { ...u, mutualCount: mutual };
+      })
+      .filter((u) => u.mutualCount > 0)
+      .sort((a, b) => b.mutualCount - a.mutualCount);
+
+    setFriendSuggestions(suggestions);
+  }, [allUsers, friends, incomingRequests, outgoingRequests]);
+
   // Send friend request
   const sendFriendRequest = async (user) => {
     if (!currentUser) return;
@@ -114,7 +141,6 @@ export default function FriendScreen({ navigation }) {
         return;
       }
 
-      // Instant UI feedback
       setOutgoingRequests((prev) => [...prev, user.uid]);
 
       const senderRef = doc(db, "users", currentUser.uid);
@@ -122,7 +148,9 @@ export default function FriendScreen({ navigation }) {
 
       await Promise.all([
         updateDoc(senderRef, { outgoingRequests: arrayUnion(user.uid) }),
-        updateDoc(receiverRef, { incomingRequests: arrayUnion(currentUser.uid) }),
+        updateDoc(receiverRef, {
+          incomingRequests: arrayUnion(currentUser.uid),
+        }),
       ]);
     } catch (err) {
       console.error("Error sending friend request:", err);
@@ -169,7 +197,7 @@ export default function FriendScreen({ navigation }) {
     }
   };
 
-  // Cancel outgoing (pending) request
+  // Cancel outgoing request
   const cancelOutgoingRequest = async (uid) => {
     if (!currentUser) return;
     try {
@@ -198,6 +226,7 @@ export default function FriendScreen({ navigation }) {
         updateDoc(currentRef, { friends: arrayRemove(uid) }),
         updateDoc(friendRef, { friends: arrayRemove(currentUser.uid) }),
       ]);
+
       setDeleteConfirmUser(null);
     } catch (err) {
       console.error("Error removing friend:", err);
@@ -263,7 +292,7 @@ export default function FriendScreen({ navigation }) {
         borderBottomWidth: 1,
       }}
     >
-      {/* Tap avatar + name to open their profile */}
+      {/* Press to open profile */}
       <TouchableOpacity
         style={{ flexDirection: "row", alignItems: "center", flex: 1 }}
         activeOpacity={0.8}
@@ -284,20 +313,28 @@ export default function FriendScreen({ navigation }) {
             borderColor: "rgba(148,163,184,0.7)",
           }}
         />
-        <Text
-          style={{
-            fontSize: 15,
-            color: "#e5e7eb",
-            fontWeight: "500",
-          }}
-        >
-          {user.username}
-        </Text>
+        <View>
+          <Text
+            style={{
+              fontSize: 15,
+              color: "#e5e7eb",
+              fontWeight: "500",
+            }}
+          >
+            {user.username}
+          </Text>
+
+          {user.mutualCount > 0 && (
+            <Text style={{ fontSize: 11, color: "#9ca3af" }}>
+              {user.mutualCount} mutual friends
+            </Text>
+          )}
+        </View>
       </TouchableOpacity>
 
-      {/* Actions on the right */}
-      {actionType === "add" && (
-        outgoingRequests.includes(user.uid) ? (
+      {/* Actions */}
+      {actionType === "add" &&
+        (outgoingRequests.includes(user.uid) ? (
           <View style={{ flexDirection: "row", alignItems: "center" }}>
             <Ionicons name="hourglass-outline" size={20} color="#9ca3af" />
             <Text style={{ fontSize: 12, color: "#9ca3af", marginLeft: 4 }}>
@@ -308,8 +345,7 @@ export default function FriendScreen({ navigation }) {
           <TouchableOpacity onPress={() => sendFriendRequest(user)}>
             <Ionicons name="person-add-outline" size={22} color="#38bdf8" />
           </TouchableOpacity>
-        )
-      )}
+        ))}
 
       {actionType === "pending" && (
         <View style={{ flexDirection: "row", alignItems: "center" }}>
@@ -359,18 +395,16 @@ export default function FriendScreen({ navigation }) {
 
   return (
     <SafeAreaView
-      edges={["top"]} // only safe area at the top
+      edges={["top"]}
       style={{
         flex: 1,
-        backgroundColor: "#020617", // 🔥 dark background
-        paddingTop:
-          Platform.OS === "android" ? StatusBar.currentHeight : 0,
+        backgroundColor: "#020617",
+        paddingTop: Platform.OS === "android" ? StatusBar.currentHeight : 0,
       }}
     >
-
       <StatusBar barStyle="light-content" />
 
-      {/* Subtle background blobs */}
+      {/* Background blobs */}
       <View
         style={{
           position: "absolute",
@@ -401,7 +435,6 @@ export default function FriendScreen({ navigation }) {
         contentContainerStyle={{ paddingBottom: 32 }}
         showsVerticalScrollIndicator={false}
       >
-        {/* Small header */}
         <Text
           style={{
             fontSize: 22,
@@ -437,10 +470,22 @@ export default function FriendScreen({ navigation }) {
         {/* Search results */}
         {searchText.length > 0 && (
           <View style={cardStyle}>
-            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+              }}
+            >
               <Text style={titleStyle}>Search Results</Text>
               {filteredUsers.length > 5 && (
-                <Text style={{ fontSize: 12, color: "#60a5fa", fontWeight: "600" }}>
+                <Text
+                  style={{
+                    fontSize: 12,
+                    color: "#60a5fa",
+                    fontWeight: "600",
+                  }}
+                >
                   {filteredUsers.length} found
                 </Text>
               )}
@@ -454,12 +499,16 @@ export default function FriendScreen({ navigation }) {
               </View>
             ) : (
               <>
-                {(showAllSearchResults ? filteredUsers : filteredUsers.slice(0, 5)).map((u) =>
-                  renderUserRow(u, "add")
-                )}
+                {(showAllSearchResults
+                  ? filteredUsers
+                  : filteredUsers.slice(0, 5)
+                ).map((u) => renderUserRow(u, "add"))}
+
                 {filteredUsers.length > 5 && (
                   <TouchableOpacity
-                    onPress={() => setShowAllSearchResults(!showAllSearchResults)}
+                    onPress={() =>
+                      setShowAllSearchResults(!showAllSearchResults)
+                    }
                     style={{
                       paddingVertical: 12,
                       alignItems: "center",
@@ -468,7 +517,13 @@ export default function FriendScreen({ navigation }) {
                       marginTop: 8,
                     }}
                   >
-                    <Text style={{ color: "#60a5fa", fontWeight: "600", fontSize: 13 }}>
+                    <Text
+                      style={{
+                        color: "#60a5fa",
+                        fontWeight: "600",
+                        fontSize: 13,
+                      }}
+                    >
                       {showAllSearchResults
                         ? "Show less"
                         : `Show ${filteredUsers.length - 5} more`}
@@ -480,11 +535,71 @@ export default function FriendScreen({ navigation }) {
           </View>
         )}
 
+        {/* USERS YOU MAY KNOW */}
+        {friendSuggestions.length > 0 && (
+          <View style={cardStyle}>
+            <TouchableOpacity
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+              }}
+              onPress={() => toggleSection("suggestions")}
+              activeOpacity={0.8}
+            >
+              <View style={{ flexDirection: "row", alignItems: "center" }}>
+                <Text style={titleStyle}>Users You May Know</Text>
+                <View
+                  style={{
+                    marginLeft: 8,
+                    backgroundColor: "#14b8a6",
+                    borderRadius: 999,
+                    paddingHorizontal: 8,
+                    paddingVertical: 2,
+                    minWidth: 20,
+                    alignItems: "center",
+                  }}
+                >
+                  <Text
+                    style={{
+                      color: "#fff",
+                      fontSize: 11,
+                      fontWeight: "700",
+                    }}
+                  >
+                    {friendSuggestions.length}
+                  </Text>
+                </View>
+              </View>
+
+              <Ionicons
+                name={
+                  sectionsExpanded.suggestions ? "chevron-up" : "chevron-down"
+                }
+                size={20}
+                color="#9ca3af"
+              />
+            </TouchableOpacity>
+
+            {sectionsExpanded.suggestions && (
+              <View style={{ marginTop: 8 }}>
+                {friendSuggestions.map((u) =>
+                  renderUserRow(u, "add")
+                )}
+              </View>
+            )}
+          </View>
+        )}
+
         {/* Incoming requests */}
         {incomingRequests.length > 0 && (
           <View style={cardStyle}>
             <TouchableOpacity
-              style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+              }}
               onPress={() => toggleSection("incoming")}
               activeOpacity={0.8}
             >
@@ -501,17 +616,27 @@ export default function FriendScreen({ navigation }) {
                     alignItems: "center",
                   }}
                 >
-                  <Text style={{ color: "#fff", fontSize: 11, fontWeight: "700" }}>
+                  <Text
+                    style={{
+                      color: "#fff",
+                      fontSize: 11,
+                      fontWeight: "700",
+                    }}
+                  >
                     {incomingRequests.length}
                   </Text>
                 </View>
               </View>
+
               <Ionicons
-                name={sectionsExpanded.incoming ? "chevron-up" : "chevron-down"}
+                name={
+                  sectionsExpanded.incoming ? "chevron-up" : "chevron-down"
+                }
                 size={20}
                 color="#9ca3af"
               />
             </TouchableOpacity>
+
             {sectionsExpanded.incoming && (
               <View style={{ marginTop: 8 }}>
                 {allUsers
@@ -522,11 +647,15 @@ export default function FriendScreen({ navigation }) {
           </View>
         )}
 
-        {/* Pending (outgoing) requests */}
+        {/* Pending requests */}
         {outgoingRequests.length > 0 && (
           <View style={cardStyle}>
             <TouchableOpacity
-              style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+              }}
               onPress={() => toggleSection("pending")}
               activeOpacity={0.8}
             >
@@ -543,17 +672,27 @@ export default function FriendScreen({ navigation }) {
                     alignItems: "center",
                   }}
                 >
-                  <Text style={{ color: "#fff", fontSize: 11, fontWeight: "700" }}>
+                  <Text
+                    style={{
+                      color: "#fff",
+                      fontSize: 11,
+                      fontWeight: "700",
+                    }}
+                  >
                     {outgoingRequests.length}
                   </Text>
                 </View>
               </View>
+
               <Ionicons
-                name={sectionsExpanded.pending ? "chevron-up" : "chevron-down"}
+                name={
+                  sectionsExpanded.pending ? "chevron-up" : "chevron-down"
+                }
                 size={20}
                 color="#9ca3af"
               />
             </TouchableOpacity>
+
             {sectionsExpanded.pending && (
               <View style={{ marginTop: 8 }}>
                 {allUsers
@@ -564,10 +703,14 @@ export default function FriendScreen({ navigation }) {
           </View>
         )}
 
-        {/* Friends list */}
+        {/* Friends List */}
         <View style={cardStyle}>
           <TouchableOpacity
-            style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+            }}
             onPress={() => toggleSection("friends")}
             activeOpacity={0.8}
           >
@@ -584,17 +727,25 @@ export default function FriendScreen({ navigation }) {
                   alignItems: "center",
                 }}
               >
-                <Text style={{ color: "#fff", fontSize: 11, fontWeight: "700" }}>
+                <Text
+                  style={{
+                    color: "#fff",
+                    fontSize: 11,
+                    fontWeight: "700",
+                  }}
+                >
                   {friends.length}
                 </Text>
               </View>
             </View>
+
             <Ionicons
               name={sectionsExpanded.friends ? "chevron-up" : "chevron-down"}
               size={20}
               color="#9ca3af"
             />
           </TouchableOpacity>
+
           {sectionsExpanded.friends && (
             <View style={{ marginTop: 8 }}>
               {friends.length === 0 ? (
@@ -614,7 +765,7 @@ export default function FriendScreen({ navigation }) {
         </View>
       </ScrollView>
 
-      {/* DELETE CONFIRMATION MODAL */}
+      {/* DELETE CONFIRMATION */}
       <Modal
         visible={!!deleteConfirmUser}
         transparent
@@ -678,7 +829,7 @@ export default function FriendScreen({ navigation }) {
                 <Text style={{ color: "#e5e7eb", fontWeight: "600" }}>
                   {deleteConfirmUser?.username}
                 </Text>{" "}
-                from your friends? You can always add them back later.
+                from your friends?
               </Text>
             </View>
 
@@ -696,10 +847,17 @@ export default function FriendScreen({ navigation }) {
                 onPress={() => setDeleteConfirmUser(null)}
                 activeOpacity={0.8}
               >
-                <Text style={{ color: "#e5e7eb", fontWeight: "600", fontSize: 15 }}>
+                <Text
+                  style={{
+                    color: "#e5e7eb",
+                    fontWeight: "600",
+                    fontSize: 15,
+                  }}
+                >
                   Cancel
                 </Text>
               </TouchableOpacity>
+
               <TouchableOpacity
                 style={{
                   flex: 1,
@@ -707,16 +865,20 @@ export default function FriendScreen({ navigation }) {
                   borderRadius: 12,
                   paddingVertical: 12,
                   alignItems: "center",
-                  shadowColor: "#ef4444",
-                  shadowOffset: { width: 0, height: 4 },
-                  shadowOpacity: 0.3,
-                  shadowRadius: 8,
                   elevation: 4,
                 }}
                 onPress={() => removeFriend(deleteConfirmUser.uid)}
                 activeOpacity={0.8}
               >
-                <Text style={{ color: "#fff", fontWeight: "700", fontSize: 15 }}>Remove</Text>
+                <Text
+                  style={{
+                    color: "#fff",
+                    fontWeight: "700",
+                    fontSize: 15,
+                  }}
+                >
+                  Remove
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
